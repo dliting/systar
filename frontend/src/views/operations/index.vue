@@ -689,7 +689,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, watch, onBeforeUnmount, onMounted } from 'vue'
+import { ref, reactive, computed, nextTick, watch, onBeforeUnmount, onMounted } from 'vue'
 import Skeleton from '@/components/Skeleton/index.vue'
 import { useRouter, useRoute } from 'vue-router'
 import TreePanel from '@/components/TreePanel'
@@ -950,7 +950,9 @@ const opStatus = useOperationStatus({ timeoutMs: DEFAULT_OP_TIMEOUT_MS })
 const refreshing = computed(() => opStatus.isLoading(detail.value?.id))
 const wsStore = useWebSocketStore()
 const executing = ref(null)
-const confirmDanger = useConfirmDanger()
+// reactive() unwraps the composable's nested refs so template bindings
+// (`confirmDanger.dialogVisible` etc.) pass plain values, not Ref objects.
+const confirmDanger = reactive(useConfirmDanger())
 const pendingDeleteId = ref(null)
 const pendingBatchAction = ref(null)
 const pendingBatchIds = ref([])

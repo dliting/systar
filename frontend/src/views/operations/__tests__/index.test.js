@@ -97,6 +97,7 @@ const StubSkeleton = defineComponent({
 })
 
 import Operations from '../index.vue'
+import ConfirmDialog from '@/components/ConfirmDialog/index.vue'
 
 async function mountAndFlush() {
   const wrapper = mount(Operations, {
@@ -453,12 +454,29 @@ describe('useOperationStatus integration', () => {
 describe('useConfirmDanger integration', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
+  it('passes unwrapped props to ConfirmDialog (refs must not leak into template)', async () => {
+    const wrapper = await mountAndFlush()
+    const dlg = wrapper.findComponent(ConfirmDialog)
+    // Regression: nested refs on a plain composable object are NOT auto-unwrapped
+    // in templates — a leaked Ref object is truthy and keeps the dialog open forever.
+    expect(dlg.props('visible')).toBe(false)
+    expect(dlg.props('title')).toBe('')
+    const vm = wrapper.vm
+    vm.detail = { id: 42, name: 'test', caption: '测试资产' }
+    vm.handleDelete()
+    await nextTick()
+    expect(dlg.props('visible')).toBe(true)
+    expect(dlg.props('title')).toBe('删除确认')
+    expect(dlg.props('message')).toBe('确认删除「测试资产」吗？删除后无法恢复。')
+    wrapper.unmount()
+  })
+
   it('handleDelete opens confirm dialog', async () => {
     const wrapper = await mountAndFlush()
     const vm = wrapper.vm
     vm.detail = { id: 42, name: 'test', caption: '测试资产' }
     vm.handleDelete()
-    expect(vm.confirmDanger.dialogVisible.value).toBe(true)
+    expect(vm.confirmDanger.dialogVisible).toBe(true)
     wrapper.unmount()
   })
 
@@ -492,8 +510,8 @@ describe('useConfirmDanger integration', () => {
       { id: 2, name: 'b', caption: 'B' }
     ]
     vm.batchOperate('delete')
-    expect(vm.confirmDanger.dialogVisible.value).toBe(true)
-    expect(vm.confirmDanger.dialogImpact.value).toContain('A')
+    expect(vm.confirmDanger.dialogVisible).toBe(true)
+    expect(vm.confirmDanger.dialogImpact).toContain('A')
     expect(vm.pendingBatchAction).toBe('delete')
     expect(vm.pendingBatchIds).toEqual([1, 2])
     wrapper.unmount()
