@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Services>
+    <Service Name="WeatherService" Caption="气象站服务">
+        <JavaClass>com.systar.monitor.drivers.weather.WeatherService</JavaClass>
+        <PropertyList>
+            <Property Name="Url" Caption="Url" Required="true">
+                <DataType>STRING</DataType>
+            </Property>
+            <Property Name="UserName" Caption="用户名" Required="true">
+                <DataType>STRING</DataType>
+            </Property>
+            <Property Name="Password" Caption="密码（md5加密）" Required="true">
+                <DataType>STRING</DataType>
+            </Property>
+            <Property Name="StationCode" Caption="站点ID" Required="true">
+                <DataType>STRING</DataType>
+            </Property>
+        </PropertyList>
+    </Service>
+</Services>

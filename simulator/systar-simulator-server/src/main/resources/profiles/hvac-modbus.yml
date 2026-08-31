@@ -1,0 +1,70 @@
+devices:
+  - id: "ahu-01"
+    name: "AHU-01 Air Handler"
+    protocol: MODBUS_TCP
+    endpoint:
+      host: "0.0.0.0"
+      port: 55502
+      unitId: 1
+    dataPoints:
+      - id: "supply-temp"
+        name: "Supply Temperature"
+        address:
+          registerType: holding
+          offset: 0
+          dataType: float
+        generator:
+          type: profile
+          segments:
+            - { time: "00:00", value: 18.0 }
+            - { time: "06:00", value: 18.0 }
+            - { time: "08:00", value: 22.0 }
+            - { time: "18:00", value: 22.0 }
+            - { time: "20:00", value: 18.0 }
+          noiseStdDev: 0.2
+
+      - id: "return-temp"
+        name: "Return Temperature"
+        address:
+          registerType: holding
+          offset: 2
+          dataType: float
+        generator:
+          type: correlated
+          expression: "supplyTemp + 2.0 + noise(0.3)"
+          references:
+            supplyTemp: "supply-temp"
+
+      - id: "supply-humidity"
+        name: "Supply Humidity"
+        address:
+          registerType: holding
+          offset: 4
+          dataType: float
+        generator:
+          type: sine
+          amplitude: 10.0
+          offset: 55.0
+          periodSeconds: 3600
+          noiseStdDev: 1.0
+
+      - id: "fan-running"
+        name: "Fan Running"
+        address:
+          registerType: coil
+          offset: 0
+          dataType: bool
+        generator:
+          type: fixed
+          value: true
+
+      - id: "damper-position"
+        name: "Damper Position"
+        address:
+          registerType: holding
+          offset: 6
+          dataType: float
+        generator:
+          type: random
+          min: 20.0
+          max: 80.0

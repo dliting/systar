@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProbeList>
+    <Probe Name="InputValue" Caption="InputValue">
+        <JavaClass>com.systar.monitor.drivers.input.InputProbe</JavaClass>
+        <DataType>STRING</DataType>
+        <ViewType>TEXTFIELD</ViewType>
+        <Source>InputService</Source>
+    </Probe>
+</ProbeList>

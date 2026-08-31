@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProbeList>
+    <Probe Name="OpcUaFloat" Caption="OPC UA 浮点监测" Interval="10m">
+        <JavaClass>com.systar.monitor.drivers.opcua.OpcUaProbe</JavaClass>
+        <DataType>FLOAT</DataType>
+        <ViewType>TEXTFIELD</ViewType>
+        <PropertyList>
+            <Property Name="NodeId" Caption="节点标识" Required="true">
+                <DataType>STRING</DataType>
+            </Property>
+        </PropertyList>
+        <Source>OpcUaService</Source>
+    </Probe>
+</ProbeList>

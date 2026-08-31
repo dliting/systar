@@ -1,0 +1,15 @@
+# Line-ending policy: explicit rules only.
+# No global "* text=auto" — the index is already normalized and a global rule
+# could trigger a whole-repo renormalization storm.
+
+# Shell scripts must stay LF so "bash init.sh" works on Linux after a Windows clone
+*.sh   text eol=lf
+
+# Windows batch files must stay CRLF
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+
+# Binary assets — never normalize
+*.jar  binary
+*.png  binary
+*.xlsx binary

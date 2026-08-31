@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Services>
+    <Service Name="InputService" Caption="手工录入服务">
+        <JavaClass>com.systar.monitor.drivers.input.InputService</JavaClass>
+    </Service>
+</Services>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProbeList>
+    <Probe Name="IEC104Float" Caption="IEC104 浮点输入" Interval="30m">
+        <JavaClass>com.systar.monitor.drivers.iec104.Iec104Probe</JavaClass>
+        <DataType>FLOAT</DataType>
+        <ViewType>TEXTFIELD</ViewType>
+        <PropertyList>
+            <Property Name="Address" Caption="信息体地址" Required="true">
+                <DataType Min="0" Max="2147483647">INT</DataType>
+            </Property>
+            <Property Name="CommonAddr" Caption="公共地址" Required="false">
+                <DataType Min="0" Max="2147483647">INT</DataType>
+            </Property>
+        </PropertyList>
+        <Source>IEC104Master</Source>
+    </Probe>
+</ProbeList>

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ControlList>
+    <Control Name="ModbusInt16FC3FC6" Caption="Modbus整数输入输出(FC=3, FC=6)">
+        <JavaClass>
+            com.systar.monitor.drivers.modbus.ModbusControl
+        </JavaClass>
+        <DataType>INT</DataType>
+        <ViewType>SLIDER</ViewType>
+        <PropertyList>
+            <Property Name="InRegisterAddr" Caption="输入寄存器地址（偏移量）" Required="true">
+                <DataType Min="0">INT</DataType>
+            </Property>
+            <Property Name="OutRegisterAddr" Caption="输出寄存器地址（偏移量）" Required="true">
+                <DataType Min="0">INT</DataType>
+            </Property>
+        </PropertyList>
+        <Source>ModbusMaster</Source>
+    </Control>
+
+    <Control Name="ModbusBoolFC3FC6" Caption="Modbus布尔输入输出(FC=3, FC=6)">
+        <JavaClass>
+            com.systar.monitor.drivers.modbus.ModbusControl
+        </JavaClass>
+        <DataType>BOOLEAN</DataType>
+        <ViewType>YESNO</ViewType>
+        <PropertyList>
+            <Property Name="InRegisterAddr" Caption="输入寄存器地址（偏移量）" Required="true">
+                <DataType Min="0">INT</DataType>
+            </Property>
+            <Property Name="OutRegisterAddr" Caption="输出寄存器地址（偏移量）" Required="true">
+                <DataType Min="0">INT</DataType>
+            </Property>
+        </PropertyList>
+        <Source>ModbusMaster</Source>
+    </Control>
+</ControlList>

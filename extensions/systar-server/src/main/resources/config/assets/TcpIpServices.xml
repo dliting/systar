@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Services>
+    <Service Name="TcpIpService" Caption="TCP/IP 服务">
+        <JavaClass>com.systar.monitor.drivers.tcpip.TcpIpService</JavaClass>
+        <PropertyList>
+            <Property Name="Host" Caption="目标主机地址" Required="true">
+                <DataType MaxLength="255">STRING</DataType>
+            </Property>
+            <Property Name="Port" Caption="目标端口" Required="true">
+                <DataType Min="1" Max="65535">INT</DataType>
+            </Property>
+            <Property Name="Timeout" Caption="超时时间 (ms)" Default="5000" Required="false">
+                <DataType Min="100" Max="60000">INT</DataType>
+            </Property>
+            <Property Name="FrameType" Caption="帧格式" Default="raw" Required="false">
+                <DataType MaxLength="63">STRING</DataType>
+            </Property>
+            <Property Name="ByteOrder" Caption="字节序" Default="big-endian" Required="false">
+                <DataType MaxLength="15">STRING</DataType>
+            </Property>
+        </PropertyList>
+    </Service>
+</Services>

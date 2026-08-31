@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Services>
+    <Service Name="EnvironmentalService" Caption="环境监测协议服务">
+        <JavaClass>com.systar.monitor.drivers.environmental.EnvService</JavaClass>
+        <PropertyList>
+            <Property Name="Port" Caption="端口" Required="true">
+                <DataType>INT</DataType>
+            </Property>
+        </PropertyList>
+    </Service>
+</Services>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProbeList>
+    <Probe Name="EnvironmentalFloat" Caption="环境温湿度数值监测器" Interval="10m">
+        <JavaClass>com.systar.monitor.drivers.environmental.EnvProbe</JavaClass>
+        <DataType>FLOAT</DataType>
+        <ViewType>TEXTFIELD</ViewType>
+        <PropertyList>
+            <Property Name="DeviceId" Caption="设备地址" Required="true">
+                <DataType>STRING</DataType>
+            </Property>
+        </PropertyList>
+        <Source>EnvironmentalService</Source>
+    </Probe>
+</ProbeList>

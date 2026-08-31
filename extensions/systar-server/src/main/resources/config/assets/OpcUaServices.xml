@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Services>
+    <Service Name="OpcUaService" Caption="OPC UA 服务">
+        <JavaClass>com.systar.monitor.drivers.opcua.OpcUaService</JavaClass>
+        <PropertyList>
+            <Property Name="Host" Caption="服务器地址" Default="127.0.0.1" Required="true">
+                <DataType MaxLength="255">STRING</DataType>
+            </Property>
+            <Property Name="Port" Caption="端口号" Default="4840" Required="true">
+                <DataType Min="1" Max="65535">INT</DataType>
+            </Property>
+            <Property Name="SecurityMode" Caption="安全模式" Default="None" Required="false">
+                <DataType MaxLength="31">STRING</DataType>
+            </Property>
+            <Property Name="EndpointUrl" Caption="服务器端点URL" Default="opc.tcp://localhost:4840" Required="true">
+                <DataType MaxLength="255">STRING</DataType>
+            </Property>
+        </PropertyList>
+    </Service>
+</Services>

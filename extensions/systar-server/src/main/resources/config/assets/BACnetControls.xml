@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ControlList>
+    <Control Name="BACnetBoolControl" Caption="BACnet 线圈状态">
+        <JavaClass>com.systar.monitor.drivers.bacnet.BacnetControl</JavaClass>
+        <DataType>BOOLEAN</DataType>
+        <ViewType>YESNO</ViewType>
+        <PropertyList>
+            <Property Name="ObjectType" Caption="对象类型 ID" Required="true">
+                <DataType Min="0" Max="30">INT</DataType>
+            </Property>
+            <Property Name="InstanceNumber" Caption="对象编号" Required="true">
+                <DataType Min="0">INT</DataType>
+            </Property>
+            <Property Name="PropertyIdentifier" Caption="属性 ID" Required="true" Default="85">
+                <DataType Min="0" Max="341">INT</DataType>
+            </Property>
+        </PropertyList>
+        <Source>BACnetService</Source>
+    </Control>
+</ControlList>

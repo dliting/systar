@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Services>
+    <Service Name="SiemensService" Caption="西门子火警服务">
+        <JavaClass>com.systar.monitor.drivers.siemens.SiemensService</JavaClass>
+        <PropertyList>
+            <Property Name="Host" Caption="IP 地址" Required="true">
+                <DataType>STRING</DataType>
+            </Property>
+            <Property Name="Port" Caption="端口" Required="true">
+                <DataType>INT</DataType>
+            </Property>
+        </PropertyList>
+    </Service>
+</Services>

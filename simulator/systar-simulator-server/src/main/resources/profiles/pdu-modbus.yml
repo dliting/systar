@@ -1,0 +1,71 @@
+devices:
+  - id: "pdu-01"
+    name: "PDU-01 Power Distribution"
+    protocol: MODBUS_TCP
+    endpoint:
+      host: "0.0.0.0"
+      port: 55502
+      unitId: 3
+    dataPoints:
+      - id: "voltage-l1"
+        name: "Voltage L1"
+        address:
+          registerType: holding
+          offset: 20
+          dataType: float
+        generator:
+          type: sine
+          amplitude: 3.0
+          offset: 220.0
+          periodSeconds: 300
+          noiseStdDev: 0.5
+
+      - id: "voltage-l2"
+        name: "Voltage L2"
+        address:
+          registerType: holding
+          offset: 22
+          dataType: float
+        generator:
+          type: sine
+          amplitude: 3.0
+          offset: 220.0
+          periodSeconds: 300
+          noiseStdDev: 0.5
+
+      - id: "voltage-l3"
+        name: "Voltage L3"
+        address:
+          registerType: holding
+          offset: 24
+          dataType: float
+        generator:
+          type: sine
+          amplitude: 3.0
+          offset: 220.0
+          periodSeconds: 300
+          noiseStdDev: 0.5
+
+      - id: "current-total"
+        name: "Current Total"
+        address:
+          registerType: holding
+          offset: 26
+          dataType: float
+        generator:
+          type: random
+          min: 5.0
+          max: 45.0
+
+      - id: "power-total"
+        name: "Power Total"
+        address:
+          registerType: holding
+          offset: 28
+          dataType: float
+        generator:
+          type: correlated
+          expression: "voltage * current * 1.732"
+          references:
+            voltage: "voltage-l1"
+            current: "current-total"

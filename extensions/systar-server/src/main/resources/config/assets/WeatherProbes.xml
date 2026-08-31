@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProbeList>
+    <Probe Name="WeatherTemp" Caption="气象站温度" Interval="10m">
+        <JavaClass>com.systar.monitor.drivers.weather.WeatherProbe</JavaClass>
+        <DataType>FLOAT</DataType>
+        <ViewType>TEXTFIELD</ViewType>
+        <PropertyList>
+            <Property Name="JsonAttribute" Caption="JSON 属性名" Required="true">
+                <DataType>STRING</DataType>
+            </Property>
+        </PropertyList>
+        <Source>WeatherService</Source>
+    </Probe>
+</ProbeList>

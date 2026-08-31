@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProbeList>
+    <Probe Name="SimulateFloat" Caption="模拟浮点数监测">
+        <JavaClass>
+            com.systar.monitor.drivers.simulate.SimulateProbe
+        </JavaClass>
+        <DataType>FLOAT</DataType>
+        <ViewType>TEXTFIELD</ViewType>
+        <PropertyList>
+            <Property Name="MinValue" Caption="最小值" Default="0" Required="false">
+                <DataType>FLOAT</DataType>
+            </Property>
+            <Property Name="MaxValue" Caption="最大值" Default="100" Required="false">
+                <DataType>FLOAT</DataType>
+            </Property>
+            <Property Name="Period" Caption="变化周期(秒)" Default="60" Required="false">
+                <DataType Min="1">INT</DataType>
+            </Property>
+        </PropertyList>
+        <Source>SimulateService</Source>
+    </Probe>
+
+    <Probe Name="SimulateInt" Caption="模拟整数监测">
+        <JavaClass>
+            com.systar.monitor.drivers.simulate.SimulateProbe
+        </JavaClass>
+        <DataType>INT</DataType>
+        <ViewType>TEXTFIELD</ViewType>
+        <PropertyList>
+            <Property Name="MinValue" Caption="最小值" Default="0" Required="false">
+                <DataType>INT</DataType>
+            </Property>
+            <Property Name="MaxValue" Caption="最大值" Default="100" Required="false">
+                <DataType>INT</DataType>
+            </Property>
+            <Property Name="Period" Caption="变化周期(秒)" Default="60" Required="false">
+                <DataType Min="1">INT</DataType>
+            </Property>
+        </PropertyList>
+        <Source>SimulateService</Source>
+    </Probe>
+</ProbeList>

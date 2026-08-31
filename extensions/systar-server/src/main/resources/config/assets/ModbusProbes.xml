@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProbeList>
+    <Probe Name="ModbusFloatFC3" Caption="Modbus浮点输入(FC=3)">
+        <JavaClass>
+            com.systar.monitor.drivers.modbus.ModbusProbe
+        </JavaClass>
+        <DataType>FLOAT</DataType>
+        <ViewType>TEXTFIELD</ViewType>
+        <PropertyList>
+            <Property Name="RegisterAddr" Caption="寄存器地址（偏移量）" Required="true">
+                <DataType Min="0">INT</DataType>
+            </Property>
+        </PropertyList>
+        <Source>ModbusMaster</Source>
+    </Probe>
+
+    <Probe Name="ModbusIntFC3" Caption="Modbus整数输入(FC=3)">
+        <JavaClass>
+            com.systar.monitor.drivers.modbus.ModbusProbe
+        </JavaClass>
+        <DataType>INT</DataType>
+        <ViewType>TEXTFIELD</ViewType>
+        <PropertyList>
+            <Property Name="RegisterAddr" Caption="寄存器地址（偏移量）" Required="true">
+                <DataType Min="0">INT</DataType>
+            </Property>
+        </PropertyList>
+        <Source>ModbusMaster</Source>
+    </Probe>
+
+    <Probe Name="ModbusBoolFC1" Caption="Modbus线圈状态（FC=1）">
+        <JavaClass>
+            com.systar.monitor.drivers.modbus.ModbusProbe
+        </JavaClass>
+        <DataType>BOOLEAN</DataType>
+        <ViewType>YESNO</ViewType>
+        <PropertyList>
+            <Property Name="RegisterAddr" Caption="寄存器地址（偏移量）" Required="true">
+                <DataType Min="0">INT</DataType>
+            </Property>
+        </PropertyList>
+        <Source>ModbusMaster</Source>
+        <Description>0—关，1—开</Description>
+    </Probe>
+</ProbeList>

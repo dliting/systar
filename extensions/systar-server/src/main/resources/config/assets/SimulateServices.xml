@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Services>
+    <Service Name="SimulateService" Caption="模拟服务">
+        <JavaClass>
+            com.systar.monitor.drivers.simulate.SimulateService
+        </JavaClass>
+    </Service>
+</Services>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProbeList>
+    <Probe Name="WsProbe" Caption="WebSocket 入侵报警监测">
+        <JavaClass>com.systar.monitor.drivers.websocket.WsProbe</JavaClass>
+        <DataType>BOOLEAN</DataType>
+        <ViewType>YESNO</ViewType>
+        <PropertyList>
+            <Property Name="AlertorIp" Caption="报警主机 IP" Required="true">
+                <DataType>STRING</DataType>
+            </Property>
+            <Property Name="AlertorProp" Caption="报警主机端口" Required="true">
+                <DataType>STRING</DataType>
+            </Property>
+            <Property Name="Chan" Caption="防区号" Required="true">
+                <DataType>STRING</DataType>
+            </Property>
+        </PropertyList>
+        <Source>WsService</Source>
+    </Probe>
+</ProbeList>

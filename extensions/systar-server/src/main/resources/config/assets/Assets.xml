@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Assets xmlns="http://www.systar.com/AssetConfig">
+    <!-- 本文件列出系统所支持的资产类型配置文件名 -->
+
+    <SpaceConfig>GenericSpaces</SpaceConfig>
+
+    <DeviceConfig>GenericDevices</DeviceConfig>
+
+    <ServiceConfig>ModbusServices</ServiceConfig>
+    <ServiceConfig>BACnetServices</ServiceConfig>
+    <ServiceConfig>IEC104Services</ServiceConfig>
+    <ServiceConfig>SiemensServices</ServiceConfig>
+    <ServiceConfig>SnmpServices</ServiceConfig>
+    <ServiceConfig>OpcUaServices</ServiceConfig>
+    <ServiceConfig>WeatherServices</ServiceConfig>
+    <ServiceConfig>SimulateServices</ServiceConfig>
+    <ServiceConfig>EnvironmentalServices</ServiceConfig>
+    <ServiceConfig>InputServices</ServiceConfig>
+    <ServiceConfig>UpsServices</ServiceConfig>
+    <ServiceConfig>WebSocketServices</ServiceConfig>
+    <ServiceConfig>TcpIpServices</ServiceConfig>
+    <ServiceConfig>MqttServices</ServiceConfig>
+
+    <ProbeConfig>ModbusProbes</ProbeConfig>
+    <ProbeConfig>BACnetProbes</ProbeConfig>
+    <ProbeConfig>IEC104Probes</ProbeConfig>
+    <ProbeConfig>SiemensProbes</ProbeConfig>
+    <ProbeConfig>SnmpProbes</ProbeConfig>
+    <ProbeConfig>OpcUaProbes</ProbeConfig>
+    <ProbeConfig>WeatherProbes</ProbeConfig>
+    <ProbeConfig>SimulateProbes</ProbeConfig>
+    <ProbeConfig>EnvironmentalProbes</ProbeConfig>
+    <ProbeConfig>InputProbes</ProbeConfig>
+    <ProbeConfig>UpsProbes</ProbeConfig>
+    <ProbeConfig>WebSocketProbes</ProbeConfig>
+    <ProbeConfig>TcpIpProbes</ProbeConfig>
+    <ProbeConfig>MqttProbes</ProbeConfig>
+
+    <ControlConfig>ModbusControls</ControlConfig>
+    <ControlConfig>BACnetControls</ControlConfig>
+    <ControlConfig>IEC104Controls</ControlConfig>
+    <ControlConfig>OpcUaControls</ControlConfig>
+</Assets>

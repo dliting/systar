@@ -1,0 +1,63 @@
+.app-container {
+  padding: 20px;
+  min-height: calc(100vh - 96px);
+}
+
+.tree-sidebar-manage-wrap {
+  display: flex;
+  gap: 0;
+  min-height: calc(100vh - 130px);
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.tree-sidebar-content {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  background: #fff;
+
+  .content-inner {
+    padding: 12px 16px;
+    height: 100%;
+    overflow-y: auto;
+  }
+}
+
+.mb8 {
+  margin-bottom: 8px;
+}
+
+.mt8 {
+  margin-top: 8px;
+}
+
+.tree-node {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  overflow: hidden;
+
+  .node-icon {
+    font-size: 14px;
+    color: #f5a623;
+    flex-shrink: 0;
+  }
+
+  .node-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .node-state-tag {
+    margin-left: 6px;
+    font-size: 11px;
+  }
+
+  .node-kind-tag {
+    margin-left: 6px;
+    font-size: 11px;
+  }
+}

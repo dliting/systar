@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProbeList>
+    <Probe Name="UpsValue" Caption="UPS 数值监测" Interval="10m">
+        <JavaClass>com.systar.monitor.drivers.ups.UpsProbe</JavaClass>
+        <DataType>FLOAT</DataType>
+        <ViewType>TEXTFIELD</ViewType>
+        <PropertyList>
+            <Property Name="CmdType" Caption="数据命令类型" Required="true">
+                <DataType>STRING</DataType>
+            </Property>
+            <Property Name="Index" Caption="响应数据中的数据索引" Required="true">
+                <DataType>INT</DataType>
+            </Property>
+        </PropertyList>
+        <Source>UpsService</Source>
+    </Probe>
+</ProbeList>

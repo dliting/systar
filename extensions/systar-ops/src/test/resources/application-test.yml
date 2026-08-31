@@ -1,0 +1,23 @@
+spring:
+  datasource:
+    # DB_CLOSE_DELAY=-1: keep in-memory DB alive for the test JVM lifetime (defensive — root fix is the bean wiring in StatisticsDataConfig)
+    url: jdbc:h2:mem:testdb;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  sql:
+    init:
+      mode: always
+      schema-locations: file:sql/h2/ddl/01-core.sql,file:sql/h2/ddl/02-ops.sql,file:sql/h2/ddl/03-system.sql
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    default-enum-type-handler: org.apache.ibatis.type.EnumOrdinalTypeHandler
+
+systar:
+  stats-datasource:
+    url: jdbc:h2:mem:testdb_stats;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:

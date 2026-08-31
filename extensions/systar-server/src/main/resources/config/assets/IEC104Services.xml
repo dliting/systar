@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Services>
+    <Service Name="IEC104Master" Caption="IEC-104 Master">
+        <JavaClass>com.systar.monitor.drivers.iec104.Iec104Service</JavaClass>
+        <PropertyList>
+            <Property Name="Host" Caption="远程IP" Default="127.0.0.1" Required="true">
+                <DataType MaxLength="255">STRING</DataType>
+            </Property>
+            <Property Name="Port" Caption="远程端口号" Default="2404" Required="false">
+                <DataType Max="65535">INT</DataType>
+            </Property>
+            <Property Name="CommonAddrStr" Caption="关联的地址字段" Default="1" Required="false">
+                <DataType MaxLength="255">STRING</DataType>
+            </Property>
+        </PropertyList>
+    </Service>
+</Services>

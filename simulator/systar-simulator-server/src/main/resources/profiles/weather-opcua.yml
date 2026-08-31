@@ -1,0 +1,58 @@
+devices:
+  - id: "weather-01"
+    name: "Weather Station"
+    protocol: OPC_UA
+    endpoint:
+      port: 55503
+      serverName: "systar-simulator"
+    dataPoints:
+      - id: "outdoor-temp"
+        name: "Outdoor Temperature"
+        address:
+          namespaceIndex: 2
+          identifier: "OutdoorTemperature"
+          integerId: false
+        generator:
+          type: profile
+          segments:
+            - { time: "00:00", value: 12.0 }
+            - { time: "06:00", value: 14.0 }
+            - { time: "12:00", value: 28.0 }
+            - { time: "18:00", value: 22.0 }
+            - { time: "22:00", value: 15.0 }
+          noiseStdDev: 0.5
+
+      - id: "humidity"
+        name: "Outdoor Humidity"
+        address:
+          namespaceIndex: 2
+          identifier: "OutdoorHumidity"
+          integerId: false
+        generator:
+          type: sine
+          amplitude: 15.0
+          offset: 60.0
+          periodSeconds: 7200
+          noiseStdDev: 2.0
+
+      - id: "wind-speed"
+        name: "Wind Speed"
+        address:
+          namespaceIndex: 2
+          identifier: "WindSpeed"
+          integerId: false
+        generator:
+          type: random
+          min: 0.0
+          max: 25.0
+
+      - id: "rainfall"
+        name: "Rainfall"
+        address:
+          namespaceIndex: 2
+          identifier: "Rainfall"
+          integerId: false
+        generator:
+          type: random
+          min: 0.0
+          max: 5.0

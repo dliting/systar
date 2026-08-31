@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProbeList>
+    <Probe Name="TcpIpProbe" Caption="TCP/IP 主机监测">
+        <JavaClass>com.systar.monitor.drivers.tcpip.TcpIpProbe</JavaClass>
+        <DataType>STRING</DataType>
+        <ViewType>TEXTFIELD</ViewType>
+        <PropertyList>
+            <Property Name="Host" Caption="主机地址" Required="true">
+                <DataType MaxLength="255">STRING</DataType>
+            </Property>
+            <Property Name="Port" Caption="端口">
+                <DataType Min="1" Max="65535">INT</DataType>
+            </Property>
+        </PropertyList>
+        <Source>TcpIpService</Source>
+    </Probe>
+</ProbeList>

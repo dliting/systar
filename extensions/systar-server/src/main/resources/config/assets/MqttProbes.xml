@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProbeList>
+    <Probe Name="MqttValue" Caption="MQTT 值监测">
+        <JavaClass>com.systar.monitor.drivers.mqtt.MqttProbe</JavaClass>
+        <DataType>STRING</DataType>
+        <ViewType>TEXTFIELD</ViewType>
+        <PropertyList>
+            <Property Name="Topic" Caption="订阅主题" Required="true">
+                <DataType>STRING</DataType>
+            </Property>
+            <Property Name="JsonPath" Caption="JSON 路径 (可选)" Required="false">
+                <DataType>STRING</DataType>
+            </Property>
+        </PropertyList>
+        <Source>MqttService</Source>
+    </Probe>
+</ProbeList>

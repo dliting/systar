@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Services>
+    <Service Name="SnmpService" Caption="SNMP 服务">
+        <JavaClass>com.systar.monitor.drivers.snmp.SnmpService</JavaClass>
+        <PropertyList>
+            <Property Name="Host" Caption="主机" Default="127.0.0.1" Required="true">
+                <DataType MaxLength="255">STRING</DataType>
+            </Property>
+            <Property Name="Port" Caption="端口" Default="161" Required="true">
+                <DataType Max="65535" Min="0">INT</DataType>
+            </Property>
+            <Property Name="Community" Caption="共同体名称" Default="public" Required="true">
+                <DataType MaxLength="31">STRING</DataType>
+            </Property>
+            <Property Name="Version" Caption="版本" Default="v2c" Required="true">
+                <DataType MaxLength="31">STRING</DataType>
+            </Property>
+        </PropertyList>
+    </Service>
+</Services>

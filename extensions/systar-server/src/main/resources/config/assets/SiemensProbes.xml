@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProbeList>
+    <Probe Name="SiemensFloat" Caption="西门子火警监测器">
+        <JavaClass>com.systar.monitor.drivers.siemens.SiemensProbe</JavaClass>
+        <DataType>BOOLEAN</DataType>
+        <ViewType>YESNO</ViewType>
+        <PropertyList>
+            <Property Name="DeviceId" Caption="设备地址" Required="true">
+                <DataType>STRING</DataType>
+            </Property>
+        </PropertyList>
+        <Source>SiemensService</Source>
+    </Probe>
+</ProbeList>

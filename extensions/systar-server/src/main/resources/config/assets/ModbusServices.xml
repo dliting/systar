@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Services>
+    <Service Name="ModbusMaster" Caption="Modbus Master" Abstract="true">
+        <JavaClass>
+            com.systar.monitor.drivers.modbus.ModbusService
+        </JavaClass>
+        <PropertyList>
+            <Property Name="UnitId" Caption="单元标识符 (从站地址)"
+                Default="1" Required="true">
+                <DataType Min="0" Max="247">INT</DataType>
+            </Property>
+            <Property Name="MaxConnections" Caption="最大允许连接数"
+                Default="1" Required="false">
+                <DataType Min="1" Max="255">INT</DataType>
+            </Property>
+        </PropertyList>
+    </Service>
+
+    <Service Name="ModbusTcpMaster" Caption="Modbus TCP Master" Super="ModbusMaster">
+        <JavaClass>
+            com.systar.monitor.drivers.modbus.ModbusService
+        </JavaClass>
+        <PropertyList>
+            <Property Name="Host" Caption="地址(IP或主机名)"
+                Default="127.0.0.1" Required="true">
+                <DataType MaxLength="255">STRING</DataType>
+            </Property>
+            <Property Name="Port" Caption="端口号"
+                Default="502" Required="true">
+                <DataType Min="1" Max="65535">INT</DataType>
+            </Property>
+        </PropertyList>
+    </Service>
+</Services>

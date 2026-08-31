@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Services>
+    <Service Name="BACnetService" Caption="BACnet 服务">
+        <JavaClass>com.systar.monitor.drivers.bacnet.BacnetService</JavaClass>
+        <PropertyList>
+            <Property Name="Remotehost" Caption="远程IP" Default="127.0.0.1" Required="true">
+                <DataType MaxLength="255">STRING</DataType>
+            </Property>
+            <Property Name="Remoteport" Caption="远程端口号" Default="47808" Required="true">
+                <DataType Max="65535">INT</DataType>
+            </Property>
+            <Property Name="DeviceId" Caption="设备编号" Default="0" Required="true">
+                <DataType Max="65535">INT</DataType>
+            </Property>
+        </PropertyList>
+    </Service>
+</Services>

@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProbeList>
+    <Probe Name="SnmpStr" Caption="SNMP 字符串监测" Interval="10m">
+        <JavaClass>com.systar.monitor.drivers.snmp.SnmpProbe</JavaClass>
+        <DataType>STRING</DataType>
+        <ViewType>TEXTFIELD</ViewType>
+        <PropertyList>
+            <Property Name="Oid" Caption="OID" Required="true">
+                <DataType>STRING</DataType>
+            </Property>
+        </PropertyList>
+        <Source>SnmpService</Source>
+    </Probe>
+
+    <Probe Name="SnmpFloat" Caption="SNMP 浮点监测" Interval="10m">
+        <JavaClass>com.systar.monitor.drivers.snmp.SnmpFloatProbe</JavaClass>
+        <DataType>FLOAT</DataType>
+        <ViewType>TEXTFIELD</ViewType>
+        <PropertyList>
+            <Property Name="Oid" Caption="OID" Required="true">
+                <DataType>STRING</DataType>
+            </Property>
+        </PropertyList>
+        <Source>SnmpService</Source>
+    </Probe>
+
+    <Probe Name="SnmpBool" Caption="SNMP 布尔监测" Interval="10m">
+        <JavaClass>com.systar.monitor.drivers.snmp.SnmpBoolProbe</JavaClass>
+        <DataType>BOOLEAN</DataType>
+        <ViewType>YESNO</ViewType>
+        <PropertyList>
+            <Property Name="Oid" Caption="OID" Required="true">
+                <DataType>STRING</DataType>
+            </Property>
+        </PropertyList>
+        <Source>SnmpService</Source>
+    </Probe>
+
+    <Probe Name="SnmpInt" Caption="SNMP 整数监测" Interval="10m">
+        <JavaClass>com.systar.monitor.drivers.snmp.SnmpIntProbe</JavaClass>
+        <DataType>INT</DataType>
+        <ViewType>TEXTFIELD</ViewType>
+        <PropertyList>
+            <Property Name="Oid" Caption="OID" Required="true">
+                <DataType>STRING</DataType>
+            </Property>
+        </PropertyList>
+        <Source>SnmpService</Source>
+    </Probe>
+
+    <!-- Network interface probes (two-sample delta algorithm) -->
+
+    <Probe Name="SnmpInterface" Caption="SNMP 网络端口监测" Abstract="true" Interval="10m">
+        <JavaClass>com.systar.monitor.drivers.snmp.InterfaceProbe</JavaClass>
+        <DataType>FLOAT</DataType>
+        <ViewType>TEXTFIELD</ViewType>
+        <PropertyList>
+            <Property Name="InterfaceIndex" Caption="端口序号" Required="true">
+                <DataType>INT</DataType>
+            </Property>
+        </PropertyList>
+        <Source>SnmpService</Source>
+    </Probe>
+
+    <Probe Name="SnmpInterfaceRecvSpeed" Caption="端口接收速率（Kbps）" Super="SnmpInterface">
+        <JavaClass>com.systar.monitor.drivers.snmp.InterfaceRecvSpeed</JavaClass>
+        <DataType>FLOAT</DataType>
+        <ViewType>TEXTFIELD</ViewType>
+    </Probe>
+
+    <Probe Name="SnmpInterfaceSendSpeed" Caption="端口发送速率（Kbps）" Super="SnmpInterface">
+        <JavaClass>com.systar.monitor.drivers.snmp.InterfaceSendSpeed</JavaClass>
+        <DataType>FLOAT</DataType>
+        <ViewType>TEXTFIELD</ViewType>
+    </Probe>
+
+    <Probe Name="SnmpInterfaceUpState" Caption="端口启用状态" Super="SnmpInterface">
+        <JavaClass>com.systar.monitor.drivers.snmp.InterfaceUpState</JavaClass>
+        <DataType>BOOLEAN</DataType>
+        <ViewType>YESNO</ViewType>
+    </Probe>
+
+    <Probe Name="SnmpInterfaceInLossRate" Caption="输入丢包率" Super="SnmpInterface">
+        <JavaClass>com.systar.monitor.drivers.snmp.InterfaceInLossRate</JavaClass>
+        <DataType>FLOAT</DataType>
+        <ViewType>TEXTFIELD</ViewType>
+    </Probe>
+
+    <Probe Name="SnmpInterfaceOutLossRate" Caption="输出丢包率" Super="SnmpInterface">
+        <JavaClass>com.systar.monitor.drivers.snmp.InterfaceOutLossRate</JavaClass>
+        <DataType>FLOAT</DataType>
+        <ViewType>TEXTFIELD</ViewType>
+    </Probe>
+</ProbeList>

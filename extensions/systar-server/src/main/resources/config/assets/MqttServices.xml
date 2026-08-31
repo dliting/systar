@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Services>
+    <Service Name="MqttService" Caption="MQTT 服务">
+        <JavaClass>com.systar.monitor.drivers.mqtt.MqttService</JavaClass>
+        <PropertyList>
+            <Property Name="BrokerUrl" Caption="Broker 地址" Default="tcp://127.0.0.1:1883" Required="true">
+                <DataType MaxLength="255">STRING</DataType>
+            </Property>
+            <Property Name="ClientId" Caption="客户端 ID" Required="false">
+                <DataType MaxLength="127">STRING</DataType>
+            </Property>
+            <Property Name="Username" Caption="用户名" Required="false">
+                <DataType MaxLength="127">STRING</DataType>
+            </Property>
+            <Property Name="Password" Caption="密码" Required="false">
+                <DataType MaxLength="127">STRING</DataType>
+            </Property>
+            <Property Name="Qos" Caption="QoS 等级" Default="0" Required="false">
+                <DataType Min="0" Max="2">INT</DataType>
+            </Property>
+        </PropertyList>
+    </Service>
+</Services>

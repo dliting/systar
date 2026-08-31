@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ControlList>
+    <Control Name="IEC104BoolControl" Caption="IEC104 线圈状态">
+        <JavaClass>com.systar.monitor.drivers.iec104.Iec104Control</JavaClass>
+        <DataType>BOOLEAN</DataType>
+        <ViewType>YESNO</ViewType>
+        <PropertyList>
+            <Property Name="Address" Caption="信息体地址" Required="true">
+                <DataType Min="0" Max="2147483647">INT</DataType>
+            </Property>
+            <Property Name="CommonAddr" Caption="公共地址" Required="true">
+                <DataType Min="0" Max="2147483647">INT</DataType>
+            </Property>
+        </PropertyList>
+        <Source>IEC104Master</Source>
+    </Control>
+
+    <Control Name="IEC104FloatControl" Caption="IEC104 浮点控制">
+        <JavaClass>com.systar.monitor.drivers.iec104.Iec104Control</JavaClass>
+        <DataType>FLOAT</DataType>
+        <ViewType>SLIDER</ViewType>
+        <PropertyList>
+            <Property Name="Address" Caption="信息体地址" Required="true">
+                <DataType Min="0" Max="2147483647">INT</DataType>
+            </Property>
+            <Property Name="CommonAddr" Caption="公共地址" Required="true">
+                <DataType Min="0" Max="2147483647">INT</DataType>
+            </Property>
+        </PropertyList>
+        <Source>IEC104Master</Source>
+    </Control>
+</ControlList>

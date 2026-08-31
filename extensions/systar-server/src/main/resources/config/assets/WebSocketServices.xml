@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Services>
+    <Service Name="WsService" Caption="WebSocket 安防服务">
+        <JavaClass>com.systar.monitor.drivers.websocket.WsService</JavaClass>
+        <PropertyList>
+            <Property Name="ServerIp" Caption="安防服务器 IP" Required="true">
+                <DataType>STRING</DataType>
+            </Property>
+            <Property Name="ProbePort" Caption="安防服务端口号" Required="true">
+                <DataType>STRING</DataType>
+            </Property>
+        </PropertyList>
+    </Service>
+</Services>

@@ -1,0 +1,7 @@
+server:
+  port: 18080
+
+simulator:
+  tickIntervalMs: 1000
+  randomSeed: 42
+  profilesLocation: "classpath:profiles/"

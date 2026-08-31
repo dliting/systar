@@ -1,0 +1,37 @@
+target/
+*.class
+*.jar
+!/lib/maven-repo/**/*.jar
+!/lib/maven-repo/**/*.pom
+!.mvn/wrapper/maven-wrapper.jar
+*.war
+.idea/
+*.iml
+.settings/
+.project
+.classpath
+*.log
+
+# JVM crash logs
+hs_err_pid*
+replay_pid*
+
+# Screenshots (root-level working files)
+/*.png
+
+# PID files (written by application itself, not the start scripts)
+*.pid
+
+# Redis dump
+dump.rdb
+
+# Test temporary data (keep directory structure, ignore generated files)
+temp/test/*
+!temp/test/.gitkeep
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# root node_modules (stray tooling cache)
+/node_modules/

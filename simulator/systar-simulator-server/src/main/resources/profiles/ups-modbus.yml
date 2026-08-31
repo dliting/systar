@@ -1,0 +1,65 @@
+devices:
+  - id: "ups-01"
+    name: "UPS-01 Battery Backup"
+    protocol: MODBUS_TCP
+    endpoint:
+      host: "0.0.0.0"
+      port: 55502
+      unitId: 2
+    dataPoints:
+      - id: "battery-level"
+        name: "Battery Level"
+        address:
+          registerType: holding
+          offset: 10
+          dataType: float
+        generator:
+          type: ramp
+          start: 100.0
+          end: 20.0
+          durationSeconds: 3600
+          loop: true
+
+      - id: "load-percent"
+        name: "Load Percent"
+        address:
+          registerType: holding
+          offset: 12
+          dataType: float
+        generator:
+          type: random
+          min: 30.0
+          max: 70.0
+
+      - id: "input-voltage"
+        name: "Input Voltage"
+        address:
+          registerType: holding
+          offset: 14
+          dataType: float
+        generator:
+          type: sine
+          amplitude: 5.0
+          offset: 220.0
+          periodSeconds: 120
+          noiseStdDev: 1.0
+
+      - id: "output-voltage"
+        name: "Output Voltage"
+        address:
+          registerType: holding
+          offset: 16
+          dataType: float
+        generator:
+          type: fixed
+          value: 220.0
+
+      - id: "on-battery"
+        name: "On Battery"
+        address:
+          registerType: coil
+          offset: 10
+          dataType: bool
+        generator:
+          type: fixed
+          value: false
