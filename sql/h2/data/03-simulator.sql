@@ -363,3 +363,112 @@ MERGE INTO t_sample_float (monitor, "value", moment) KEY (monitor, moment) VALUE
 (1211, 217.5, DATEADD('MINUTE', -20, NOW())),
 (1211, 218.5, DATEADD('MINUTE', -10, NOW())),
 (1211, 220.0, NOW());
+
+-- ============================================================================
+-- 10. 告警历史 (近7天，用于看板/统计演示)
+-- asset_id 存监测器运行时 ID (t_probe.id)；
+-- t_error_message_log.state: 1=ERROR 2=WARNING；t_alarm_message.state: 1=待处理 2=已处理
+-- ============================================================================
+MERGE INTO t_error_message_log (id, asset_id, monitor_name, error_message, "value", state, warn_id, time) KEY (id) VALUES
+    -- 今日
+    (901, 1201, '送风温度', 'AHU送风温度偏高',   '32.4',  2, 2, DATEADD('MINUTE', -420, NOW())),
+    (902, 1208, '输入电压', 'UPS输入电压偏低',   '195.4', 1, 4, DATEADD('MINUTE', -330, NOW())),
+    (903, 1211, 'L1电压',   'PDU L1电压偏低',    '196.8', 1, 3, DATEADD('MINUTE', -240, NOW())),
+    (904, 1206, '电池电量', 'UPS电池电量偏低',   '23.5',  1, 3, DATEADD('MINUTE', -150, NOW())),
+    (905, 1211, 'L1电压',   'PDU L1电压偏低',    '195.9', 1, 3, DATEADD('MINUTE',  -90, NOW())),
+    -- 昨日
+    (906, 1208, '输入电压', 'UPS输入电压偏低',   '194.1', 1, 4, DATEADD('MINUTE', -1700, NOW())),
+    (907, 1201, '送风温度', 'AHU送风温度偏高',   '32.8',  2, 2, DATEADD('MINUTE', -1650, NOW())),
+    (908, 1206, '电池电量', 'UPS电池电量偏低',   '24.0',  1, 3, DATEADD('MINUTE', -1560, NOW())),
+    (909, 1211, 'L1电压',   'PDU L1电压偏低',    '197.3', 1, 3, DATEADD('MINUTE', -1500, NOW())),
+    -- 前两天
+    (910, 1201, '送风温度', 'AHU送风温度偏高',   '31.9',  2, 2, DATEADD('MINUTE', -3160, NOW())),
+    (911, 1216, '室外温度', '室外温度超限',      '36.2',  2, 2, DATEADD('MINUTE', -3100, NOW())),
+    (912, 1206, '电池电量', 'UPS电池电量偏低',   '24.8',  1, 3, DATEADD('MINUTE', -3000, NOW())),
+    (913, 1211, 'L1电压',   'PDU L1电压偏低',    '197.8', 1, 3, DATEADD('MINUTE', -2950, NOW())),
+    -- 前三天
+    (914, 1201, '送风温度', 'AHU送风温度偏高',   '32.1',  2, 2, DATEADD('MINUTE', -4600, NOW())),
+    (915, 1206, '电池电量', 'UPS电池电量偏低',   '24.3',  1, 3, DATEADD('MINUTE', -4520, NOW())),
+    (916, 1206, '电池电量', 'UPS电池电量偏低',   '23.9',  1, 3, DATEADD('MINUTE', -4460, NOW())),
+    (917, 1211, 'L1电压',   'PDU L1电压偏低',    '196.2', 1, 3, DATEADD('MINUTE', -4400, NOW())),
+    -- 前四天
+    (918, 1201, '送风温度', 'AHU送风温度偏高',   '31.6',  2, 2, DATEADD('MINUTE', -5980, NOW())),
+    (919, 1208, '输入电压', 'UPS输入电压偏低',   '193.8', 1, 4, DATEADD('MINUTE', -5910, NOW())),
+    (920, 1211, 'L1电压',   'PDU L1电压偏低',    '195.4', 1, 3, DATEADD('MINUTE', -5850, NOW())),
+    -- 前五天
+    (921, 1206, '电池电量', 'UPS电池电量偏低',   '25.1',  1, 3, DATEADD('MINUTE', -7440, NOW())),
+    (922, 1216, '室外温度', '室外温度超限',      '35.8',  2, 2, DATEADD('MINUTE', -7360, NOW())),
+    (923, 1211, 'L1电压',   'PDU L1电压偏低',    '198.2', 1, 3, DATEADD('MINUTE', -7300, NOW())),
+    -- 前六天
+    (924, 1206, '电池电量', 'UPS电池电量偏低',   '24.6',  1, 3, DATEADD('MINUTE', -8820, NOW())),
+    (925, 1201, '送风温度', 'AHU送风温度偏高',   '32.5',  2, 2, DATEADD('MINUTE', -8760, NOW())),
+    (926, 1211, 'L1电压',   'PDU L1电压偏低',    '196.5', 1, 3, DATEADD('MINUTE', -8700, NOW()));
+
+MERGE INTO t_alarm_message (id, log_id, caption, state, auto, alarm_time, recovered, warn_id, device_id) KEY (id) VALUES
+    -- 今日：904/905 待处理，其余已处理
+    (901, 901, 'AHU送风温度偏高', 2, 1, DATEADD('MINUTE',  -420, NOW()), 1, 2, 1101),
+    (902, 902, 'UPS输入电压偏低', 2, 1, DATEADD('MINUTE',  -330, NOW()), 1, 4, 1102),
+    (903, 903, 'PDU L1电压偏低',  2, 1, DATEADD('MINUTE',  -240, NOW()), 1, 3, 1103),
+    (904, 904, 'UPS电池电量偏低', 1, 1, DATEADD('MINUTE',  -150, NOW()), 0, 3, 1102),
+    (905, 905, 'PDU L1电压偏低',  1, 1, DATEADD('MINUTE',   -90, NOW()), 0, 3, 1103),
+    (906, 906, 'UPS输入电压偏低', 2, 1, DATEADD('MINUTE', -1700, NOW()), 1, 4, 1102),
+    (907, 907, 'AHU送风温度偏高', 2, 1, DATEADD('MINUTE', -1650, NOW()), 1, 2, 1101),
+    (908, 908, 'UPS电池电量偏低', 2, 1, DATEADD('MINUTE', -1560, NOW()), 1, 3, 1102),
+    (909, 909, 'PDU L1电压偏低',  2, 1, DATEADD('MINUTE', -1500, NOW()), 1, 3, 1103),
+    (910, 910, 'AHU送风温度偏高', 2, 1, DATEADD('MINUTE', -3160, NOW()), 1, 2, 1101),
+    (911, 911, '室外温度超限',    2, 1, DATEADD('MINUTE', -3100, NOW()), 1, 2, 1104),
+    (912, 912, 'UPS电池电量偏低', 2, 1, DATEADD('MINUTE', -3000, NOW()), 1, 3, 1102),
+    (913, 913, 'PDU L1电压偏低',  2, 1, DATEADD('MINUTE', -2950, NOW()), 1, 3, 1103),
+    (914, 914, 'AHU送风温度偏高', 2, 1, DATEADD('MINUTE', -4600, NOW()), 1, 2, 1101),
+    (915, 915, 'UPS电池电量偏低', 2, 1, DATEADD('MINUTE', -4520, NOW()), 1, 3, 1102),
+    (916, 916, 'UPS电池电量偏低', 2, 1, DATEADD('MINUTE', -4460, NOW()), 1, 3, 1102),
+    (917, 917, 'PDU L1电压偏低',  2, 1, DATEADD('MINUTE', -4400, NOW()), 1, 3, 1103),
+    (918, 918, 'AHU送风温度偏高', 2, 1, DATEADD('MINUTE', -5980, NOW()), 1, 2, 1101),
+    (919, 919, 'UPS输入电压偏低', 2, 1, DATEADD('MINUTE', -5910, NOW()), 1, 4, 1102),
+    (920, 920, 'PDU L1电压偏低',  2, 1, DATEADD('MINUTE', -5850, NOW()), 1, 3, 1103),
+    (921, 921, 'UPS电池电量偏低', 2, 1, DATEADD('MINUTE', -7440, NOW()), 1, 3, 1102),
+    (922, 922, '室外温度超限',    2, 1, DATEADD('MINUTE', -7360, NOW()), 1, 2, 1104),
+    (923, 923, 'PDU L1电压偏低',  2, 1, DATEADD('MINUTE', -7300, NOW()), 1, 3, 1103),
+    (924, 924, 'UPS电池电量偏低', 2, 1, DATEADD('MINUTE', -8820, NOW()), 1, 3, 1102),
+    (925, 925, 'AHU送风温度偏高', 2, 1, DATEADD('MINUTE', -8760, NOW()), 1, 2, 1101),
+    (926, 926, 'PDU L1电压偏低',  2, 1, DATEADD('MINUTE', -8700, NOW()), 1, 3, 1103);
+
+-- ============================================================================
+-- 11. 工单历史 (近7天，用于看板/统计演示)
+-- ============================================================================
+MERGE INTO t_work_order (id, order_no, title, description, type, source, device_id, priority, status, assignee_id, creator_id, due_time, resolution, created_at, updated_at, closed_at) KEY (id) VALUES
+    (901, 'WO-2026-0901', 'PDU配电柜L1电压偏低处理', 'PDU L1相电压低于告警阈值，需要现场排查供电回路', 'REPAIR', 'ALARM_AUTO', 1103, 1, 'CREATED',    NULL, 1, DATEADD('HOUR', 22, NOW()), NULL, DATEADD('MINUTE',  -90, NOW()), DATEADD('MINUTE',  -90, NOW()), NULL),
+    (902, 'WO-2026-0902', 'UPS电池电量告警核查',     'UPS电池电量持续偏低，核查电池组状态并安排充电', 'MAINTENANCE', 'ALARM_AUTO', 1102, 2, 'ASSIGNED',   1, 1, DATEADD('HOUR', 8, NOW()),  NULL, DATEADD('MINUTE', -1500, NOW()), DATEADD('MINUTE', -1400, NOW()), NULL),
+    (903, 'WO-2026-0903', 'AHU空调机组过滤网更换',   '按季度保养计划更换AHU过滤网并清洗表冷器', 'MAINTENANCE', 'MANUAL', 1101, 3, 'PROCESSING', 1, 1, DATEADD('DAY', 1, NOW()),   NULL, DATEADD('MINUTE', -1740, NOW()), DATEADD('MINUTE', -1200, NOW()), NULL),
+    (904, 'WO-2026-0904', 'UPS输入电压异常检修',     'UPS输入电压低于下限，检修输入回路', 'REPAIR', 'ALARM_AUTO', 1102, 2, 'CLOSED', 1, 1, DATEADD('MINUTE', -1460, NOW()), '更换输入滤波电容，电压恢复正常', DATEADD('MINUTE', -2900, NOW()), DATEADD('MINUTE', -2660, NOW()), DATEADD('MINUTE', -2660, NOW())),
+    (905, 'WO-2026-0905', 'AHU送风温度偏高处理',     'AHU送风温度超上限，排查冷媒与水阀', 'REPAIR', 'ALARM_AUTO', 1101, 2, 'CLOSED', 1, 1, DATEADD('MINUTE', -2910, NOW()), '清洗表冷器并调整水阀开度', DATEADD('MINUTE', -4350, NOW()), DATEADD('MINUTE', -4170, NOW()), DATEADD('MINUTE', -4170, NOW())),
+    (906, 'WO-2026-0906', 'PDU配电柜月度保养',       'PDU月度保养：紧固接线、除尘、测温', 'MAINTENANCE', 'MANUAL', 1103, 3, 'CLOSED', 1, 1, DATEADD('MINUTE', -4360, NOW()), '完成紧固与除尘，温升正常', DATEADD('MINUTE', -5800, NOW()), DATEADD('MINUTE', -5600, NOW()), DATEADD('MINUTE', -5600, NOW())),
+    (907, 'WO-2026-0907', '气象站传感器数据校准',     '室外温度读数偏差校准', 'INSPECTION', 'MANUAL', 1104, 4, 'CLOSED', 1, 1, DATEADD('MINUTE', -5860, NOW()), '校准完成，比对误差0.3℃', DATEADD('MINUTE', -7300, NOW()), DATEADD('MINUTE', -7180, NOW()), DATEADD('MINUTE', -7180, NOW())),
+    (908, 'WO-2026-0908', 'UPS电池组老化更换',       'UPS电池组容量衰减，整体更换并做充放电测试', 'REPAIR', 'MANUAL', 1102, 1, 'CLOSED', 1, 1, DATEADD('MINUTE', -7360, NOW()), '更换电池组，放电测试通过', DATEADD('MINUTE', -8800, NOW()), DATEADD('MINUTE', -7000, NOW()), DATEADD('MINUTE', -7000, NOW())),
+    (909, 'WO-2026-0909', 'PDU重复告警误报复核',     '经复核为电压采样抖动，无需处理', 'OTHER', 'MANUAL', 1103, 4, 'CANCELLED', NULL, 1, DATEADD('MINUTE', -3060, NOW()), NULL, DATEADD('MINUTE', -4500, NOW()), DATEADD('MINUTE', -4300, NOW()), NULL);
+
+-- ============================================================================
+-- 12. 巡检计划与任务 (用于看板/统计演示；时间相对 NOW() 生成)
+-- ============================================================================
+MERGE INTO t_inspection_plan (id, name, description, cron_expression, enabled, default_assignee_id, creator_id) KEY (id) VALUES
+    (901, '机房设备例行巡检', '对机房主要设备进行例行巡视检查', '0 8 * * *',    1, 1, 1),
+    (902, '配电系统专项巡检', 'UPS/PDU配电系统负载与温度专项巡检', '0 8,14 * * *', 1, 1, 1);
+
+MERGE INTO t_inspection_plan_device (id, plan_id, device_id) KEY (id) VALUES
+    (951, 901, 1101),
+    (952, 901, 1104),
+    (953, 902, 1102),
+    (954, 902, 1103);
+
+MERGE INTO t_inspection_task (id, plan_id, task_no, status, assignee_id, scheduled_time, started_at, completed_at, created_at) KEY (id) VALUES
+    -- 今日：4单，2完成 → 完成率50%
+    (911, 901, 'INS-0911', 'COMPLETED',   1, DATEADD('MINUTE',  -300, NOW()), NULL, DATEADD('MINUTE', -240, NOW()), DATEADD('DAY', -7, NOW())),
+    (912, 902, 'INS-0912', 'COMPLETED',   1, DATEADD('MINUTE',  -180, NOW()), NULL, DATEADD('MINUTE', -120, NOW()), DATEADD('DAY', -7, NOW())),
+    (913, 902, 'INS-0913', 'IN_PROGRESS', 1, DATEADD('MINUTE',   -60, NOW()), DATEADD('MINUTE', -50, NOW()), NULL, DATEADD('DAY', -7, NOW())),
+    (914, 901, 'INS-0914', 'PENDING',  NULL, DATEADD('MINUTE',   180, NOW()), NULL, NULL, DATEADD('DAY', -7, NOW())),
+    -- 历史已完成
+    (915, 901, 'INS-0915', 'COMPLETED', 1, DATEADD('MINUTE', -1740, NOW()), NULL, DATEADD('MINUTE', -1680, NOW()), DATEADD('DAY', -7, NOW())),
+    (916, 902, 'INS-0916', 'COMPLETED', 1, DATEADD('MINUTE', -1560, NOW()), NULL, DATEADD('MINUTE', -1500, NOW()), DATEADD('DAY', -7, NOW())),
+    (917, 902, 'INS-0917', 'COMPLETED', 1, DATEADD('MINUTE', -1380, NOW()), NULL, DATEADD('MINUTE', -1320, NOW()), DATEADD('DAY', -7, NOW())),
+    (918, 901, 'INS-0918', 'COMPLETED', 1, DATEADD('MINUTE', -3180, NOW()), NULL, DATEADD('MINUTE', -3120, NOW()), DATEADD('DAY', -7, NOW())),
+    (919, 902, 'INS-0919', 'COMPLETED', 1, DATEADD('MINUTE', -3000, NOW()), NULL, DATEADD('MINUTE', -2940, NOW()), DATEADD('DAY', -7, NOW()));

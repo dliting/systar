@@ -376,3 +376,112 @@ INSERT INTO t_sample_float (monitor, `value`, moment) VALUES
 (1211, 217.5, DATE_SUB(NOW(), INTERVAL 20 MINUTE)),
 (1211, 218.5, DATE_SUB(NOW(), INTERVAL 10 MINUTE)),
 (1211, 220.0, NOW());
+
+-- ============================================================================
+-- 10. 告警历史 (近7天，用于看板/统计演示)
+-- asset_id 存监测器运行时 ID (t_probe.id)；
+-- t_error_message_log.state: 1=ERROR 2=WARNING；t_alarm_message.state: 1=待处理 2=已处理
+-- ============================================================================
+INSERT INTO t_error_message_log (id, asset_id, monitor_name, error_message, `value`, state, warn_id, time) VALUES
+    -- 今日
+    (901, 1201, '送风温度', 'AHU送风温度偏高',   '32.4',  2, 2, DATE_SUB(NOW(), INTERVAL 420 MINUTE)),
+    (902, 1208, '输入电压', 'UPS输入电压偏低',   '195.4', 1, 4, DATE_SUB(NOW(), INTERVAL 330 MINUTE)),
+    (903, 1211, 'L1电压',   'PDU L1电压偏低',    '196.8', 1, 3, DATE_SUB(NOW(), INTERVAL 240 MINUTE)),
+    (904, 1206, '电池电量', 'UPS电池电量偏低',   '23.5',  1, 3, DATE_SUB(NOW(), INTERVAL 150 MINUTE)),
+    (905, 1211, 'L1电压',   'PDU L1电压偏低',    '195.9', 1, 3, DATE_SUB(NOW(), INTERVAL 90 MINUTE)),
+    -- 昨日
+    (906, 1208, '输入电压', 'UPS输入电压偏低',   '194.1', 1, 4, DATE_SUB(NOW(), INTERVAL 1700 MINUTE)),
+    (907, 1201, '送风温度', 'AHU送风温度偏高',   '32.8',  2, 2, DATE_SUB(NOW(), INTERVAL 1650 MINUTE)),
+    (908, 1206, '电池电量', 'UPS电池电量偏低',   '24.0',  1, 3, DATE_SUB(NOW(), INTERVAL 1560 MINUTE)),
+    (909, 1211, 'L1电压',   'PDU L1电压偏低',    '197.3', 1, 3, DATE_SUB(NOW(), INTERVAL 1500 MINUTE)),
+    -- 前两天
+    (910, 1201, '送风温度', 'AHU送风温度偏高',   '31.9',  2, 2, DATE_SUB(NOW(), INTERVAL 3160 MINUTE)),
+    (911, 1216, '室外温度', '室外温度超限',      '36.2',  2, 2, DATE_SUB(NOW(), INTERVAL 3100 MINUTE)),
+    (912, 1206, '电池电量', 'UPS电池电量偏低',   '24.8',  1, 3, DATE_SUB(NOW(), INTERVAL 3000 MINUTE)),
+    (913, 1211, 'L1电压',   'PDU L1电压偏低',    '197.8', 1, 3, DATE_SUB(NOW(), INTERVAL 2950 MINUTE)),
+    -- 前三天
+    (914, 1201, '送风温度', 'AHU送风温度偏高',   '32.1',  2, 2, DATE_SUB(NOW(), INTERVAL 4600 MINUTE)),
+    (915, 1206, '电池电量', 'UPS电池电量偏低',   '24.3',  1, 3, DATE_SUB(NOW(), INTERVAL 4520 MINUTE)),
+    (916, 1206, '电池电量', 'UPS电池电量偏低',   '23.9',  1, 3, DATE_SUB(NOW(), INTERVAL 4460 MINUTE)),
+    (917, 1211, 'L1电压',   'PDU L1电压偏低',    '196.2', 1, 3, DATE_SUB(NOW(), INTERVAL 4400 MINUTE)),
+    -- 前四天
+    (918, 1201, '送风温度', 'AHU送风温度偏高',   '31.6',  2, 2, DATE_SUB(NOW(), INTERVAL 5980 MINUTE)),
+    (919, 1208, '输入电压', 'UPS输入电压偏低',   '193.8', 1, 4, DATE_SUB(NOW(), INTERVAL 5910 MINUTE)),
+    (920, 1211, 'L1电压',   'PDU L1电压偏低',    '195.4', 1, 3, DATE_SUB(NOW(), INTERVAL 5850 MINUTE)),
+    -- 前五天
+    (921, 1206, '电池电量', 'UPS电池电量偏低',   '25.1',  1, 3, DATE_SUB(NOW(), INTERVAL 7440 MINUTE)),
+    (922, 1216, '室外温度', '室外温度超限',      '35.8',  2, 2, DATE_SUB(NOW(), INTERVAL 7360 MINUTE)),
+    (923, 1211, 'L1电压',   'PDU L1电压偏低',    '198.2', 1, 3, DATE_SUB(NOW(), INTERVAL 7300 MINUTE)),
+    -- 前六天
+    (924, 1206, '电池电量', 'UPS电池电量偏低',   '24.6',  1, 3, DATE_SUB(NOW(), INTERVAL 8820 MINUTE)),
+    (925, 1201, '送风温度', 'AHU送风温度偏高',   '32.5',  2, 2, DATE_SUB(NOW(), INTERVAL 8760 MINUTE)),
+    (926, 1211, 'L1电压',   'PDU L1电压偏低',    '196.5', 1, 3, DATE_SUB(NOW(), INTERVAL 8700 MINUTE));
+
+INSERT INTO t_alarm_message (id, log_id, caption, state, auto, alarm_time, recovered, warn_id, device_id) VALUES
+    -- 今日：904/905 待处理，其余已处理
+    (901, 901, 'AHU送风温度偏高', 2, 1, DATE_SUB(NOW(), INTERVAL 420 MINUTE), 1, 2, 1101),
+    (902, 902, 'UPS输入电压偏低', 2, 1, DATE_SUB(NOW(), INTERVAL 330 MINUTE), 1, 4, 1102),
+    (903, 903, 'PDU L1电压偏低',  2, 1, DATE_SUB(NOW(), INTERVAL 240 MINUTE), 1, 3, 1103),
+    (904, 904, 'UPS电池电量偏低', 1, 1, DATE_SUB(NOW(), INTERVAL 150 MINUTE), 0, 3, 1102),
+    (905, 905, 'PDU L1电压偏低',  1, 1, DATE_SUB(NOW(), INTERVAL 90 MINUTE), 0, 3, 1103),
+    (906, 906, 'UPS输入电压偏低', 2, 1, DATE_SUB(NOW(), INTERVAL 1700 MINUTE), 1, 4, 1102),
+    (907, 907, 'AHU送风温度偏高', 2, 1, DATE_SUB(NOW(), INTERVAL 1650 MINUTE), 1, 2, 1101),
+    (908, 908, 'UPS电池电量偏低', 2, 1, DATE_SUB(NOW(), INTERVAL 1560 MINUTE), 1, 3, 1102),
+    (909, 909, 'PDU L1电压偏低',  2, 1, DATE_SUB(NOW(), INTERVAL 1500 MINUTE), 1, 3, 1103),
+    (910, 910, 'AHU送风温度偏高', 2, 1, DATE_SUB(NOW(), INTERVAL 3160 MINUTE), 1, 2, 1101),
+    (911, 911, '室外温度超限',    2, 1, DATE_SUB(NOW(), INTERVAL 3100 MINUTE), 1, 2, 1104),
+    (912, 912, 'UPS电池电量偏低', 2, 1, DATE_SUB(NOW(), INTERVAL 3000 MINUTE), 1, 3, 1102),
+    (913, 913, 'PDU L1电压偏低',  2, 1, DATE_SUB(NOW(), INTERVAL 2950 MINUTE), 1, 3, 1103),
+    (914, 914, 'AHU送风温度偏高', 2, 1, DATE_SUB(NOW(), INTERVAL 4600 MINUTE), 1, 2, 1101),
+    (915, 915, 'UPS电池电量偏低', 2, 1, DATE_SUB(NOW(), INTERVAL 4520 MINUTE), 1, 3, 1102),
+    (916, 916, 'UPS电池电量偏低', 2, 1, DATE_SUB(NOW(), INTERVAL 4460 MINUTE), 1, 3, 1102),
+    (917, 917, 'PDU L1电压偏低',  2, 1, DATE_SUB(NOW(), INTERVAL 4400 MINUTE), 1, 3, 1103),
+    (918, 918, 'AHU送风温度偏高', 2, 1, DATE_SUB(NOW(), INTERVAL 5980 MINUTE), 1, 2, 1101),
+    (919, 919, 'UPS输入电压偏低', 2, 1, DATE_SUB(NOW(), INTERVAL 5910 MINUTE), 1, 4, 1102),
+    (920, 920, 'PDU L1电压偏低',  2, 1, DATE_SUB(NOW(), INTERVAL 5850 MINUTE), 1, 3, 1103),
+    (921, 921, 'UPS电池电量偏低', 2, 1, DATE_SUB(NOW(), INTERVAL 7440 MINUTE), 1, 3, 1102),
+    (922, 922, '室外温度超限',    2, 1, DATE_SUB(NOW(), INTERVAL 7360 MINUTE), 1, 2, 1104),
+    (923, 923, 'PDU L1电压偏低',  2, 1, DATE_SUB(NOW(), INTERVAL 7300 MINUTE), 1, 3, 1103),
+    (924, 924, 'UPS电池电量偏低', 2, 1, DATE_SUB(NOW(), INTERVAL 8820 MINUTE), 1, 3, 1102),
+    (925, 925, 'AHU送风温度偏高', 2, 1, DATE_SUB(NOW(), INTERVAL 8760 MINUTE), 1, 2, 1101),
+    (926, 926, 'PDU L1电压偏低',  2, 1, DATE_SUB(NOW(), INTERVAL 8700 MINUTE), 1, 3, 1103);
+
+-- ============================================================================
+-- 11. 工单历史 (近7天，用于看板/统计演示)
+-- ============================================================================
+INSERT INTO t_work_order (id, order_no, title, description, type, source, device_id, priority, status, assignee_id, creator_id, due_time, resolution, created_at, updated_at, closed_at) VALUES
+    (901, 'WO-2026-0901', 'PDU配电柜L1电压偏低处理', 'PDU L1相电压低于告警阈值，需要现场排查供电回路', 'REPAIR', 'ALARM_AUTO', 1103, 1, 'CREATED',    NULL, 1, DATE_ADD(NOW(), INTERVAL 22 HOUR), NULL, DATE_SUB(NOW(), INTERVAL 90 MINUTE), DATE_SUB(NOW(), INTERVAL 90 MINUTE), NULL),
+    (902, 'WO-2026-0902', 'UPS电池电量告警核查',     'UPS电池电量持续偏低，核查电池组状态并安排充电', 'MAINTENANCE', 'ALARM_AUTO', 1102, 2, 'ASSIGNED',   1, 1, DATE_ADD(NOW(), INTERVAL 8 HOUR),  NULL, DATE_SUB(NOW(), INTERVAL 1500 MINUTE), DATE_SUB(NOW(), INTERVAL 1400 MINUTE), NULL),
+    (903, 'WO-2026-0903', 'AHU空调机组过滤网更换',   '按季度保养计划更换AHU过滤网并清洗表冷器', 'MAINTENANCE', 'MANUAL', 1101, 3, 'PROCESSING', 1, 1, DATE_ADD(NOW(), INTERVAL 1 DAY),   NULL, DATE_SUB(NOW(), INTERVAL 1740 MINUTE), DATE_SUB(NOW(), INTERVAL 1200 MINUTE), NULL),
+    (904, 'WO-2026-0904', 'UPS输入电压异常检修',     'UPS输入电压低于下限，检修输入回路', 'REPAIR', 'ALARM_AUTO', 1102, 2, 'CLOSED', 1, 1, DATE_SUB(NOW(), INTERVAL 1460 MINUTE), '更换输入滤波电容，电压恢复正常', DATE_SUB(NOW(), INTERVAL 2900 MINUTE), DATE_SUB(NOW(), INTERVAL 2660 MINUTE), DATE_SUB(NOW(), INTERVAL 2660 MINUTE)),
+    (905, 'WO-2026-0905', 'AHU送风温度偏高处理',     'AHU送风温度超上限，排查冷媒与水阀', 'REPAIR', 'ALARM_AUTO', 1101, 2, 'CLOSED', 1, 1, DATE_SUB(NOW(), INTERVAL 2910 MINUTE), '清洗表冷器并调整水阀开度', DATE_SUB(NOW(), INTERVAL 4350 MINUTE), DATE_SUB(NOW(), INTERVAL 4170 MINUTE), DATE_SUB(NOW(), INTERVAL 4170 MINUTE)),
+    (906, 'WO-2026-0906', 'PDU配电柜月度保养',       'PDU月度保养：紧固接线、除尘、测温', 'MAINTENANCE', 'MANUAL', 1103, 3, 'CLOSED', 1, 1, DATE_SUB(NOW(), INTERVAL 4360 MINUTE), '完成紧固与除尘，温升正常', DATE_SUB(NOW(), INTERVAL 5800 MINUTE), DATE_SUB(NOW(), INTERVAL 5600 MINUTE), DATE_SUB(NOW(), INTERVAL 5600 MINUTE)),
+    (907, 'WO-2026-0907', '气象站传感器数据校准',     '室外温度读数偏差校准', 'INSPECTION', 'MANUAL', 1104, 4, 'CLOSED', 1, 1, DATE_SUB(NOW(), INTERVAL 5860 MINUTE), '校准完成，比对误差0.3℃', DATE_SUB(NOW(), INTERVAL 7300 MINUTE), DATE_SUB(NOW(), INTERVAL 7180 MINUTE), DATE_SUB(NOW(), INTERVAL 7180 MINUTE)),
+    (908, 'WO-2026-0908', 'UPS电池组老化更换',       'UPS电池组容量衰减，整体更换并做充放电测试', 'REPAIR', 'MANUAL', 1102, 1, 'CLOSED', 1, 1, DATE_SUB(NOW(), INTERVAL 7360 MINUTE), '更换电池组，放电测试通过', DATE_SUB(NOW(), INTERVAL 8800 MINUTE), DATE_SUB(NOW(), INTERVAL 7000 MINUTE), DATE_SUB(NOW(), INTERVAL 7000 MINUTE)),
+    (909, 'WO-2026-0909', 'PDU重复告警误报复核',     '经复核为电压采样抖动，无需处理', 'OTHER', 'MANUAL', 1103, 4, 'CANCELLED', NULL, 1, DATE_SUB(NOW(), INTERVAL 3060 MINUTE), NULL, DATE_SUB(NOW(), INTERVAL 4500 MINUTE), DATE_SUB(NOW(), INTERVAL 4300 MINUTE), NULL);
+
+-- ============================================================================
+-- 12. 巡检计划与任务 (用于看板/统计演示；时间相对 NOW() 生成)
+-- ============================================================================
+INSERT INTO t_inspection_plan (id, name, description, cron_expression, enabled, default_assignee_id, creator_id) VALUES
+    (901, '机房设备例行巡检', '对机房主要设备进行例行巡视检查', '0 8 * * *',    1, 1, 1),
+    (902, '配电系统专项巡检', 'UPS/PDU配电系统负载与温度专项巡检', '0 8,14 * * *', 1, 1, 1);
+
+INSERT INTO t_inspection_plan_device (id, plan_id, device_id) VALUES
+    (951, 901, 1101),
+    (952, 901, 1104),
+    (953, 902, 1102),
+    (954, 902, 1103);
+
+INSERT INTO t_inspection_task (id, plan_id, task_no, status, assignee_id, scheduled_time, started_at, completed_at, created_at) VALUES
+    -- 今日：4单，2完成 → 完成率50%
+    (911, 901, 'INS-0911', 'COMPLETED',   1, DATE_SUB(NOW(), INTERVAL 300 MINUTE), NULL, DATE_SUB(NOW(), INTERVAL 240 MINUTE), DATE_SUB(NOW(), INTERVAL 7 DAY)),
+    (912, 902, 'INS-0912', 'COMPLETED',   1, DATE_SUB(NOW(), INTERVAL 180 MINUTE), NULL, DATE_SUB(NOW(), INTERVAL 120 MINUTE), DATE_SUB(NOW(), INTERVAL 7 DAY)),
+    (913, 902, 'INS-0913', 'IN_PROGRESS', 1, DATE_SUB(NOW(), INTERVAL 60 MINUTE), DATE_SUB(NOW(), INTERVAL 50 MINUTE), NULL, DATE_SUB(NOW(), INTERVAL 7 DAY)),
+    (914, 901, 'INS-0914', 'PENDING',  NULL, DATE_ADD(NOW(), INTERVAL 180 MINUTE), NULL, NULL, DATE_SUB(NOW(), INTERVAL 7 DAY)),
+    -- 历史已完成
+    (915, 901, 'INS-0915', 'COMPLETED', 1, DATE_SUB(NOW(), INTERVAL 1740 MINUTE), NULL, DATE_SUB(NOW(), INTERVAL 1680 MINUTE), DATE_SUB(NOW(), INTERVAL 7 DAY)),
+    (916, 902, 'INS-0916', 'COMPLETED', 1, DATE_SUB(NOW(), INTERVAL 1560 MINUTE), NULL, DATE_SUB(NOW(), INTERVAL 1500 MINUTE), DATE_SUB(NOW(), INTERVAL 7 DAY)),
+    (917, 902, 'INS-0917', 'COMPLETED', 1, DATE_SUB(NOW(), INTERVAL 1380 MINUTE), NULL, DATE_SUB(NOW(), INTERVAL 1320 MINUTE), DATE_SUB(NOW(), INTERVAL 7 DAY)),
+    (918, 901, 'INS-0918', 'COMPLETED', 1, DATE_SUB(NOW(), INTERVAL 3180 MINUTE), NULL, DATE_SUB(NOW(), INTERVAL 3120 MINUTE), DATE_SUB(NOW(), INTERVAL 7 DAY)),
+    (919, 902, 'INS-0919', 'COMPLETED', 1, DATE_SUB(NOW(), INTERVAL 3000 MINUTE), NULL, DATE_SUB(NOW(), INTERVAL 2940 MINUTE), DATE_SUB(NOW(), INTERVAL 7 DAY));
