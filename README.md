@@ -260,7 +260,7 @@ Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## License
 
-Copyright (C) 2026 Alan Dlite.
+Copyright (C) 2026 Hao Yufei.
 
 Systar is licensed under the **GNU General Public License v3.0 only** — see
 [LICENSE](LICENSE). The vendored BACnet4J 4.1.6 artifact under `lib/maven-repo/` is

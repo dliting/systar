@@ -241,7 +241,7 @@ systar/
 
 ## 许可证
 
-Copyright (C) 2026 Alan Dlite。
+Copyright (C) 2026 Hao Yufei。
 
 Systar 以 **GNU General Public License v3.0 only** 许可发布——见
 [LICENSE](LICENSE)。`lib/maven-repo/` 下的 BACnet4J 4.1.6 产物同样为 GPL-3.0
