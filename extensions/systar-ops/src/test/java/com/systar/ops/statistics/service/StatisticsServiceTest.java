@@ -17,9 +17,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.Rollback;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +41,12 @@ import static org.assertj.core.api.Assertions.*;
 @Timeout(value = 3, unit = TimeUnit.MINUTES)
 class StatisticsServiceTest {
 
+    private static final int TOP_DEVICE_ID        = 9101;
+    private static final int TOP_DEVICE_ASSET_ID  = 9101;
+    private static final int TOP_PROBE_ASSET_ID   = 9102;
+    private static final int TOP_PROBE_ID         = 9201;
+    private static final String TOP_DEVICE_NAME   = "stats_top_dev";
+
     @Autowired
     private StatisticsService statisticsService;
 
@@ -56,6 +64,10 @@ class StatisticsServiceTest {
 
     @Autowired
     private CacheManager cacheManager;
+
+    @Autowired
+    @Qualifier("mainJdbcTemplate")
+    private JdbcTemplate jdbcTemplate;
 
     private LocalDate today;
     private LocalDate yesterday;
@@ -233,6 +245,79 @@ class StatisticsServiceTest {
         assertThat(vo.getTopDevices()).isEmpty();
     }
 
+    @Test
+    void getAlarmStats_shouldResolveTopDevicesWhenErrorLogStoresMonitorIds() {
+        // t_error_message_log.asset_id stores the MONITOR id (t_probe.id /
+        // t_control.id), not the t_asset id — statistics must bridge the two id
+        // domains via t_asset.probe_id / control_id. Regression guard: top
+        // devices were permanently empty when matching e.asset_id to t_asset.id.
+        insertAlarmHistoryFixture();
+
+        AlarmStatsVO vo = statisticsService.getAlarmStats(
+                new StatisticsQuery(threeDaysAgo, today, null, null, "DAY"));
+
+        assertThat(vo.getTopDevices()).hasSize(1);
+        assertThat(vo.getTopDevices().get(0).deviceId()).isEqualTo(TOP_DEVICE_ID);
+        assertThat(vo.getTopDevices().get(0).deviceName()).isEqualTo(TOP_DEVICE_NAME);
+        assertThat(vo.getTopDevices().get(0).alarmCount()).isEqualTo(1);
+    }
+
+    @Test
+    void getDeviceHistory_shouldCountAlarmsWhenErrorLogStoresMonitorIds() {
+        // Same id-domain bridge applies to the device runtime history drill-down.
+        insertAlarmHistoryFixture();
+
+        Map<String, Object> history = statisticsService.getDeviceHistory(
+                new StatisticsQuery(threeDaysAgo, today, null, null, "DAY"), TOP_DEVICE_ID);
+
+        // H2 uppercases unquoted column aliases; StatisticsService.getValue is
+        // the shared case-insensitive lookup used by production code paths.
+        assertThat(((Number) StatisticsService.getValue(history, "alarmCount")).longValue())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void getDeviceHistory_shouldNotInflateMaintenanceCostByAlarmRows() {
+        // Alarms and maintenance records are independent one-to-many branches
+        // of the device; a flat join multiplies SUM(cost) by the alarm row
+        // count (A×ΣC instead of ΣC). Regression guard: the id-domain fix
+        // activated this previously dormant fan-out.
+        insertAlarmHistoryFixture();
+
+        LocalDateTime secondAlarmTime = yesterday.atTime(13, 0);
+        jdbcTemplate.update(
+                "INSERT INTO t_error_message_log "
+                        + "(asset_id, monitor_name, error_message, \"value\", state, warn_id, time) "
+                        + "VALUES (?, 'L1电压', 'PDU L1电压偏低', '198', 1, 3, ?)",
+                TOP_PROBE_ID, secondAlarmTime);
+        jdbcTemplate.update(
+                "INSERT INTO t_alarm_message "
+                        + "(log_id, caption, state, auto, alarm_time, recovered, warn_id, device_id) "
+                        + "VALUES ((SELECT MAX(id) FROM t_error_message_log), 'PDU L1电压偏低告警', 2, 1, ?, 1, 3, ?)",
+                secondAlarmTime, TOP_DEVICE_ID);
+        jdbcTemplate.update(
+                "INSERT INTO t_maintenance_record "
+                        + "(device_id, type, title, performer_id, creator_id, performed_at, cost) "
+                        + "VALUES (?, 'MAINTENANCE', '统计保养记录', 1, 1, ?, 60)",
+                TOP_DEVICE_ID, yesterday.atTime(9, 0));
+        jdbcTemplate.update(
+                "INSERT INTO t_maintenance_record "
+                        + "(device_id, type, title, performer_id, creator_id, performed_at, cost) "
+                        + "VALUES (?, 'REPAIR', '统计维修记录', 1, 1, ?, 40)",
+                TOP_DEVICE_ID, yesterday.atTime(10, 0));
+
+        Map<String, Object> history = statisticsService.getDeviceHistory(
+                new StatisticsQuery(threeDaysAgo, today, null, null, "DAY"), TOP_DEVICE_ID);
+
+        assertThat(((Number) StatisticsService.getValue(history, "alarmCount")).longValue())
+                .isEqualTo(2);
+        assertThat(((Number) StatisticsService.getValue(history, "maintenanceCount")).longValue())
+                .isEqualTo(2);
+        // ΣC = 60 + 40 = 100; the flat-join bug reported 2 × 100 = 200.
+        assertThat(((Number) StatisticsService.getValue(history, "totalMaintenanceCost")).doubleValue())
+                .isEqualTo(100.0);
+    }
+
     // ==================== Dashboard ====================
 
     @Test
@@ -315,6 +400,35 @@ class StatisticsServiceTest {
     }
 
     // ==================== Helpers ====================
+
+    /**
+     * Seeds one device with a probe asset and a single handled alarm, using the
+     * runtime id domains: t_error_message_log.asset_id holds the probe id
+     * (t_probe.id), referenced from t_asset via probe_id.
+     */
+    private void insertAlarmHistoryFixture() {
+        jdbcTemplate.update(
+                "INSERT INTO t_device (id, name, caption, parent, lifecycle_status) "
+                        + "VALUES (?, ?, ?, 0, 'IN_SERVICE')",
+                TOP_DEVICE_ID, TOP_DEVICE_NAME, "统计回归设备");
+        jdbcTemplate.update(
+                "INSERT INTO t_asset (id, name, kind, device_id) VALUES (?, ?, 1, ?)",
+                TOP_DEVICE_ASSET_ID, "stats_dev_asset", TOP_DEVICE_ID);
+        jdbcTemplate.update(
+                "INSERT INTO t_asset (id, name, kind, parent_id, probe_id) VALUES (?, ?, 3, ?, ?)",
+                TOP_PROBE_ASSET_ID, "stats_probe_asset", TOP_DEVICE_ASSET_ID, TOP_PROBE_ID);
+        LocalDateTime alarmTime = yesterday.atTime(12, 0);
+        jdbcTemplate.update(
+                "INSERT INTO t_error_message_log "
+                        + "(asset_id, monitor_name, error_message, \"value\", state, warn_id, time) "
+                        + "VALUES (?, ?, ?, ?, 2, 3, ?)",
+                TOP_PROBE_ID, "L1电压", "PDU L1电压偏低", "199", alarmTime);
+        jdbcTemplate.update(
+                "INSERT INTO t_alarm_message "
+                        + "(log_id, caption, state, auto, alarm_time, recovered, warn_id, device_id) "
+                        + "VALUES ((SELECT MAX(id) FROM t_error_message_log), ?, 2, 1, ?, 1, 3, ?)",
+                "PDU L1电压偏低告警", alarmTime, TOP_DEVICE_ID);
+    }
 
     private WorkOrderEntity createWorkOrder(WorkOrderStatus status, LocalDate createdDate) {
         WorkOrderEntity wo = new WorkOrderEntity();

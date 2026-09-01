@@ -4,7 +4,9 @@ import com.systar.ops.test.OpsTestApplication;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.Rollback;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +26,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class StatisticsMapperTest {
 
     private static final int NONEXISTENT_ID = 99999;
+    private static final int DIRECT_DEVICE_ID = 9101;
+    private static final int DIRECT_PROBE_ID  = 9301;
     private static final int TOP_N_LIMIT   = 10;
     private static final int PAGE_SIZE     = 20;
     private static final int ALARM_LEVEL_WARN = 1;
@@ -31,6 +35,10 @@ class StatisticsMapperTest {
 
     @Autowired
     private StatisticsMapper mapper;
+
+    @Autowired
+    @Qualifier("mainJdbcTemplate")
+    private JdbcTemplate jdbcTemplate;
 
     private final LocalDateTime now       = LocalDateTime.now();
     private final LocalDateTime start     = now.minusDays(7);
@@ -41,6 +49,21 @@ class StatisticsMapperTest {
     void countAlarmsByLevel_shouldReturnEmptyForNoData() {
         List<Map<String, Object>> result = mapper.countAlarmsByLevel(start, now);
         assertThat(result).isNotNull();
+    }
+
+    @Test
+    void findProbeIdsByDevice_shouldMatchProbesParentedDirectlyToDevice() {
+        // In the runtime data model t_probe.parent references t_device.id
+        // directly (services attach via the source column), so probe lookup
+        // must accept the direct edge, not only probe→service→device chains.
+        jdbcTemplate.update(
+                "INSERT INTO t_probe (id, name, caption, parent) "
+                        + "VALUES (?, 'stats_probe_direct', '直挂设备探头', ?)",
+                DIRECT_PROBE_ID, DIRECT_DEVICE_ID);
+
+        List<Integer> ids = mapper.findProbeIdsByDevice(DIRECT_DEVICE_ID);
+
+        assertThat(ids).contains(DIRECT_PROBE_ID);
     }
 
     @Test

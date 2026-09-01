@@ -29,9 +29,15 @@ public interface AnalysisMapper {
             "FROM t_device d WHERE d.lifecycle_status = 'IN_SERVICE'")
     List<Map<String, Object>> listActiveDevices();
 
+    // t_error_message_log.asset_id stores the MONITOR id (t_probe.id /
+    // t_control.id) — bridge to t_asset via COALESCE(probe_id, control_id).
+    // Monitor rows do NOT carry device_id; they hang off the device's asset row
+    // via parent_id, so the device must be resolved through that row.
     @Select("SELECT COUNT(*) FROM t_alarm_message m " +
             "JOIN t_error_message_log e ON m.log_id = e.id " +
-            "WHERE e.asset_id IN (SELECT a.id FROM t_asset a WHERE a.device_id = #{deviceId} AND a.kind IN (3,4)) " +
+            "WHERE e.asset_id IN (SELECT COALESCE(a.probe_id, a.control_id) FROM t_asset a " +
+            "JOIN t_asset da ON a.parent_id = da.id " +
+            "WHERE da.kind = 1 AND da.device_id = #{deviceId} AND a.kind IN (3,4)) " +
             "AND m.alarm_time BETWEEN #{start} AND #{end}")
     long countAlarmsForDevice(@Param("deviceId") int deviceId,
                               @Param("start") LocalDateTime start,
@@ -43,7 +49,10 @@ public interface AnalysisMapper {
                                     @Param("start") LocalDateTime start,
                                     @Param("end") LocalDateTime end);
 
-    @Select("SELECT p.id FROM t_probe p JOIN t_service s ON p.parent = s.id " +
-            "WHERE s.parent = #{deviceId}")
+    // Accepts both probe→device (standard model, service via source column)
+    // and probe→service→device layouts.
+    @Select("SELECT p.id FROM t_probe p " +
+            "LEFT JOIN t_service s ON p.parent = s.id " +
+            "WHERE p.parent = #{deviceId} OR s.parent = #{deviceId}")
     List<Integer> findProbeIdsForDevice(@Param("deviceId") int deviceId);
 }

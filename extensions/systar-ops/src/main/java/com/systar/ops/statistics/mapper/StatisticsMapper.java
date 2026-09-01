@@ -45,10 +45,15 @@ public interface StatisticsMapper {
     long countPendingAlarms(@Param("start") LocalDateTime start,
                             @Param("end") LocalDateTime end);
 
-    @Select("SELECT e.asset_id as assetId, COUNT(*) as cnt " +
+    // t_error_message_log.asset_id stores the MONITOR id (t_probe.id /
+    // t_control.id); t_asset rows reference it via probe_id / control_id, so the
+    // join must bridge the two id domains — grouping by e.asset_id directly
+    // yields ids the caller cannot resolve and TOP alarm devices stay empty.
+    @Select("SELECT a.id as assetId, COUNT(*) as cnt " +
             "FROM t_alarm_message m JOIN t_error_message_log e ON m.log_id = e.id " +
+            "JOIN t_asset a ON COALESCE(a.probe_id, a.control_id) = e.asset_id " +
             "WHERE m.alarm_time BETWEEN #{start} AND #{end} " +
-            "GROUP BY e.asset_id ORDER BY cnt DESC LIMIT #{limit}")
+            "GROUP BY a.id ORDER BY cnt DESC LIMIT #{limit}")
     List<Map<String, Object>> topAlarmAssets(@Param("start") LocalDateTime start,
                                               @Param("end") LocalDateTime end,
                                               @Param("limit") int limit);
@@ -131,9 +136,12 @@ public interface StatisticsMapper {
 
     // ==================== Device Runtime Statistics ====================
 
-    @Select("SELECT p.id " +
-            "FROM t_probe p JOIN t_service s ON p.parent = s.id " +
-            "WHERE s.parent = #{deviceId}")
+    // t_probe.parent references the device directly in the standard model
+    // (services attach via the source column); the probe→service→device chain
+    // is kept for layouts that hang probes off a service.
+    @Select("SELECT p.id FROM t_probe p " +
+            "LEFT JOIN t_service s ON p.parent = s.id " +
+            "WHERE p.parent = #{deviceId} OR s.parent = #{deviceId}")
     List<Integer> findProbeIdsByDevice(@Param("deviceId") int deviceId);
 
     @Select("<script>" +
@@ -247,19 +255,22 @@ public interface StatisticsMapper {
                                           @Param("end") LocalDateTime end,
                                           @Param("status") String status);
 
-    @Select("SELECT COUNT(DISTINCT m.id) as alarmCount, " +
-            "COUNT(DISTINCT mr.id) as maintenanceCount, " +
-            "COALESCE(SUM(mr.cost), 0) as totalMaintenanceCost " +
-            "FROM t_device d " +
-            "LEFT JOIN t_error_message_log e ON e.asset_id IN (" +
-            "  SELECT a.id FROM t_asset a WHERE a.device_id = d.id AND a.kind IN (3,4)" +
-            ") " +
-            "LEFT JOIN t_alarm_message m ON m.log_id = e.id " +
-            "  AND m.alarm_time BETWEEN #{start} AND #{end} " +
-            "LEFT JOIN t_maintenance_record mr ON mr.device_id = d.id " +
-            "  AND mr.performed_at BETWEEN #{start} AND #{end} " +
-            "WHERE d.id = #{deviceId} " +
-            "GROUP BY d.id")
+    // Alarms and maintenance records are independent one-to-many branches of
+    // the device — each aggregate must run in its own scalar subquery, or the
+    // flat join multiplies SUM(cost) by the alarm row count.
+    @Select("SELECT " +
+            "  (SELECT COUNT(*) FROM t_alarm_message m " +
+            "   JOIN t_error_message_log e ON m.log_id = e.id " +
+            "   WHERE m.alarm_time BETWEEN #{start} AND #{end} " +
+            "   AND e.asset_id IN (" +
+            "     SELECT COALESCE(a.probe_id, a.control_id) FROM t_asset a " +
+            "     JOIN t_asset da ON a.parent_id = da.id " +
+            "     WHERE da.kind = 1 AND da.device_id = d.id AND a.kind IN (3,4))) as alarmCount, " +
+            "  (SELECT COUNT(*) FROM t_maintenance_record mr " +
+            "   WHERE mr.device_id = d.id AND mr.performed_at BETWEEN #{start} AND #{end}) as maintenanceCount, " +
+            "  (SELECT COALESCE(SUM(mr.cost), 0) FROM t_maintenance_record mr " +
+            "   WHERE mr.device_id = d.id AND mr.performed_at BETWEEN #{start} AND #{end}) as totalMaintenanceCost " +
+            "FROM t_device d WHERE d.id = #{deviceId}")
     Map<String, Object> getDeviceRuntimeHistory(@Param("deviceId") int deviceId,
                                                  @Param("start") LocalDateTime start,
                                                  @Param("end") LocalDateTime end);
