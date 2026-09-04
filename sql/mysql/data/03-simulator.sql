@@ -485,3 +485,31 @@ INSERT INTO t_inspection_task (id, plan_id, task_no, status, assignee_id, schedu
     (917, 902, 'INS-0917', 'COMPLETED', 1, DATE_SUB(NOW(), INTERVAL 1380 MINUTE), NULL, DATE_SUB(NOW(), INTERVAL 1320 MINUTE), DATE_SUB(NOW(), INTERVAL 7 DAY)),
     (918, 901, 'INS-0918', 'COMPLETED', 1, DATE_SUB(NOW(), INTERVAL 3180 MINUTE), NULL, DATE_SUB(NOW(), INTERVAL 3120 MINUTE), DATE_SUB(NOW(), INTERVAL 7 DAY)),
     (919, 902, 'INS-0919', 'COMPLETED', 1, DATE_SUB(NOW(), INTERVAL 3000 MINUTE), NULL, DATE_SUB(NOW(), INTERVAL 2940 MINUTE), DATE_SUB(NOW(), INTERVAL 7 DAY));
+
+-- ============================================================================
+-- 13. 维保记录 (近7天，用于看板/统计演示；与工单 904-908 的处理动作对应)
+-- ============================================================================
+INSERT INTO t_maintenance_record (id, device_id, type, title, description, performer_id, creator_id, performed_at, cost, result, next_maintenance_date, created_at, updated_at) VALUES
+    (961, 1102, 'REPAIR',      'UPS输入回路检修',   '更换输入滤波电容，电压恢复正常', 1, 1, DATE_SUB(NOW(), INTERVAL  2660 MINUTE),  850.00, '电压稳定在220V', NULL, DATE_SUB(NOW(), INTERVAL  2660 MINUTE), DATE_SUB(NOW(), INTERVAL  2660 MINUTE)),
+    (962, 1101, 'MAINTENANCE', 'AHU表冷器清洗',     '清洗表冷器并调整水阀开度',       1, 1, DATE_SUB(NOW(), INTERVAL  4170 MINUTE),  600.00, '送风温度回落至26℃', NULL, DATE_SUB(NOW(), INTERVAL  4170 MINUTE), DATE_SUB(NOW(), INTERVAL  4170 MINUTE)),
+    (963, 1103, 'MAINTENANCE', 'PDU月度保养',       '紧固接线、除尘、红外测温',       1, 1, DATE_SUB(NOW(), INTERVAL  5600 MINUTE),  300.00, '温升正常', NULL, DATE_SUB(NOW(), INTERVAL  5600 MINUTE), DATE_SUB(NOW(), INTERVAL  5600 MINUTE)),
+    (964, 1104, 'INSPECTION',  '气象站传感器校准',  '室外温度传感器偏差校准',         1, 1, DATE_SUB(NOW(), INTERVAL  7180 MINUTE),  200.00, '比对误差0.3℃', NULL, DATE_SUB(NOW(), INTERVAL  7180 MINUTE), DATE_SUB(NOW(), INTERVAL  7180 MINUTE)),
+    (965, 1102, 'REPAIR',      'UPS电池组更换',     '整组更换并做充放电测试',         1, 1, DATE_SUB(NOW(), INTERVAL  7000 MINUTE), 5200.00, '放电测试通过', NULL, DATE_SUB(NOW(), INTERVAL  7000 MINUTE), DATE_SUB(NOW(), INTERVAL  7000 MINUTE)),
+    (966, 1101, 'MAINTENANCE', 'AHU过滤网更换',     '季度保养：更换过滤网',           1, 1, DATE_SUB(NOW(), INTERVAL  1200 MINUTE),  260.00, '压差恢复正常', NULL, DATE_SUB(NOW(), INTERVAL  1200 MINUTE), DATE_SUB(NOW(), INTERVAL  1200 MINUTE)),
+    (967, 1103, 'INSPECTION',  '配电柜红外测温',    'PDU配电柜端子红外测温巡检',      1, 1, DATE_SUB(NOW(), INTERVAL  3000 MINUTE),  150.00, '无过热点', NULL, DATE_SUB(NOW(), INTERVAL  3000 MINUTE), DATE_SUB(NOW(), INTERVAL  3000 MINUTE)),
+    (968, 1102, 'MAINTENANCE', 'UPS电池组巡检',     '电池组季度巡检与端电压记录',     1, 1, DATE_SUB(NOW(), INTERVAL  4460 MINUTE),  180.00, '端电压一致', NULL, DATE_SUB(NOW(), INTERVAL  4460 MINUTE), DATE_SUB(NOW(), INTERVAL  4460 MINUTE));
+
+-- ============================================================================
+-- 14. 巡检结果 (含异常项，用于巡检统计/异常分析演示)
+-- check_result: NORMAL=正常 ABNORMAL=异常；created_at 对应任务完成时间
+-- ============================================================================
+INSERT INTO t_inspection_result (id, task_id, device_id, template_id, item_name, expected_value, check_result, actual_value, remark, created_at) VALUES
+    (981, 911, 1101, 1, '机房环境温度检查',   '18~28℃',   'NORMAL',   '24.1℃',          NULL,           DATE_SUB(NOW(), INTERVAL   240 MINUTE)),
+    (982, 911, 1104, 2, '室外气象传感器检查', '误差≤0.5℃', 'ABNORMAL', '偏差0.8℃',        '需重新校准',   DATE_SUB(NOW(), INTERVAL   240 MINUTE)),
+    (983, 912, 1102, 1, 'UPS输出电压检查',   '220V±3%',   'NORMAL',   '221.4V',          NULL,           DATE_SUB(NOW(), INTERVAL   120 MINUTE)),
+    (984, 912, 1103, 2, 'PDU负载不平衡检查', '≤15%',      'ABNORMAL', 'L1负载率62%',     '建议调相',     DATE_SUB(NOW(), INTERVAL   120 MINUTE)),
+    (985, 915, 1101, 1, 'AHU送风温度检查',   '≤26℃',     'NORMAL',   '25.2℃',          NULL,           DATE_SUB(NOW(), INTERVAL  1680 MINUTE)),
+    (986, 916, 1102, 2, 'UPS电池组外观检查', '无漏液',    'ABNORMAL', '2号电池端子漏液', '已转维保',     DATE_SUB(NOW(), INTERVAL  1500 MINUTE)),
+    (987, 917, 1103, 1, '接线端子紧固检查',  '无松动',    'NORMAL',   '全部紧固',        NULL,           DATE_SUB(NOW(), INTERVAL  1320 MINUTE)),
+    (988, 918, 1104, 2, '防雷模块状态检查',  '正常',      'NORMAL',   '显示正常',        NULL,           DATE_SUB(NOW(), INTERVAL  3120 MINUTE)),
+    (989, 919, 1102, 3, 'UPS风扇滤网检查',   '清洁',      'NORMAL',   '轻微积尘已清理',  NULL,           DATE_SUB(NOW(), INTERVAL  2940 MINUTE));
