@@ -34,19 +34,19 @@
       <div class="chart-grid">
         <div class="chart-card" @click="$emit('drill-down', { key: 'alarm-level' })">
           <div class="chart-title">告警等级分布 <span class="drill-hint">›</span></div>
-          <div ref="pieRef" style="height: 260px"></div>
+          <div :ref="pie.bindChart" style="height: 260px"></div>
         </div>
         <div class="chart-card" @click="$emit('drill-down', { key: 'alarm-trend' })">
           <div class="chart-title">告警趋势分析 <span class="drill-hint">›</span></div>
-          <div ref="trendRef" style="height: 260px"></div>
+          <div :ref="trend.bindChart" style="height: 260px"></div>
         </div>
         <div class="chart-card" @click="$emit('drill-down', { key: 'alarm-top-devices' })">
           <div class="chart-title">Top告警设备 <span class="drill-hint">›</span></div>
-          <div ref="topRef" style="height: 260px"></div>
+          <div :ref="top.bindChart" style="height: 260px"></div>
         </div>
         <div class="chart-card">
           <div class="chart-title">环比对比</div>
-          <div ref="compRef" style="height: 260px"></div>
+          <div :ref="comp.bindChart" style="height: 260px"></div>
         </div>
       </div>
     </template>
@@ -80,7 +80,7 @@ async function fetch() {
     }
     await nextTick()
     render()
-  } catch { data.value = null } finally { loading.value = false }
+  } catch (e) { console.error('Failed to load alarm statistics:', e); data.value = null } finally { loading.value = false }
 }
 
 function render() {

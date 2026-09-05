@@ -84,13 +84,19 @@ describe('useTrendSeriesLoader', () => {
     getTrendData.mockResolvedValue({ granularity: 'HOUR', dataPoints: [], summary: null, avg5: [], avg10: [], avg20: [] })
     getTrendMetadata.mockResolvedValue({ unit: '°C' })
     detectAnomalies.mockRejectedValue(new Error('anomaly service down'))
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    const { load, series, failedCount } = useTrendSeriesLoader()
-    await load([1], 'PROBE', ['2026-06-01 00:00:00', '2026-06-02 00:00:00'], 'HOUR')
+    try {
+      const { load, series, failedCount } = useTrendSeriesLoader()
+      await load([1], 'PROBE', ['2026-06-01 00:00:00', '2026-06-02 00:00:00'], 'HOUR')
 
-    expect(series.value).toHaveLength(1)        // trend data still loaded
-    expect(series.value[0].anomalies).toEqual([])  // anomalies default to []
-    expect(failedCount.value).toBe(0)           // anomaly failure doesn't count
+      expect(series.value).toHaveLength(1)        // trend data still loaded
+      expect(series.value[0].anomalies).toEqual([])  // anomalies default to []
+      expect(failedCount.value).toBe(0)           // anomaly failure doesn't count
+      expect(warnSpy).toHaveBeenCalledWith('Failed to load anomalies:', expect.any(Error))
+    } finally {
+      warnSpy.mockRestore()
+    }
   })
 
   it('skips detectAnomalies when granularity is not HOUR/DAY', async () => {

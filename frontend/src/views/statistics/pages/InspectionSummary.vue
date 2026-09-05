@@ -27,19 +27,19 @@
       <div class="chart-grid">
         <div class="chart-card">
           <div class="chart-title">巡检完成率</div>
-          <div ref="gaugeRef" style="height: 260px"></div>
+          <div :ref="gauge.bindChart" style="height: 260px"></div>
         </div>
         <div class="chart-card" @click="$emit('drill-down', { key: 'inspection-anomaly' })">
           <div class="chart-title">异常趋势 <span class="drill-hint">›</span></div>
-          <div ref="trendRef" style="height: 260px"></div>
+          <div :ref="trend.bindChart" style="height: 260px"></div>
         </div>
         <div class="chart-card">
           <div class="chart-title">巡检完成趋势</div>
-          <div ref="completionRef" style="height: 260px"></div>
+          <div :ref="completion.bindChart" style="height: 260px"></div>
         </div>
         <div class="chart-card">
           <div class="chart-title">环比对比</div>
-          <div ref="compRef" style="height: 260px"></div>
+          <div :ref="comp.bindChart" style="height: 260px"></div>
         </div>
       </div>
     </template>
@@ -63,7 +63,7 @@ async function fetch() {
   try {
     data.value = await getInspectionStats({ startDate: props.startDate, endDate: props.endDate, granularity: props.granularity })
     await nextTick(); render()
-  } catch { data.value = null } finally { loading.value = false }
+  } catch (e) { console.error('Failed to load inspection statistics:', e); data.value = null } finally { loading.value = false }
 }
 function render() {
   if (!data.value) return

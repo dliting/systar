@@ -27,19 +27,19 @@
       <div class="chart-grid">
         <div class="chart-card" @click="$emit('drill-down', { key: 'workorder-aging' })">
           <div class="chart-title">工单老化分布 <span class="drill-hint">›</span></div>
-          <div ref="agingRef" style="height: 260px"></div>
+          <div :ref="aging.bindChart" style="height: 260px"></div>
         </div>
         <div class="chart-card">
           <div class="chart-title">工单状态分布 <span class="drill-hint">›</span></div>
-          <div ref="statusRef" style="height: 260px"></div>
+          <div :ref="status.bindChart" style="height: 260px"></div>
         </div>
         <div class="chart-card" @click="$emit('drill-down', { key: 'workorder-mttr' })">
           <div class="chart-title">MTTR/趋势 <span class="drill-hint">›</span></div>
-          <div ref="mttrRef" style="height: 260px"></div>
+          <div :ref="mttr.bindChart" style="height: 260px"></div>
         </div>
         <div class="chart-card" @click="$emit('drill-down', { key: 'workorder-sla' })">
           <div class="chart-title">SLA达标率 <span class="drill-hint">›</span></div>
-          <div ref="slaRef" style="height: 260px"></div>
+          <div :ref="sla.bindChart" style="height: 260px"></div>
         </div>
       </div>
     </template>
@@ -70,7 +70,7 @@ async function fetch() {
   try {
     data.value = await getWorkOrderStats({ startDate: props.startDate, endDate: props.endDate, granularity: props.granularity })
     await nextTick(); render()
-  } catch { data.value = null } finally { loading.value = false }
+  } catch (e) { console.error('Failed to load work order statistics:', e); data.value = null } finally { loading.value = false }
 }
 
 function render() {

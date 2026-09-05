@@ -22,15 +22,15 @@
       <div class="chart-grid">
         <div class="chart-card" @click="$emit('drill-down', { key: 'maintenance-cost' })">
           <div class="chart-title">维护费用趋势 <span class="drill-hint">›</span></div>
-          <div ref="costRef" style="height: 260px"></div>
+          <div :ref="cost.bindChart" style="height: 260px"></div>
         </div>
         <div class="chart-card">
           <div class="chart-title">维护类型分布</div>
-          <div ref="typeRef" style="height: 260px"></div>
+          <div :ref="type.bindChart" style="height: 260px"></div>
         </div>
         <div class="chart-card full">
           <div class="chart-title">费用按类型</div>
-          <div ref="costTypeRef" style="height: 260px"></div>
+          <div :ref="costType.bindChart" style="height: 260px"></div>
         </div>
       </div>
     </template>
@@ -56,7 +56,7 @@ async function fetch() {
   try {
     data.value = await getMaintenanceStats({ startDate: props.startDate, endDate: props.endDate, granularity: props.granularity })
     await nextTick(); render()
-  } catch { data.value = null } finally { loading.value = false }
+  } catch (e) { console.error('Failed to load maintenance statistics:', e); data.value = null } finally { loading.value = false }
 }
 function render() {
   if (!data.value) return

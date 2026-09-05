@@ -109,8 +109,9 @@ export function useTrendSeriesLoader() {
         const endIso   = endTime.replace(' ', 'T')
         const r = await detectAnomalies(monitorId, startIso, endIso)
         anomalies = Array.isArray(r) ? r : []
-      } catch {
+      } catch (e) {
         // Anomaly service is best-effort; leave anomalies empty
+        console.warn('Failed to load anomalies:', e)
       }
     }
 

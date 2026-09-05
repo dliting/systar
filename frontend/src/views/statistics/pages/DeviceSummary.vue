@@ -22,7 +22,7 @@
       <div class="chart-grid">
         <div class="chart-card full" @click="$emit('drill-down', { key: 'device-ranking' })">
           <div class="chart-title">设备可用率排行 <span class="drill-hint">›</span></div>
-          <div ref="rankRef" style="height: 320px"></div>
+          <div :ref="rank.bindChart" style="height: 320px"></div>
         </div>
         <div class="chart-card full">
           <div class="chart-title">设备在线率明细表</div>
@@ -57,7 +57,7 @@ async function fetch() {
   try {
     data.value = await getDeviceRuntimeStats({ startDate: props.startDate, endDate: props.endDate, granularity: props.granularity })
     await nextTick(); render()
-  } catch { data.value = null } finally { loading.value = false }
+  } catch (e) { console.error('Failed to load device runtime statistics:', e); data.value = null } finally { loading.value = false }
 }
 function render() {
   if (!data.value?.details?.length) return

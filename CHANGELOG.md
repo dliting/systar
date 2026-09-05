@@ -10,6 +10,11 @@
 
 ### 修复
 
+**统计前端（frontend）**
+- 修复统计报表全部 6 个页面的图表从未渲染：页面模板此前使用未声明的字符串 ref（如 `ref="pieRef"`），`useChart()` 内部的 `chartRef` 从未绑定到 DOM，`initChart()` 静默返回 null，图表区域一直空白（仅标题/图例）。`useChart` 新增 `bindChart(el)` 绑定入口（多图页面统一 `:ref="xxx.bindChart"`），且未绑定时 `initChart()` 明确报错不再静默
+- 演示种子（03-simulator.sql，双方言）补充上一期（第 8~13 天前）告警历史 15 条，使"环比对比"面板双柱可见
+- 统计页 fetch 失败不再静默吞掉：6 个概览页与趋势页的加载异常现在先记录 `console.error` 再回退空态（此前后端 500/断网只显示"暂无数据"，控制台无任何线索）
+
 **资产视图（systar-server）**
 - 修复 UI 创建资产的统计漏计：`t_asset.parent_id` 此前误存父资产的运行时 id（`t_device.id` 等），现统一存父资产行 id，与种子数据及统计 SQL 的 parent 链对齐；存量库修复 SQL 见 `docs/design/ops-statistics-design.md` 第 5 节
 

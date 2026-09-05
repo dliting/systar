@@ -68,6 +68,17 @@ describe('useChart', () => {
     }
   }
 
+  it('bindChart wires a template element into chartRef', async () => {
+    const { chartRef, bindChart, initChart } = useChart()
+    const el = document.createElement('div')
+    bindChart(el)
+    expect(chartRef.value).toBe(el)
+
+    const instance = initChart()
+    await nextTick()
+    expect(instance).toBeTruthy()
+  })
+
   it('initializes chart instance with dark theme', async () => {
     const { chartRef, initChart } = useChart()
     chartRef.value = document.createElement('div')
@@ -77,11 +88,17 @@ describe('useChart', () => {
     expect(typeof instance.setOption).toBe('function')
   })
 
-  it('returns null when chartRef is not set', () => {
-    const { chartRef, initChart } = useChart()
-    chartRef.value = null
-    const instance = initChart()
-    expect(instance).toBeNull()
+  it('returns null and logs an error when chartRef is not bound', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const { chartRef, initChart } = useChart()
+      chartRef.value = null
+      const instance = initChart()
+      expect(instance).toBeNull()
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('chartRef is not bound'))
+    } finally {
+      errorSpy.mockRestore()
+    }
   })
 
   it('ResizeObserver is created on initChart', async () => {

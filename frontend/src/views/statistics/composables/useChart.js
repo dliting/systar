@@ -21,8 +21,26 @@ export function useChart() {
     })
   }
 
+  /**
+   * Template binding for pages hosting several charts: `:ref="xxx.bindChart"`.
+   * A stable function identity (unlike inline arrows) avoids ref churn on
+   * re-render; string `ref="chartRef"` still works for single-chart
+   * components that destructure the returned ref.
+   */
+  function bindChart(el) {
+    chartRef.value = el
+  }
+
   function initChart(theme = 'dark') {
-    if (!chartRef.value) return null
+    if (!chartRef.value) {
+      // Loud by design: a missing binding once made every chart render blank
+      // with no error (template ref never reached the composable).
+      console.error(
+        '[useChart] initChart() called but chartRef is not bound to a DOM element — ' +
+        'bind it in the template via :ref="xxx.bindChart"'
+      )
+      return null
+    }
     dispose()
     chartInstance = echarts.init(chartRef.value, theme)
     if (typeof ResizeObserver !== 'undefined') {
@@ -58,5 +76,5 @@ export function useChart() {
     dispose()
   })
 
-  return { chartRef, initChart, setOption, resize: scheduleResize, dispose }
+  return { chartRef, bindChart, initChart, setOption, resize: scheduleResize, dispose }
 }

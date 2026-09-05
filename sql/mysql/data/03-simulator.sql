@@ -446,6 +446,41 @@ INSERT INTO t_alarm_message (id, log_id, caption, state, auto, alarm_time, recov
     (925, 925, 'AHU送风温度偏高', 2, 1, DATE_SUB(NOW(), INTERVAL 8760 MINUTE), 1, 2, 1101),
     (926, 926, 'PDU L1电压偏低',  2, 1, DATE_SUB(NOW(), INTERVAL 8700 MINUTE), 1, 3, 1103);
 
+-- 上一期（第8~13天前）：统计"环比对比"面板的上期数据，全部已处理
+INSERT INTO t_error_message_log (id, asset_id, monitor_name, error_message, `value`, state, warn_id, time) VALUES
+    (927, 1206, '电池电量', 'UPS电池电量偏低',   '24.9',  1, 3, DATE_SUB(NOW(), INTERVAL 11680 MINUTE)),
+    (928, 1211, 'L1电压',   'PDU L1电压偏低',    '196.9', 1, 3, DATE_SUB(NOW(), INTERVAL 11640 MINUTE)),
+    (929, 1201, '送风温度', 'AHU送风温度偏高',   '32.2',  2, 2, DATE_SUB(NOW(), INTERVAL 11600 MINUTE)),
+    (930, 1208, '输入电压', 'UPS输入电压偏低',   '194.6', 1, 4, DATE_SUB(NOW(), INTERVAL 12960 MINUTE)),
+    (931, 1216, '室外温度', '室外温度超限',      '36.5',  2, 2, DATE_SUB(NOW(), INTERVAL 12920 MINUTE)),
+    (932, 1206, '电池电量', 'UPS电池电量偏低',   '25.3',  1, 3, DATE_SUB(NOW(), INTERVAL 14440 MINUTE)),
+    (933, 1211, 'L1电压',   'PDU L1电压偏低',    '197.1', 1, 3, DATE_SUB(NOW(), INTERVAL 14400 MINUTE)),
+    (934, 1201, '送风温度', 'AHU送风温度偏高',   '31.7',  2, 2, DATE_SUB(NOW(), INTERVAL 14360 MINUTE)),
+    (935, 1208, '输入电压', 'UPS输入电压偏低',   '194.3', 1, 4, DATE_SUB(NOW(), INTERVAL 15840 MINUTE)),
+    (936, 1206, '电池电量', 'UPS电池电量偏低',   '24.4',  1, 3, DATE_SUB(NOW(), INTERVAL 15800 MINUTE)),
+    (937, 1211, 'L1电压',   'PDU L1电压偏低',    '197.5', 1, 3, DATE_SUB(NOW(), INTERVAL 17280 MINUTE)),
+    (938, 1201, '送风温度', 'AHU送风温度偏高',   '31.4',  2, 2, DATE_SUB(NOW(), INTERVAL 17240 MINUTE)),
+    (939, 1206, '电池电量', 'UPS电池电量偏低',   '25.6',  1, 3, DATE_SUB(NOW(), INTERVAL 18760 MINUTE)),
+    (940, 1208, '输入电压', 'UPS输入电压偏低',   '193.6', 1, 4, DATE_SUB(NOW(), INTERVAL 18720 MINUTE)),
+    (941, 1216, '室外温度', '室外温度超限',      '35.2',  2, 2, DATE_SUB(NOW(), INTERVAL 18680 MINUTE));
+
+INSERT INTO t_alarm_message (id, log_id, caption, state, auto, alarm_time, recovered, warn_id, device_id) VALUES
+    (927, 927, 'UPS电池电量偏低', 2, 1, DATE_SUB(NOW(), INTERVAL 11680 MINUTE), 1, 3, 1102),
+    (928, 928, 'PDU L1电压偏低',  2, 1, DATE_SUB(NOW(), INTERVAL 11640 MINUTE), 1, 3, 1103),
+    (929, 929, 'AHU送风温度偏高', 2, 1, DATE_SUB(NOW(), INTERVAL 11600 MINUTE), 1, 2, 1101),
+    (930, 930, 'UPS输入电压偏低', 2, 1, DATE_SUB(NOW(), INTERVAL 12960 MINUTE), 1, 4, 1102),
+    (931, 931, '室外温度超限',    2, 1, DATE_SUB(NOW(), INTERVAL 12920 MINUTE), 1, 2, 1104),
+    (932, 932, 'UPS电池电量偏低', 2, 1, DATE_SUB(NOW(), INTERVAL 14440 MINUTE), 1, 3, 1102),
+    (933, 933, 'PDU L1电压偏低',  2, 1, DATE_SUB(NOW(), INTERVAL 14400 MINUTE), 1, 3, 1103),
+    (934, 934, 'AHU送风温度偏高', 2, 1, DATE_SUB(NOW(), INTERVAL 14360 MINUTE), 1, 2, 1101),
+    (935, 935, 'UPS输入电压偏低', 2, 1, DATE_SUB(NOW(), INTERVAL 15840 MINUTE), 1, 4, 1102),
+    (936, 936, 'UPS电池电量偏低', 2, 1, DATE_SUB(NOW(), INTERVAL 15800 MINUTE), 1, 3, 1102),
+    (937, 937, 'PDU L1电压偏低',  2, 1, DATE_SUB(NOW(), INTERVAL 17280 MINUTE), 1, 3, 1103),
+    (938, 938, 'AHU送风温度偏高', 2, 1, DATE_SUB(NOW(), INTERVAL 17240 MINUTE), 1, 2, 1101),
+    (939, 939, 'UPS电池电量偏低', 2, 1, DATE_SUB(NOW(), INTERVAL 18760 MINUTE), 1, 3, 1102),
+    (940, 940, 'UPS输入电压偏低', 2, 1, DATE_SUB(NOW(), INTERVAL 18720 MINUTE), 1, 4, 1102),
+    (941, 941, '室外温度超限',    2, 1, DATE_SUB(NOW(), INTERVAL 18680 MINUTE), 1, 2, 1104);
+
 -- ============================================================================
 -- 11. 工单历史 (近7天，用于看板/统计演示)
 -- ============================================================================

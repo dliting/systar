@@ -433,6 +433,41 @@ MERGE INTO t_alarm_message (id, log_id, caption, state, auto, alarm_time, recove
     (925, 925, 'AHU送风温度偏高', 2, 1, DATEADD('MINUTE', -8760, NOW()), 1, 2, 1101),
     (926, 926, 'PDU L1电压偏低',  2, 1, DATEADD('MINUTE', -8700, NOW()), 1, 3, 1103);
 
+-- 上一期（第8~13天前）：统计"环比对比"面板的上期数据，全部已处理
+MERGE INTO t_error_message_log (id, asset_id, monitor_name, error_message, "value", state, warn_id, time) KEY (id) VALUES
+    (927, 1206, '电池电量', 'UPS电池电量偏低',   '24.9',  1, 3, DATEADD('MINUTE', -11680, NOW())),
+    (928, 1211, 'L1电压',   'PDU L1电压偏低',    '196.9', 1, 3, DATEADD('MINUTE', -11640, NOW())),
+    (929, 1201, '送风温度', 'AHU送风温度偏高',   '32.2',  2, 2, DATEADD('MINUTE', -11600, NOW())),
+    (930, 1208, '输入电压', 'UPS输入电压偏低',   '194.6', 1, 4, DATEADD('MINUTE', -12960, NOW())),
+    (931, 1216, '室外温度', '室外温度超限',      '36.5',  2, 2, DATEADD('MINUTE', -12920, NOW())),
+    (932, 1206, '电池电量', 'UPS电池电量偏低',   '25.3',  1, 3, DATEADD('MINUTE', -14440, NOW())),
+    (933, 1211, 'L1电压',   'PDU L1电压偏低',    '197.1', 1, 3, DATEADD('MINUTE', -14400, NOW())),
+    (934, 1201, '送风温度', 'AHU送风温度偏高',   '31.7',  2, 2, DATEADD('MINUTE', -14360, NOW())),
+    (935, 1208, '输入电压', 'UPS输入电压偏低',   '194.3', 1, 4, DATEADD('MINUTE', -15840, NOW())),
+    (936, 1206, '电池电量', 'UPS电池电量偏低',   '24.4',  1, 3, DATEADD('MINUTE', -15800, NOW())),
+    (937, 1211, 'L1电压',   'PDU L1电压偏低',    '197.5', 1, 3, DATEADD('MINUTE', -17280, NOW())),
+    (938, 1201, '送风温度', 'AHU送风温度偏高',   '31.4',  2, 2, DATEADD('MINUTE', -17240, NOW())),
+    (939, 1206, '电池电量', 'UPS电池电量偏低',   '25.6',  1, 3, DATEADD('MINUTE', -18760, NOW())),
+    (940, 1208, '输入电压', 'UPS输入电压偏低',   '193.6', 1, 4, DATEADD('MINUTE', -18720, NOW())),
+    (941, 1216, '室外温度', '室外温度超限',      '35.2',  2, 2, DATEADD('MINUTE', -18680, NOW()));
+
+MERGE INTO t_alarm_message (id, log_id, caption, state, auto, alarm_time, recovered, warn_id, device_id) KEY (id) VALUES
+    (927, 927, 'UPS电池电量偏低', 2, 1, DATEADD('MINUTE', -11680, NOW()), 1, 3, 1102),
+    (928, 928, 'PDU L1电压偏低',  2, 1, DATEADD('MINUTE', -11640, NOW()), 1, 3, 1103),
+    (929, 929, 'AHU送风温度偏高', 2, 1, DATEADD('MINUTE', -11600, NOW()), 1, 2, 1101),
+    (930, 930, 'UPS输入电压偏低', 2, 1, DATEADD('MINUTE', -12960, NOW()), 1, 4, 1102),
+    (931, 931, '室外温度超限',    2, 1, DATEADD('MINUTE', -12920, NOW()), 1, 2, 1104),
+    (932, 932, 'UPS电池电量偏低', 2, 1, DATEADD('MINUTE', -14440, NOW()), 1, 3, 1102),
+    (933, 933, 'PDU L1电压偏低',  2, 1, DATEADD('MINUTE', -14400, NOW()), 1, 3, 1103),
+    (934, 934, 'AHU送风温度偏高', 2, 1, DATEADD('MINUTE', -14360, NOW()), 1, 2, 1101),
+    (935, 935, 'UPS输入电压偏低', 2, 1, DATEADD('MINUTE', -15840, NOW()), 1, 4, 1102),
+    (936, 936, 'UPS电池电量偏低', 2, 1, DATEADD('MINUTE', -15800, NOW()), 1, 3, 1102),
+    (937, 937, 'PDU L1电压偏低',  2, 1, DATEADD('MINUTE', -17280, NOW()), 1, 3, 1103),
+    (938, 938, 'AHU送风温度偏高', 2, 1, DATEADD('MINUTE', -17240, NOW()), 1, 2, 1101),
+    (939, 939, 'UPS电池电量偏低', 2, 1, DATEADD('MINUTE', -18760, NOW()), 1, 3, 1102),
+    (940, 940, 'UPS输入电压偏低', 2, 1, DATEADD('MINUTE', -18720, NOW()), 1, 4, 1102),
+    (941, 941, '室外温度超限',    2, 1, DATEADD('MINUTE', -18680, NOW()), 1, 2, 1104);
+
 -- ============================================================================
 -- 11. 工单历史 (近7天，用于看板/统计演示)
 -- ============================================================================

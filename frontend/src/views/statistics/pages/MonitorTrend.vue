@@ -189,7 +189,8 @@ async function loadMonitorList() {
   try {
     const res = await listAssets({ kind: props.monitorKind })
     monitorList.value = res.data || res || []
-  } catch {
+  } catch (e) {
+    console.error('Failed to load monitor list:', e)
     monitorList.value = []
   }
 }
@@ -216,7 +217,8 @@ async function loadMetadata() {
       max     : meta.maxValue ?? null,
       warnCond: meta.warnCond ?? null,
     }
-  } catch {
+  } catch (e) {
+    console.error('Failed to load metadata:', e)
     unit.value = ''
     thresholds.value = null
   }

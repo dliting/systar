@@ -3,24 +3,24 @@
     <el-empty v-if="!loading && !data" description="暂无看板数据" />
     <template v-else-if="data">
       <div class="kpi-grid">
-        <div class="kpi-gauge" ref="g1Ref" style="height: 220px"></div>
-        <div class="kpi-gauge" ref="g2Ref" style="height: 220px"></div>
-        <div class="kpi-gauge" ref="g3Ref" style="height: 220px"></div>
-        <div class="kpi-gauge" ref="g4Ref" style="height: 220px"></div>
-        <div class="kpi-gauge" ref="g5Ref" style="height: 220px"></div>
-        <div class="kpi-gauge" ref="g6Ref" style="height: 220px"></div>
+        <div class="kpi-gauge" :ref="gauges[0].bindChart" style="height: 220px"></div>
+        <div class="kpi-gauge" :ref="gauges[1].bindChart" style="height: 220px"></div>
+        <div class="kpi-gauge" :ref="gauges[2].bindChart" style="height: 220px"></div>
+        <div class="kpi-gauge" :ref="gauges[3].bindChart" style="height: 220px"></div>
+        <div class="kpi-gauge" :ref="gauges[4].bindChart" style="height: 220px"></div>
+        <div class="kpi-gauge" :ref="gauges[5].bindChart" style="height: 220px"></div>
       </div>
       <el-row :gutter="16" style="margin-top:20px">
         <el-col :span="12">
           <div class="chart-card">
             <div class="chart-title">Top告警设备</div>
-            <div ref="topRef" style="height: 300px"></div>
+            <div :ref="top.bindChart" style="height: 300px"></div>
           </div>
         </el-col>
         <el-col :span="12">
           <div class="chart-card">
             <div class="chart-title">告警趋势(近7天)</div>
-            <div ref="trendRef" style="height: 300px"></div>
+            <div :ref="trend.bindChart" style="height: 300px"></div>
           </div>
         </el-col>
       </el-row>
@@ -44,7 +44,7 @@ async function fetch() {
   try {
     data.value = await getDashboardStats()
     await nextTick(); render()
-  } catch { data.value = null } finally { loading.value = false }
+  } catch (e) { console.error('Failed to load dashboard statistics:', e); data.value = null } finally { loading.value = false }
 }
 function render() {
   if (!data.value) return
