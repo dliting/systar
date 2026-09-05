@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS t_asset (
     caption         VARCHAR(255)    NULL                            COMMENT '显示名称',
     kind            TINYINT         NOT NULL                        COMMENT '资产类型 0=SPACE 1=DEVICE 2=SERVICE 3=PROBE 4=CONTROL',
     type_id         BIGINT          NULL                            COMMENT '资产类型定义id',
-    parent_id       BIGINT          NULL                            COMMENT '父资产id(0为根节点)',
+    parent_id       BIGINT          NULL                            COMMENT '父资产行id(t_asset.id,0为根节点)',
     state           TINYINT         NULL                            COMMENT '资产状态 0=NORMAL 1=WARNING 2=ERROR 3=OFFLINE',
     enabled         INT             NULL DEFAULT 1                  COMMENT '是否启用 1=启用 0=禁用',
     sort            INT             NULL DEFAULT 0                  COMMENT '同级排序',

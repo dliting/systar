@@ -182,7 +182,7 @@ AssetCrudListener（新建：监听事件）
 
 新增资产时，写入顺序（两阶段加载）：
 1. 写入子表（`t_space`/`t_device`/`t_probe`/`t_control`）获取子表 ID，`type` 列引用 `t_asset_type_config.type_name`
-2. 写入统一表 `t_asset`，`kind` 标识类型，`spaceId`/`deviceId`/`serviceId` 关联子表
+2. 写入统一表 `t_asset`，`kind` 标识类型，`spaceId`/`deviceId`/`serviceId` 关联子表；`parent_id` 存**父资产行 id**（由创建请求中的运行时父 id 翻译，规则见 `ops-statistics-design.md` 第 3 节）
 3. 写入扩展属性 `t_asset_attribute`（如有）
 4. 发布 `AssetChangedEvent`
 

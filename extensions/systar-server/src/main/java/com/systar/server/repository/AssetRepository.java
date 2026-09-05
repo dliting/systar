@@ -995,11 +995,53 @@ public class AssetRepository {
 
     // ======================== t_asset Unified View ========================
 
-    public void insertAssetView(String name, String caption, AssetKind kind, int parentId, int perKindId) {
-        String kindCol = getKindIdColumn(kind);
+    /**
+     * Inserts the unified-view row for a newly created asset.
+     * <p>
+     * {@code parentRuntimeId} is the parent's per-kind runtime id (the domain
+     * the create API and the asset tree use); {@code t_asset.parent_id} stores
+     * the parent's t_asset ROW id — the seed convention that statistics SQL
+     * joins against (docs/design/ops-statistics-design.md §3) — so the parent
+     * is translated here. Falls back to 0 (view root) with a warning when the
+     * parent cannot be resolved, rather than corrupting the hierarchy.
+     */
+    public void insertAssetView(String name, String caption, AssetKind kind, int parentRuntimeId, int perKindId) {
+        String kindCol      = getKindIdColumn(kind);
+        int     parentRowId = parentAssetViewRowId(parentRuntimeId);
         jdbc.update(
                 "INSERT INTO t_asset (name, caption, kind, parent_id, enabled, " + kindCol + ") VALUES (?, ?, ?, ?, 1, ?)",
-                name, caption, kind.ordinal(), (long) parentId, (long) perKindId);
+                name, caption, kind.ordinal(), (long) parentRowId, (long) perKindId);
+    }
+
+    /**
+     * Resolves the t_asset row id referenced by a parent runtime id, or
+     * {@link Asset#INVALID_ID} when unresolvable (root parent, unknown asset,
+     * or missing view row).
+     */
+    private int parentAssetViewRowId(int parentRuntimeId) {
+        if (parentRuntimeId <= 0) {
+            return Asset.INVALID_ID;
+        }
+        Asset<?> parent = store.findAsset(parentRuntimeId);
+        if (parent == null) {
+            log.warn("Parent runtime id {} not found in asset store; asset view row gets parent_id=0.",
+                    parentRuntimeId);
+            return Asset.INVALID_ID;
+        }
+        String parentKindCol = getKindIdColumn(parent.getKind());
+        List<Integer> rowIds = jdbc.query(
+                "SELECT id FROM t_asset WHERE kind=? AND " + parentKindCol + "=? ORDER BY id",
+                (rs, i) -> rs.getInt("id"), parent.getKind().ordinal(), parentRuntimeId);
+        if (rowIds.isEmpty()) {
+            log.warn("Parent {} (runtime id {}) has no t_asset view row; asset view row gets parent_id=0.",
+                    parent.getKind(), parentRuntimeId);
+            return Asset.INVALID_ID;
+        }
+        if (rowIds.size() > 1) {
+            log.warn("Parent {} (runtime id {}) has {} t_asset view rows; using the lowest row id {}.",
+                    parent.getKind(), parentRuntimeId, rowIds.size(), rowIds.get(0));
+        }
+        return rowIds.get(0);
     }
 
     public void updateAssetView(int perKindId, AssetKind kind, String name, String caption) {

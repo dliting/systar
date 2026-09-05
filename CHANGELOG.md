@@ -6,6 +6,13 @@
 
 ---
 
+## [未发布]
+
+### 修复
+
+**资产视图（systar-server）**
+- 修复 UI 创建资产的统计漏计：`t_asset.parent_id` 此前误存父资产的运行时 id（`t_device.id` 等），现统一存父资产行 id，与种子数据及统计 SQL 的 parent 链对齐；存量库修复 SQL 见 `docs/design/ops-statistics-design.md` 第 5 节
+
 ## [1.1.0] - 2026-06-07
 
 运维业务扩展、技术债清理、数据保留策略、前端 UX 改进。
