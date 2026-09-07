@@ -166,7 +166,7 @@ class AssetControllerTest {
         @DisplayName("returns all assets when no kind filter")
         void noKindFilter() {
             when(monitorServer.getAssets()).thenReturn(List.of());
-            Result<List<AssetVO>> result = controller.getAssets(null);
+            Result<List<AssetVO>> result = controller.getAssets(null, null);
             assertThat(result.getCode()).isEqualTo(0);
             assertThat(result.getData()).isEmpty();
         }
@@ -179,7 +179,7 @@ class AssetControllerTest {
             };
             probe.init(new ProbeType("test"), 1, "probe-1");
             when(monitorServer.getAssetsByKind(AssetKind.PROBE)).thenReturn(List.of(probe));
-            Result<List<AssetVO>> result = controller.getAssets("PROBE");
+            Result<List<AssetVO>> result = controller.getAssets("PROBE", null);
             assertThat(result.getCode()).isEqualTo(0);
             assertThat(result.getData()).hasSize(1);
             assertThat(result.getData().get(0).getKind()).isEqualTo("PROBE");
@@ -188,7 +188,7 @@ class AssetControllerTest {
         @Test
         @DisplayName("returns error for invalid kind")
         void invalidKind() {
-            Result<List<AssetVO>> result = controller.getAssets("INVALID_KIND");
+            Result<List<AssetVO>> result = controller.getAssets("INVALID_KIND", null);
             assertThat(result.getCode()).isEqualTo(1);
             assertThat(result.getMessage()).contains("Invalid asset kind");
         }
@@ -197,9 +197,61 @@ class AssetControllerTest {
         @DisplayName("blank kind returns all assets")
         void blankKindReturnsAll() {
             when(monitorServer.getAssets()).thenReturn(List.of());
-            Result<List<AssetVO>> result = controller.getAssets("   ");
+            Result<List<AssetVO>> result = controller.getAssets("   ", null);
             assertThat(result.getCode()).isEqualTo(0);
             verify(monitorServer).getAssets();
+        }
+
+        @Test
+        @DisplayName("name filter returns only the exact-match asset (UI duplicate-name check)")
+        void filtersByExactName() {
+            Probe probeA = new Probe() {
+                @Override public void detect(com.systar.monitor.result.IMonitorResult r) {}
+            };
+            probeA.init(new ProbeType("test"), 1, "probe-a");
+            Probe probeB = new Probe() {
+                @Override public void detect(com.systar.monitor.result.IMonitorResult r) {}
+            };
+            probeB.init(new ProbeType("test"), 2, "probe-b");
+            when(monitorServer.getAssetsByKind(AssetKind.PROBE))
+                    .thenReturn(List.of(probeA, probeB));
+
+            Result<List<AssetVO>> result = controller.getAssets("PROBE", "probe-a");
+
+            assertThat(result.getCode()).isEqualTo(0);
+            assertThat(result.getData()).hasSize(1);
+            assertThat(result.getData().get(0).getName()).isEqualTo("probe-a");
+        }
+
+        @Test
+        @DisplayName("name filter with no match returns empty list, not all assets")
+        void nameFilterNoMatchReturnsEmpty() {
+            Probe probeA = new Probe() {
+                @Override public void detect(com.systar.monitor.result.IMonitorResult r) {}
+            };
+            probeA.init(new ProbeType("test"), 1, "probe-a");
+            when(monitorServer.getAssetsByKind(AssetKind.PROBE))
+                    .thenReturn(List.of(probeA));
+
+            Result<List<AssetVO>> result = controller.getAssets("PROBE", "totally-new-name");
+
+            assertThat(result.getCode()).isEqualTo(0);
+            assertThat(result.getData()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("blank name filter is ignored")
+        void blankNameIgnored() {
+            Probe probe = new Probe() {
+                @Override public void detect(com.systar.monitor.result.IMonitorResult r) {}
+            };
+            probe.init(new ProbeType("test"), 1, "probe-1");
+            when(monitorServer.getAssetsByKind(AssetKind.PROBE)).thenReturn(List.of(probe));
+
+            Result<List<AssetVO>> result = controller.getAssets("PROBE", "   ");
+
+            assertThat(result.getCode()).isEqualTo(0);
+            assertThat(result.getData()).hasSize(1);
         }
     }
 

@@ -44,6 +44,14 @@ public class AssetOrchestrator {
 
         int newId = repo.nextId(kind);
 
+        // Persist extension attributes BEFORE the per-kind create: the monitor
+        // create paths (SERVICE/PROBE/CONTROL) call find*ById to build the
+        // CREATED event asset, which loads attributes from t_asset_attribute —
+        // persisting afterwards would publish an event carrying default instead
+        // of configured values. (SPACE/DEVICE finders load no attributes; the
+        // ordering is a no-op for them.)
+        repo.saveAttributes(newId, req.attributes());
+
         Asset<?> asset = switch (kind) {
             case SPACE -> createSpace(newId, req);
             case DEVICE -> createDevice(newId, req);
@@ -52,7 +60,6 @@ public class AssetOrchestrator {
             case CONTROL -> createControl(newId, req);
         };
 
-        repo.saveAttributes(newId, req.attributes());
         eventPublisher.publishEvent(new AssetChangedEvent(Action.CREATED, newId, kind, asset));
         log.info("Created asset: kind={} id={} name={}", kind, newId, req.name());
         return newId;
@@ -87,12 +94,58 @@ public class AssetOrchestrator {
 
     private Asset<?> createService(int newId, AssetCreateRequest req) {
         var p = req.properties();
+        Integer mode = extractMode(p);
+        if (mode == null) {
+            mode = deriveModeFromDriver(req.name(), req.typeName(), getStrProp(p, "driverClass"));
+        }
         var row = new AssetRepository.ServiceRow(newId, req.name(), req.caption(), req.parentId(),
-                extractMode(p), getStrProp(p, "driverClass"),
+                mode, getStrProp(p, "driverClass"),
                 getIntProp(p, "maxConnections"), req.typeName());
         repo.insertService(row);
         repo.insertAssetView(req.name(), req.caption(), AssetKind.SERVICE, req.parentId(), newId);
         return repo.findServiceById(newId);
+    }
+
+    /**
+     * Derives the default monitor mode from the driver class, mirroring the
+     * repository's driver resolution precedence: the service type's JavaClass
+     * first, then the request's driverClass. The driver class is the single
+     * source of truth for ACTIVE/PASSIVE — the repository rejects entity rows
+     * whose mode disagrees with the driver — so when the create request omits
+     * an explicit mode we resolve it from the driver instead of persisting
+     * NULL (which would make the service uninstantiable). Returns null only
+     * when no driver class is resolvable, where an explicit mode remains
+     * mandatory.
+     */
+    private Integer deriveModeFromDriver(String serviceName, String typeName,
+                                         String requestDriverClass) {
+        String driverClass = null;
+        if (typeName != null && !typeName.isBlank()) {
+            ServiceType type = assetStore.getServiceTypes().find(typeName);
+            if (type != null && type.getRelatedClass() != null
+                    && !type.getRelatedClass().isBlank()) {
+                driverClass = type.getRelatedClass();
+            }
+        }
+        if (driverClass == null) {
+            driverClass = requestDriverClass;
+        }
+        if (driverClass == null || driverClass.isBlank()) {
+            return null;
+        }
+        try {
+            Class<?> cls = Class.forName(driverClass);
+            MonitorService service = (MonitorService) cls.getDeclaredConstructor().newInstance();
+            return service.getMode().getCode();
+        } catch (AssetException e) {
+            // Rethrown unwrapped so a future inner check keeps its message —
+            // mirrors the repository's instantiation helpers.
+            throw e;
+        } catch (Exception e) {
+            throw new AssetException(e,
+                    "Cannot instantiate driver class '%s' to derive mode for service '%s'.",
+                    driverClass, serviceName);
+        }
     }
 
     private Asset<?> createProbe(int newId, AssetCreateRequest req) {
@@ -129,6 +182,15 @@ public class AssetOrchestrator {
     public void updateAsset(int id, AssetKind kind, AssetUpdateRequest req) {
         validateTypeName(kind, req.typeName());
 
+        // Persist extension attributes BEFORE re-reading the asset: the
+        // per-kind update path calls find*ById, which loads attributes from
+        // t_asset_attribute — persisting afterwards would publish an UPDATED
+        // event carrying stale attribute values.
+        if (req.attributes() != null) {
+            repo.deleteAttributes(id);
+            repo.saveAttributes(id, req.attributes());
+        }
+
         Asset<?> asset = switch (kind) {
             case SPACE -> updateSpace(id, req);
             case DEVICE -> updateDevice(id, req);
@@ -136,11 +198,6 @@ public class AssetOrchestrator {
             case PROBE -> updateProbe(id, req);
             case CONTROL -> updateControl(id, req);
         };
-
-        if (req.attributes() != null) {
-            repo.deleteAttributes(id);
-            repo.saveAttributes(id, req.attributes());
-        }
 
         eventPublisher.publishEvent(new AssetChangedEvent(Action.UPDATED, id, kind, asset));
         log.info("Updated asset: kind={} id={}", kind, id);
@@ -470,7 +527,14 @@ public class AssetOrchestrator {
     private static Integer extractMode(Map<String, Object> props) {
         if (props == null) return null;
         Object val = props.get("mode");
-        if (val instanceof String s) return MonitorMode.valueOf(s.toUpperCase()).getCode();
+        if (val instanceof String s) {
+            try {
+                return MonitorMode.valueOf(s.toUpperCase()).getCode();
+            } catch (IllegalArgumentException e) {
+                throw new AssetException(e,
+                        "Invalid mode '%s' for service: must be ACTIVE or PASSIVE.", s);
+            }
+        }
         if (val instanceof Number n) return n.intValue();
         return null;
     }

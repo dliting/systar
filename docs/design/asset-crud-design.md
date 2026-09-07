@@ -33,7 +33,7 @@
 加载链路：`XmlAssetTypeLoader.load()`（类型定义）→ `DatabaseAssetLoader.load()`（实例加载）。
 
 具体机制：
-1. **驱动 XML 是类型定义源**：`XmlAssetTypeLoader` 从 classpath `/config/assets/Assets.xml` 读取各驱动/类型 XML，解析 Space/Device/Service/Probe/Control 类型定义、Java 实现类、属性名称/数据类型/默认值、version。
+1. **驱动 XML 是类型定义源**：`XmlAssetTypeLoader` 按目录扫描发现类型 XML（驱动模块包内 `classpath*:com/systar/monitor/drivers/**/*.xml` 自注册 + `config/assets/generic-*.xml` + 可选 `systar.asset-type.scan-paths` 外置路径，详见 `xml-asset-type-config-design.md`），解析 Space/Device/Service/Probe/Control 类型定义、Java 实现类、属性名称/数据类型/默认值、version。
 2. **XML 解析后注册到内存**：解析出的类型注册到 `AssetStore` 的各类 `AssetTypeManager`，运行时实例加载通过 `type_name` 在内存查找类型，而非从 DB 重建类型。
 3. **XML 同步 DB**：解析后的配置内容/version/属性 schema 同步到 `t_asset_type_config`。DB 表是 XML 的投影，用于资产实例 `type_name` 关联、前端 schema 查询、导入校验和版本比对审计，不是人工维护的主数据源。
 4. **XML 变更驱动类型变更**：开发人员修改 XML 中 Probe/Control 的属性类型、名称、默认值、实现类或 version 后，系统重启时重新解析 XML 并同步更新 DB `t_asset_type_config`。
@@ -67,7 +67,7 @@ Phase 2 已完成：CRUD Service、Event、Listener、Controller 扩展、运行
 - `XmlAssetTypeLoader` 在 `systar-server` 实现，作为 Spring Bean 注册
 - `MonitorServer.loadAssets()` 注入 `List<AssetTypeLoader>`，逐个调用
 - 未来驱动模块可提供自己的 `AssetTypeLoader` Bean 和 XML，无需修改核心代码
-- XML 路径：`resources/config/assets/Assets.xml`（主入口），各驱动子文件由主入口引用
+- XML 路径：无主索引；驱动类型 XML 在 `core/systar-monitor-drivers` 的包 resources 内（放入即自注册），通用 Space/Device 类型在 `extensions/systar-server` 的 `config/assets/generic-*.xml`，外置扩展路径经 `systar.asset-type.scan-paths` 配置
 - CRUD 创建资产时，用户选择 `typeName` → 后端校验 typeName 已注册且 kind 匹配
 - 前端根据 typeName 获取属性定义，动态渲染表单
 - `DatabaseAssetLoader` 重构：从 `new ProbeType("probe-" + id)` 改为通过 typeName 查找注册的类型
@@ -80,7 +80,7 @@ Phase 2 已完成：CRUD Service、Event、Listener、Controller 扩展、运行
 | 类型加载注入 | `List<AssetTypeLoader>` Spring 自动注入 | 支持多 Loader 插件式扩展 |
 | 类型/实例加载 | 分离为 `AssetTypeLoader`（接口）+ `AssetLoader`（接口） | 职责单一，类型定义和实例加载解耦 |
 | DB 同步粒度 | 按类型（一行对应一个 type_name） | 细粒度，便于按类型查询和 CRUD |
-| 版本跟踪 | 整数计数器递增 | 简化实现；将来可改为内容哈希 |
+| 版本跟踪 | 内容实际变化时计数器递增 | caption/driverClass/属性序列化任一变化才 version+1，重启不膨胀 |
 | Source 引用 | 存储为字符串，实例加载时通过 `serviceId` 外键关联 | 延迟到实例层解析，避免类型加载顺序耦合 |
 | 实例化机制 | `AssetEntityConverter` 内按类型分发 | 当前仅在 Service 使用反射，其他类型用匿名类。将来统一工厂方法 |
 | 错误处理 | 严格：所有配置错误和引用缺失均抛 `AssetException` 中断启动 | fail-fast，配置错误尽早暴露 |
@@ -99,8 +99,8 @@ Phase 2 已完成：CRUD Service、Event、Listener、Controller 扩展、运行
 **错误处理原则**（已实施）：
 
 采用 fail-fast 模式，所有配置错误和引用缺失均抛 `AssetException` 中断启动：
-- 主索引文件缺失 → 抛异常
-- 引用的配置文件缺失 → 抛异常
+- 类型 XML 根元素不在合法集合（Spaces/Devices/Services/ProbeList/ControlList）→ 抛异常
+- 类型名同类别内跨扫描路径重复 → 抛异常
 - 匿名类型（无 Name 属性）→ 抛异常
 - Super type 未注册 → 抛异常
 - 驱动类实例化失败 → 抛异常
@@ -241,6 +241,7 @@ public void stopMonitor(int id);
 
 | 端点 | 方法 | 说明 | 权限 |
 |------|------|------|------|
+| `/api/monitor/assets` | GET | 资产列表，可选 `kind`（PROBE/SERVICE/...）与 `name`（精确匹配）过滤；`name` 供前端创建前查重 | iot:asset:list |
 | `/api/monitor/assets` | POST | 新增资产 | iot:asset:add |
 | `/api/monitor/assets/{id}` | PUT | 修改资产 | iot:asset:edit |
 | `/api/monitor/assets/{id}` | DELETE | 删除资产 | iot:asset:delete |
@@ -282,6 +283,10 @@ POST /api/monitor/assets
 `attributes` 中的 key：
 - **主表字段**（model, serialNumber, vendor...）→ 写入 `t_device` 等主表
 - **扩展属性**（不在主表中的 key）→ 写入 `t_asset_attribute` KV 表
+
+**SERVICE 创建的 mode 缺省**：`properties.mode`（ACTIVE/PASSIVE）可省略。省略时后端按与仓储层一致的驱动解析顺序——先类型定义的驱动类（`ServiceType.getRelatedClass()`），后请求的 `properties.driverClass`——实例化驱动并取其固有 mode 作为缺省写入 `t_service.mode`（驱动类是 ACTIVE/PASSIVE 的单一事实来源，仓储层会校验实体 mode 与驱动 mode 一致）。两者都未提供（无 JavaClass 且无 driverClass）时，mode 必须显式给出，否则报错。
+
+**SERVICE 更新的 mode 语义**（与创建不同）：更新路径不做缺省推导——`properties.mode` 省略表示沿用原值；显式给出但与新驱动 mode 不一致时，仓储层校验会报错并回滚。
 
 ---
 

@@ -161,23 +161,23 @@ class XmlAssetTypeLoaderTest {
         // BACnet
         ServiceType bacnet = store.getServiceTypes().find("BACnetService");
         assertThat(bacnet).isNotNull();
-        assertThat(bacnet.getProperties()).hasSize(3);
+        assertThat(bacnet.getProperties()).hasSize(4);
         assertThat(bacnet.getProperties().stream().map(AssetTypeProperty::getName).toList())
-                .containsExactlyInAnyOrder("Remotehost", "Remoteport", "DeviceId");
+                .containsExactlyInAnyOrder("Remotehost", "Remoteport", "DeviceId", "Timeout");
 
         // SNMP
         ServiceType snmp = store.getServiceTypes().find("SnmpService");
         assertThat(snmp).isNotNull();
-        assertThat(snmp.getProperties()).hasSize(4);
+        assertThat(snmp.getProperties()).hasSize(5);
         assertThat(snmp.getProperties().stream().map(AssetTypeProperty::getName).toList())
-                .containsExactlyInAnyOrder("Host", "Port", "Community", "Version");
+                .containsExactlyInAnyOrder("Host", "Port", "Community", "Version", "Timeout");
 
         // IEC104
         ServiceType iec = store.getServiceTypes().find("IEC104Master");
         assertThat(iec).isNotNull();
-        assertThat(iec.getProperties()).hasSize(3);
+        assertThat(iec.getProperties()).hasSize(4);
         assertThat(iec.getProperties().stream().map(AssetTypeProperty::getName).toList())
-                .containsExactlyInAnyOrder("Host", "Port", "CommonAddrStr");
+                .containsExactlyInAnyOrder("Host", "Port", "CommonAddrStr", "Timeout");
 
         // MQTT
         ServiceType mqtt = store.getServiceTypes().find("MqttService");
@@ -280,6 +280,43 @@ class XmlAssetTypeLoaderTest {
         assertThat(portProp).isNotNull();
         assertThat(portProp.getMin()).isEqualTo(1.0);
         assertThat(portProp.getMax()).isEqualTo(255.0);
+    }
+
+    @Test
+    @DisplayName("Every protocol service exposes Timeout with its driver's built-in default")
+    void everyServiceExposesTunableTimeout() {
+        loader.load(store);
+
+        assertTimeoutDefault("ModbusTcpMaster", "5000");
+        assertTimeoutDefault("BACnetService", "5000");
+        assertTimeoutDefault("IEC104Master", "10000");
+        assertTimeoutDefault("SnmpService", "5000");
+        assertTimeoutDefault("UpsService", "5000");
+        assertTimeoutDefault("TcpIpService", "5000");
+    }
+
+    private void assertTimeoutDefault(String typeName, String expectedDefault) {
+        ServiceType type = store.getServiceTypes().find(typeName);
+        assertThat(type).as("Service type '%s' should be loaded", typeName).isNotNull();
+        AssetTypeProperty timeout = type.findProperty("Timeout");
+        assertThat(timeout)
+                .as("Service type '%s' should expose a per-instance Timeout property", typeName)
+                .isNotNull();
+        assertThat(timeout.getDefaultValue())
+                .as("Timeout default of '%s'", typeName)
+                .isEqualTo(expectedDefault);
+    }
+
+    @Test
+    @DisplayName("Modbus connection-pool default is 10, matching the ActiveService built-in")
+    void modbusMaxConnectionsDefaultsToTen() {
+        loader.load(store);
+
+        AssetTypeProperty maxConn = store.getServiceTypes().find("ModbusMaster").findProperty("MaxConnections");
+        assertThat(maxConn).isNotNull();
+        assertThat(maxConn.getDefaultValue()).isEqualTo("10");
+        assertThat(maxConn.getMin()).isEqualTo(1.0);
+        assertThat(maxConn.getMax()).isEqualTo(255.0);
     }
 
     @Test

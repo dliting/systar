@@ -61,7 +61,8 @@ public class AssetController {
     @RequirePermission("iot:asset:list")
     @GetMapping("/assets")
     public Result<List<AssetVO>> getAssets(
-            @RequestParam(required = false) String kind) {
+            @RequestParam(required = false) String kind,
+            @RequestParam(required = false) String name) {
         Collection<Asset<?>> assets;
         if (kind != null && !kind.isBlank()) {
             try {
@@ -72,6 +73,11 @@ public class AssetController {
             }
         } else {
             assets = monitorServer.getAssets();
+        }
+        if (name != null && !name.isBlank()) {
+            assets = assets.stream()
+                    .filter(a -> name.equals(a.getName()))
+                    .collect(Collectors.toList());
         }
         List<AssetVO> result = assets.stream()
                 .map(this::toAssetVO)

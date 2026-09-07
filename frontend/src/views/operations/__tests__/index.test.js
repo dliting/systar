@@ -98,6 +98,7 @@ const StubSkeleton = defineComponent({
 
 import Operations from '../index.vue'
 import ConfirmDialog from '@/components/ConfirmDialog/index.vue'
+import { createAsset } from '@/api/iot/asset'
 
 async function mountAndFlush() {
   const wrapper = mount(Operations, {
@@ -350,6 +351,21 @@ describe('Create wizard', () => {
     expect(vm.canNextStep).toBe(true)
     vm.wizardStep = 4
     expect(vm.canNextStep).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('submitForm warns visibly when validation fails instead of aborting silently', async () => {
+    const { ElMessage } = await import('element-plus')
+    const warnSpy = vi.spyOn(ElMessage, 'warning')
+    const wrapper = await mountAndFlush()
+    const vm = wrapper.vm
+    vm.openCreateDialog()
+    vm.wizardStep = 4
+    vm.formRef = { validate: vi.fn().mockRejectedValue({ fields: { name: [] } }) }
+    await vm.submitForm()
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    expect(createAsset).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
     wrapper.unmount()
   })
 })

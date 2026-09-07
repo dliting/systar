@@ -161,6 +161,149 @@ class AssetOrchestratorTest {
         }
 
         @Test
+        @DisplayName("derives service mode from the type's driver class when request omits mode")
+        void createServiceDerivesModeFromDriverClass() {
+            ServiceType typed = new ServiceType("MySimulate");
+            typed.setRelatedClass("com.systar.monitor.drivers.simulate.SimulateService");
+            store.getServiceTypes().register(typed);
+
+            when(repo.nextId(AssetKind.SERVICE)).thenReturn(70);
+            MonitorService created = new ActiveService() {
+                @Override public void start() {}
+                @Override public void stop() {}
+                @Override public MonitorConnection createConnection() { return null; }
+            };
+            created.init(typed, 70, "svc2");
+            when(repo.findServiceById(70)).thenReturn(created);
+
+            var req = new AssetCreateRequest("SERVICE", 0, "svc2", "Simulate",
+                    "MySimulate", Map.of(), Map.of());
+            orchestrator.createAsset(req);
+
+            ArgumentCaptor<AssetRepository.ServiceRow> row =
+                    ArgumentCaptor.forClass(AssetRepository.ServiceRow.class);
+            verify(repo).insertService(row.capture());
+            assertThat(row.getValue().mode())
+                    .as("mode should default to the driver class's own mode (ACTIVE)")
+                    .isEqualTo(MonitorMode.ACTIVE.getCode());
+        }
+
+        @Test
+        @DisplayName("derives mode from request driverClass when the type has no JavaClass")
+        void createServiceDerivesModeFromRequestDriverClass() {
+            store.getServiceTypes().register(new ServiceType("DriverlessService"));
+
+            when(repo.nextId(AssetKind.SERVICE)).thenReturn(71);
+            MonitorService created = new ActiveService() {
+                @Override public void start() {}
+                @Override public void stop() {}
+                @Override public MonitorConnection createConnection() { return null; }
+            };
+            created.init(new ServiceType("DriverlessService"), 71, "svc3");
+            when(repo.findServiceById(71)).thenReturn(created);
+
+            var req = new AssetCreateRequest("SERVICE", 0, "svc3", "Driverless",
+                    "DriverlessService",
+                    Map.of("driverClass", "com.systar.monitor.drivers.simulate.SimulateService"),
+                    Map.of());
+            orchestrator.createAsset(req);
+
+            ArgumentCaptor<AssetRepository.ServiceRow> row =
+                    ArgumentCaptor.forClass(AssetRepository.ServiceRow.class);
+            verify(repo).insertService(row.capture());
+            assertThat(row.getValue().mode())
+                    .as("mode should fall back to the request driverClass's mode")
+                    .isEqualTo(MonitorMode.ACTIVE.getCode());
+        }
+
+        @Test
+        @DisplayName("type JavaClass wins over request driverClass (repository precedence)")
+        void createServiceTypeClassBeatsRequestDriverClass() {
+            ServiceType typed = new ServiceType("TypedService");
+            typed.setRelatedClass("com.systar.monitor.drivers.simulate.SimulateService"); // ACTIVE
+            store.getServiceTypes().register(typed);
+
+            when(repo.nextId(AssetKind.SERVICE)).thenReturn(75);
+            MonitorService created = new ActiveService() {
+                @Override public void start() {}
+                @Override public void stop() {}
+                @Override public MonitorConnection createConnection() { return null; }
+            };
+            created.init(typed, 75, "svc7");
+            when(repo.findServiceById(75)).thenReturn(created);
+
+            var req = new AssetCreateRequest("SERVICE", 0, "svc7", "Typed",
+                    "TypedService",
+                    Map.of("driverClass", "com.systar.monitor.drivers.mqtt.MqttService"), // PASSIVE
+                    Map.of());
+            orchestrator.createAsset(req);
+
+            ArgumentCaptor<AssetRepository.ServiceRow> row =
+                    ArgumentCaptor.forClass(AssetRepository.ServiceRow.class);
+            verify(repo).insertService(row.capture());
+            assertThat(row.getValue().mode())
+                    .as("type's JavaClass must take precedence over request driverClass")
+                    .isEqualTo(MonitorMode.ACTIVE.getCode());
+        }
+
+        @Test
+        @DisplayName("driverless type without mode or driverClass keeps null mode")
+        void createServiceDriverlessWithoutModeStaysNull() {
+            store.getServiceTypes().register(new ServiceType("DriverlessService"));
+
+            when(repo.nextId(AssetKind.SERVICE)).thenReturn(72);
+            MonitorService created = new ActiveService() {
+                @Override public void start() {}
+                @Override public void stop() {}
+                @Override public MonitorConnection createConnection() { return null; }
+            };
+            created.init(new ServiceType("DriverlessService"), 72, "svc4");
+            when(repo.findServiceById(72)).thenReturn(created);
+
+            var req = new AssetCreateRequest("SERVICE", 0, "svc4", "Driverless",
+                    "DriverlessService", Map.of(), Map.of());
+            orchestrator.createAsset(req);
+
+            ArgumentCaptor<AssetRepository.ServiceRow> row =
+                    ArgumentCaptor.forClass(AssetRepository.ServiceRow.class);
+            verify(repo).insertService(row.capture());
+            assertThat(row.getValue().mode())
+                    .as("driverless service keeps null mode (explicit mode stays mandatory)")
+                    .isNull();
+        }
+
+        @Test
+        @DisplayName("misconfigured JavaClass (not a MonitorService) yields AssetException, not raw CCE")
+        void createServiceBadDriverClassWrapsException() {
+            ServiceType bad = new ServiceType("BadService");
+            bad.setRelatedClass("com.systar.monitor.drivers.simulate.SimulateProbe");
+            store.getServiceTypes().register(bad);
+
+            when(repo.nextId(AssetKind.SERVICE)).thenReturn(73);
+
+            var req = new AssetCreateRequest("SERVICE", 0, "svc5", "Bad",
+                    "BadService", Map.of(), Map.of());
+            assertThatThrownBy(() -> orchestrator.createAsset(req))
+                    .isInstanceOf(AssetException.class)
+                    .hasMessageContaining("SimulateProbe")
+                    .hasMessageContaining("svc5");
+        }
+
+        @Test
+        @DisplayName("invalid mode string yields AssetException naming the value")
+        void createServiceInvalidModeString() {
+            store.getServiceTypes().register(new ServiceType("AnyService"));
+
+            when(repo.nextId(AssetKind.SERVICE)).thenReturn(74);
+
+            var req = new AssetCreateRequest("SERVICE", 0, "svc6", "Any",
+                    "AnyService", Map.of("mode", "SOMETIMES"), Map.of());
+            assertThatThrownBy(() -> orchestrator.createAsset(req))
+                    .isInstanceOf(AssetException.class)
+                    .hasMessageContaining("SOMETIMES");
+        }
+
+        @Test
         @DisplayName("throws on invalid kind")
         void invalidKind() {
             var req = new AssetCreateRequest("INVALID", 0, "x", "X",

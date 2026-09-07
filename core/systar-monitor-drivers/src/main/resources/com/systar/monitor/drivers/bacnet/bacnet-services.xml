@@ -12,6 +12,9 @@
             <Property Name="DeviceId" Caption="设备编号" Default="0" Required="true">
                 <DataType Max="65535">INT</DataType>
             </Property>
+            <Property Name="Timeout" Caption="超时时间 (ms)" Default="5000" Required="false">
+                <DataType Min="100" Max="60000">INT</DataType>
+            </Property>
         </PropertyList>
     </Service>
 </Services>

@@ -17,7 +17,7 @@ MERGE INTO t_service (id, name, caption, parent, mode, driver_class, max_connect
 -- 2. 服务属性 (t_asset_attribute)
 -- 键名 = 类型 XML 的 Property Name，经 bindProperties() 反射绑定到驱动 setter
 -- (Host/Port/UnitId → ModbusService，EndpointUrl → OpcUaService)
--- timeout 无 XML Property，由 ModbusService 字段初值 (5000) 兜底，不再入库
+-- Timeout 走类型 XML Property 缺省 (5000)，种子不逐实例覆写
 -- ============================================================================
 MERGE INTO t_asset_attribute (id, asset_id, attr_key, attr_value, attr_type) KEY (id)
     VALUES (200, 110, 'Host',   'localhost', 'STRING'),

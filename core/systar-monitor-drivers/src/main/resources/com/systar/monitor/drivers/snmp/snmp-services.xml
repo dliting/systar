@@ -15,6 +15,9 @@
             <Property Name="Version" Caption="版本" Default="v2c" Required="true">
                 <DataType MaxLength="31">STRING</DataType>
             </Property>
+            <Property Name="Timeout" Caption="超时时间 (ms)" Default="5000" Required="false">
+                <DataType Min="100" Max="60000">INT</DataType>
+            </Property>
         </PropertyList>
     </Service>
 </Services>

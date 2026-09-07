@@ -10,8 +10,11 @@
                 <DataType Min="0" Max="247">INT</DataType>
             </Property>
             <Property Name="MaxConnections" Caption="最大允许连接数"
-                Default="1" Required="false">
+                Default="10" Required="false">
                 <DataType Min="1" Max="255">INT</DataType>
+            </Property>
+            <Property Name="Timeout" Caption="超时时间 (ms)" Default="5000" Required="false">
+                <DataType Min="100" Max="60000">INT</DataType>
             </Property>
         </PropertyList>
     </Service>

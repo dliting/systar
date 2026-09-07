@@ -1428,7 +1428,12 @@ async function submitForm() {
   if (!formRef.value) return
   try {
     await formRef.value.validate()
-  } catch { return }
+  } catch {
+    // Validation errors render on their own wizard step, which may be hidden
+    // from the user standing on the confirm step — surface a visible hint.
+    ElMessage.warning('表单校验未通过，请检查各步骤的必填项')
+    return
+  }
   submitting.value = true
   try {
     if (dialogMode.value === 'create') {
