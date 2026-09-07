@@ -385,6 +385,8 @@ H2 脚本需去除 `ENGINE=InnoDB`、`COLLATE`、`COMMENT`，用 `MERGE INTO` �
 
 ## 7. 协议驱动扩展指南
 
+> 完整的驱动二次开发教程（基类契约、代码骨架、绑定机制、测试范式、部署配方）见 `docs/driver-development-guide.md`；类型 XML 完整规格见 `xml-asset-type-config-design.md`。本章为架构级摘要。
+
 ### 7.1 驱动架构
 
 每个协议驱动实现 `MonitorService`（主动）或 `IPassiveMonitor`（被动）接口：
