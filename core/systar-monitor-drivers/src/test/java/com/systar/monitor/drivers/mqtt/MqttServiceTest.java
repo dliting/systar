@@ -1,6 +1,9 @@
 package com.systar.monitor.drivers.mqtt;
 
+import com.systar.monitor.asset.type.AssetTypeProperty;
+import com.systar.monitor.asset.type.DataType;
 import com.systar.monitor.asset.type.ProbeType;
+import com.systar.monitor.asset.type.ServiceType;
 import com.systar.monitor.result.MonitorResult;
 import com.systar.monitor.result.ResultDispatcher;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,9 +45,24 @@ class MqttServiceTest {
     class Configuration {
 
         @Test
-        @DisplayName("default qos is 1")
+        @DisplayName("default qos is 0 (aligned with XML Default)")
         void defaultQos() {
-            assertThat(new MqttService().getQos()).isEqualTo(1);
+            assertThat(new MqttService().getQos()).isEqualTo(0);
+        }
+
+        @Test
+        @DisplayName("bindProperties applies type defaults when metadata absent")
+        void bindsTypeDefaults() {
+            ServiceType type = new ServiceType("MqttService");
+            type.addProperty(new AssetTypeProperty("BrokerUrl", DataType.STRING,
+                    "tcp://127.0.0.1:1883", "Broker 地址"));
+            type.addProperty(new AssetTypeProperty("Qos", DataType.INT, "0", "QoS 等级"));
+            service.init(type, 1, "mqtt-svc");
+
+            service.bindProperties();
+
+            assertThat(service.getBrokerUrl()).isEqualTo("tcp://127.0.0.1:1883");
+            assertThat(service.getQos()).isEqualTo(0);
         }
 
         @Test

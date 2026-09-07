@@ -24,7 +24,7 @@ public class MqttService extends PassiveService {
 
     private static final Logger LOG = LoggerFactory.getLogger(MqttService.class);
 
-    private static final int DEFAULT_QOS = 1;
+    private static final int DEFAULT_QOS = 0;
     private static final int DEFAULT_KEEPALIVE_SECS = 60;
 
     private String brokerUrl;

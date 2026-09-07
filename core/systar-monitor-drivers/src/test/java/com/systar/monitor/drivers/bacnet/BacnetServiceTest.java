@@ -1,6 +1,9 @@
 package com.systar.monitor.drivers.bacnet;
 
 import com.systar.monitor.drivers.bacnet.BacnetService.BacnetConnection;
+import com.systar.monitor.asset.type.AssetTypeProperty;
+import com.systar.monitor.asset.type.DataType;
+import com.systar.monitor.asset.type.ServiceType;
 import com.serotonin.bacnet4j.type.enumerated.ObjectType;
 import com.serotonin.bacnet4j.type.enumerated.PropertyIdentifier;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,9 +31,9 @@ class BacnetServiceTest {
     class Configuration {
 
         @Test
-        @DisplayName("default deviceId is 100")
+        @DisplayName("default deviceId is 0 (aligned with XML Default)")
         void defaultDeviceId() {
-            assertThat(new BacnetService().getDeviceId()).isEqualTo(100);
+            assertThat(new BacnetService().getDeviceId()).isEqualTo(0);
         }
 
         @Test
@@ -57,6 +60,33 @@ class BacnetServiceTest {
             assertThat(service.getRemotePort()).isEqualTo(47809);
             assertThat(service.getDeviceId()).isEqualTo(200);
             assertThat(service.getTimeout()).isEqualTo(10000);
+        }
+
+        @Test
+        @DisplayName("bindProperties applies type defaults when metadata absent")
+        void bindsTypeDefaults() {
+            ServiceType type = new ServiceType("BACnetService");
+            type.addProperty(new AssetTypeProperty("Remotehost", DataType.STRING, "127.0.0.1", "远程IP"));
+            type.addProperty(new AssetTypeProperty("DeviceId", DataType.INT, "0", "设备编号"));
+            service.init(type, 1, "bacnet-svc");
+
+            service.bindProperties();
+
+            assertThat(service.getRemoteHost()).isEqualTo("127.0.0.1");
+            assertThat(service.getDeviceId()).isEqualTo(0);
+        }
+
+        @Test
+        @DisplayName("bindProperties lets metadata override type defaults")
+        void metadataOverridesTypeDefaults() {
+            ServiceType type = new ServiceType("BACnetService");
+            type.addProperty(new AssetTypeProperty("DeviceId", DataType.INT, "0", "设备编号"));
+            service.init(type, 1, "bacnet-svc");
+            service.setMetadata("DeviceId", "200");
+
+            service.bindProperties();
+
+            assertThat(service.getDeviceId()).isEqualTo(200);
         }
     }
 

@@ -126,16 +126,6 @@ class AssetBindPropertiesTest {
     // ======================== edge cases ========================
 
     @Test
-    @DisplayName("Null metadata value skips property")
-    void nullMetadataSkips() {
-        controlType.addProperty(new AssetTypeProperty("Address", DataType.INT, "0", "addr"));
-
-        control.bindProperties();
-
-        assertThat(control.getAddress()).isEqualTo(0);
-    }
-
-    @Test
     @DisplayName("Missing setter does not throw")
     void missingSetterDoesNotThrow() {
         controlType.addProperty(new AssetTypeProperty("Nonexistent", DataType.STRING, "", "none"));
@@ -173,6 +163,49 @@ class AssetBindPropertiesTest {
         control.bindProperties();
 
         assertThat(control.getAddress()).isEqualTo(999);
+    }
+
+    // ======================== type default fallback ========================
+
+    @Test
+    @DisplayName("Missing metadata falls back to type property default (INT)")
+    void appliesTypeDefaultWhenMetadataAbsent() {
+        controlType.addProperty(new AssetTypeProperty("Address", DataType.INT, "10", "addr"));
+
+        control.bindProperties();
+
+        assertThat(control.getAddress()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("Missing metadata falls back to type property default (STRING)")
+    void appliesStringTypeDefaultWhenMetadataAbsent() {
+        controlType.addProperty(new AssetTypeProperty("NodeId", DataType.STRING, "127.0.0.1", "node"));
+
+        control.bindProperties();
+
+        assertThat(control.getNodeId()).isEqualTo("127.0.0.1");
+    }
+
+    @Test
+    @DisplayName("Neither metadata nor default leaves field at its initial value")
+    void neitherMetadataNorDefaultLeavesFieldUntouched() {
+        controlType.addProperty(new AssetTypeProperty("NodeId", DataType.STRING, null, "node"));
+
+        control.bindProperties();
+
+        assertThat(control.getNodeId()).isNull();
+    }
+
+    @Test
+    @DisplayName("Default fallback converts via setter param type (STRING default → int setter)")
+    void defaultFallbackConvertsToSetterParamType() {
+        // Real-world shape: XML declares Default="502" for Port; setter takes int.
+        controlType.addProperty(new AssetTypeProperty("Address", DataType.STRING, "502", "addr"));
+
+        control.bindProperties();
+
+        assertThat(control.getAddress()).isEqualTo(502);
     }
 
     // ======================== additional coverage ========================
@@ -235,7 +268,7 @@ class AssetBindPropertiesTest {
     @Test
     @DisplayName("Mismatched property DataType vs setter param — converts to setter's actual type")
     void convertsToSetterParamTypeWhenPropertyDataTypeDiffers() {
-        // Real-world regression: ModbusServices.xml declared UnitId as STRING but
+        // Real-world regression: modbus-services.xml declared UnitId as STRING but
         // ModbusService.setUnitId takes int. Binding must succeed by converting
         // "1" → int, not failing with "argument type mismatch".
         controlType.addProperty(new AssetTypeProperty("Address", DataType.STRING, "0", "addr"));

@@ -2,14 +2,21 @@ package com.systar.server.loader;
 
 import com.systar.data.entity.AssetTypeConfigEntity;
 import com.systar.data.mapper.AssetTypeConfigMapper;
+import com.systar.monitor.asset.AssetException;
 import com.systar.monitor.asset.AssetKind;
 import com.systar.monitor.asset.AssetStore;
 import com.systar.monitor.asset.type.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
@@ -178,6 +185,13 @@ class XmlAssetTypeLoaderTest {
         assertThat(mqtt.getProperties()).hasSize(5);
         assertThat(mqtt.getProperties().stream().map(AssetTypeProperty::getName).toList())
                 .containsExactlyInAnyOrder("BrokerUrl", "ClientId", "Username", "Password", "Qos");
+
+        // OpcUa — property names must match driver setters (SecurityPolicy, not SecurityMode)
+        ServiceType opcua = store.getServiceTypes().find("OpcUaService");
+        assertThat(opcua).isNotNull();
+        assertThat(opcua.getProperties()).hasSize(4);
+        assertThat(opcua.getProperties().stream().map(AssetTypeProperty::getName).toList())
+                .containsExactlyInAnyOrder("Host", "Port", "SecurityPolicy", "EndpointUrl");
     }
 
     @Test
@@ -502,5 +516,194 @@ class XmlAssetTypeLoaderTest {
         AssetTypeProperty regProp = type.findProperty("InRegisterAddr");
         assertThat(regProp).isNotNull();
         assertThat(regProp.getViewType()).isEqualTo(ViewType.TEXTFIELD);
+    }
+
+    // ======================== DB sync versioning ========================
+
+    @Nested
+    @DisplayName("DB sync versioning: only real content changes bump the version")
+    class DbSyncVersioning {
+
+        @Test
+        @DisplayName("reload with unchanged XML performs no insert/update/delete")
+        void unchangedReloadSkipsUpdate() {
+            loader.load(store);
+
+            ArgumentCaptor<AssetTypeConfigEntity> captor =
+                    ArgumentCaptor.forClass(AssetTypeConfigEntity.class);
+            verify(mapper, atLeastOnce()).insert(captor.capture());
+            List<AssetTypeConfigEntity> insertedRows = captor.getAllValues();
+
+            clearInvocations(mapper);
+            when(mapper.selectList(any())).thenReturn(insertedRows);
+
+            loader.load(new AssetStore());
+
+            verify(mapper, never()).insert(any(AssetTypeConfigEntity.class));
+            verify(mapper, never()).updateById(any(AssetTypeConfigEntity.class));
+            verify(mapper, never()).deleteById(anyLong());
+        }
+
+        @Test
+        @DisplayName("changed caption bumps the version exactly once for that type")
+        void changedCaptionBumpsVersion() {
+            loader.load(store);
+
+            ArgumentCaptor<AssetTypeConfigEntity> captor =
+                    ArgumentCaptor.forClass(AssetTypeConfigEntity.class);
+            verify(mapper, atLeastOnce()).insert(captor.capture());
+            List<AssetTypeConfigEntity> rows = captor.getAllValues();
+            rows.forEach(r -> {
+                if ("ModbusMaster".equals(r.getTypeName())) r.setCaption("STALE");
+            });
+
+            clearInvocations(mapper);
+            when(mapper.selectList(any())).thenReturn(rows);
+
+            loader.load(new AssetStore());
+
+            ArgumentCaptor<AssetTypeConfigEntity> updated =
+                    ArgumentCaptor.forClass(AssetTypeConfigEntity.class);
+            verify(mapper, times(1)).updateById(updated.capture());
+            assertThat(updated.getValue().getTypeName()).isEqualTo("ModbusMaster");
+            assertThat(updated.getValue().getCaption()).isEqualTo("Modbus Master");
+            assertThat(updated.getValue().getVersion()).isEqualTo(2);
+            verify(mapper, never()).insert(any(AssetTypeConfigEntity.class));
+        }
+
+        @Test
+        @DisplayName("DB rows absent from XML are deleted exactly once (obsolete cleanup)")
+        void obsoleteTypeDeletedFromDb() {
+            AssetTypeConfigEntity orphan = new AssetTypeConfigEntity();
+            orphan.setId(999L);
+            orphan.setKind("SERVICE");
+            orphan.setTypeName("GoneService");
+            orphan.setCaption("gone");
+            orphan.setVersion(1);
+
+            loader.load(store);
+
+            ArgumentCaptor<AssetTypeConfigEntity> captor =
+                    ArgumentCaptor.forClass(AssetTypeConfigEntity.class);
+            verify(mapper, atLeastOnce()).insert(captor.capture());
+            List<AssetTypeConfigEntity> rows = new ArrayList<>(captor.getAllValues());
+            rows.add(orphan);
+
+            clearInvocations(mapper);
+            when(mapper.selectList(any())).thenReturn(rows);
+
+            loader.load(new AssetStore());
+
+            verify(mapper, times(1)).deleteById(999L);
+        }
+
+        @Test
+        @DisplayName("null version in a changed DB row is treated as 0, not an NPE")
+        void nullVersionRowHandled() {
+            loader.load(store);
+
+            ArgumentCaptor<AssetTypeConfigEntity> captor =
+                    ArgumentCaptor.forClass(AssetTypeConfigEntity.class);
+            verify(mapper, atLeastOnce()).insert(captor.capture());
+            List<AssetTypeConfigEntity> rows = captor.getAllValues();
+            rows.forEach(r -> {
+                if ("ModbusMaster".equals(r.getTypeName())) {
+                    r.setCaption("STALE");
+                    r.setVersion(null);
+                }
+            });
+
+            clearInvocations(mapper);
+            when(mapper.selectList(any())).thenReturn(rows);
+
+            loader.load(new AssetStore());
+
+            ArgumentCaptor<AssetTypeConfigEntity> updated =
+                    ArgumentCaptor.forClass(AssetTypeConfigEntity.class);
+            verify(mapper, times(1)).updateById(updated.capture());
+            assertThat(updated.getValue().getTypeName()).isEqualTo("ModbusMaster");
+            assertThat(updated.getValue().getVersion()).isEqualTo(1);
+        }
+    }
+
+    // ======================== directory scan & extra scan paths ========================
+
+    @Nested
+    @DisplayName("Directory scanning and extra scan paths")
+    class DirectoryScan {
+
+        @TempDir
+        Path tempDir;
+
+        @Test
+        @DisplayName("extra file: scan path contributes types alongside the built-ins")
+        void discoversTypeFromExtraScanPath() throws Exception {
+            writeXml("private-services.xml", """
+                    <?xml version="1.0" encoding="UTF-8"?>
+                    <Services>
+                        <Service Name="MyPrivateService" Caption="私有服务">
+                            <JavaClass>com.systar.monitor.drivers.simulate.SimulateService</JavaClass>
+                        </Service>
+                    </Services>
+                    """);
+
+            XmlAssetTypeLoader extraLoader = new XmlAssetTypeLoader(mapper, tempDir.toUri() + "*.xml");
+            extraLoader.load(store);
+
+            ServiceType privateType = store.getServiceTypes().find("MyPrivateService");
+            assertThat(privateType).as("type from extra scan path should be registered").isNotNull();
+            assertThat(privateType.getRelatedClass())
+                    .isEqualTo("com.systar.monitor.drivers.simulate.SimulateService");
+            assertThat(store.getServiceTypes().find("ModbusMaster"))
+                    .as("built-in types must still load from default patterns").isNotNull();
+        }
+
+        @Test
+        @DisplayName("unknown root element fails fast naming the file and the legal roots")
+        void unknownRootElementFailsFast() throws Exception {
+            writeXml("bad-root.xml", """
+                    <?xml version="1.0" encoding="UTF-8"?>
+                    <FancyList>
+                        <Service Name="X"/>
+                    </FancyList>
+                    """);
+
+            XmlAssetTypeLoader extraLoader = new XmlAssetTypeLoader(mapper, tempDir.toUri() + "*.xml");
+            assertThatThrownBy(() -> extraLoader.load(store))
+                    .isInstanceOf(AssetException.class)
+                    .hasMessageContaining("bad-root.xml")
+                    .hasMessageContaining("Services");
+        }
+
+        @Test
+        @DisplayName("duplicate type name across scan paths throws (no override semantics)")
+        void duplicateTypeNameAcrossPathsThrows() throws Exception {
+            writeXml("dup-services.xml", """
+                    <?xml version="1.0" encoding="UTF-8"?>
+                    <Services>
+                        <Service Name="ModbusMaster" Caption="重复类型"/>
+                    </Services>
+                    """);
+
+            XmlAssetTypeLoader extraLoader = new XmlAssetTypeLoader(mapper, tempDir.toUri() + "*.xml");
+            assertThatThrownBy(() -> extraLoader.load(store))
+                    .isInstanceOf(AssetException.class)
+                    .hasMessageContaining("ModbusMaster");
+        }
+
+        @Test
+        @DisplayName("non-existent extra file: path resolves to nothing and is not an error")
+        void nonExistentExtraPathIgnored() {
+            XmlAssetTypeLoader extraLoader = new XmlAssetTypeLoader(mapper, "file:/definitely/not/here/*.xml");
+
+            assertThatCode(() -> extraLoader.load(store)).doesNotThrowAnyException();
+            assertThat(store.getServiceTypes().find("ModbusMaster"))
+                    .as("built-in types still load when an extra path is empty")
+                    .isNotNull();
+        }
+
+        private void writeXml(String fileName, String content) throws Exception {
+            Files.writeString(tempDir.resolve(fileName), content);
+        }
     }
 }

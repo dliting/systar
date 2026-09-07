@@ -2,34 +2,22 @@ package com.systar.monitor.drivers.modbus;
 
 import com.systar.monitor.asset.ActiveService;
 import com.systar.monitor.asset.MonitorConnection;
-import com.systar.monitor.asset.type.AssetTypeProperty;
-import com.systar.monitor.asset.type.ServiceType;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Modbus TCP active service that manages a connection pool.
  * <p>
- * Configuration is resolved in priority order:
- * <ol>
- *   <li>Asset instance metadata (runtime overrides)</li>
- *   <li>Type property default values (design-time configuration)</li>
- *   <li>Built-in defaults</li>
- * </ol>
- * <p>
- * Recognized configuration keys:
- * <ul>
- *   <li>{@code host} - Modbus TCP host (default: "127.0.0.1")</li>
- *   <li>{@code port} - Modbus TCP port (default: 502)</li>
- *   <li>{@code unitId} - Modbus slave unit ID (default: 1)</li>
- *   <li>{@code timeout} - Socket timeout in milliseconds (default: 5000)</li>
- *   <li>{@code maxConnections} - Connection pool size (default: 10)</li>
- * </ul>
+ * Configuration binds through the framework's reflective property binding
+ * ({@link com.systar.monitor.asset.Asset#bindProperties()}), in priority
+ * order: instance metadata (runtime overrides), then type property defaults
+ * (design-time configuration), then the field initial values below
+ * (built-in defaults). XML property names: {@code Host}, {@code Port},
+ * {@code UnitId}, {@code MaxConnections}, {@code Timeout}.
  */
 public class ModbusService extends ActiveService {
 
@@ -40,7 +28,6 @@ public class ModbusService extends ActiveService {
     private static final int DEFAULT_PORT = 502;
     private static final int DEFAULT_UNIT_ID = 1;
     private static final int DEFAULT_TIMEOUT = 5000;
-    private static final int DEFAULT_MAX_CONNECTIONS = 10;
 
     // Resolved configuration
     private String host = DEFAULT_HOST;
@@ -53,47 +40,6 @@ public class ModbusService extends ActiveService {
 
     public ModbusService() {
         super();
-    }
-
-    /**
-     * Resolves configuration from type property defaults and runtime metadata.
-     * <p>
-     * Priority: metadata (runtime) > type property defaults > built-in defaults.
-     */
-    private void resolveConfig() {
-        // Build a config map from type property defaults
-        Map<String, Object> configDefaults = new java.util.HashMap<>();
-        ServiceType type = getType();
-        if (type != null && type.getProperties() != null) {
-            for (AssetTypeProperty prop : type.getProperties()) {
-                if (prop.getName() != null && prop.getDefaultValue() != null) {
-                    configDefaults.put(prop.getName(), prop.getDefaultValue());
-                }
-            }
-        }
-
-        // Read from type property defaults first
-        this.host = getString(configDefaults, "host", DEFAULT_HOST);
-        this.port = getInt(configDefaults, "port", DEFAULT_PORT);
-        this.unitId = getInt(configDefaults, "unitId", DEFAULT_UNIT_ID);
-        this.timeout = getInt(configDefaults, "timeout", DEFAULT_TIMEOUT);
-        setMaxConnections(getInt(configDefaults, "maxConnections", DEFAULT_MAX_CONNECTIONS));
-
-        // Override from runtime metadata if present
-        Object metaHost = getMetadata("host");
-        if (metaHost != null) this.host = metaHost.toString();
-
-        Object metaPort = getMetadata("port");
-        if (metaPort != null) this.port = toInt(metaPort, this.port);
-
-        Object metaUnitId = getMetadata("unitId");
-        if (metaUnitId != null) this.unitId = toInt(metaUnitId, this.unitId);
-
-        Object metaTimeout = getMetadata("timeout");
-        if (metaTimeout != null) this.timeout = toInt(metaTimeout, this.timeout);
-
-        Object metaMaxConn = getMetadata("maxConnections");
-        if (metaMaxConn != null) setMaxConnections(toInt(metaMaxConn, getMaxConnections()));
     }
 
     // ======================== ActiveService ========================
@@ -111,7 +57,6 @@ public class ModbusService extends ActiveService {
 
     @Override
     public void start() throws Exception {
-        resolveConfig();
         LOG.info("Starting Modbus service: {}:{} [unitId={}, maxConnections={}]",
                 host, port, unitId, getMaxConnections());
 
@@ -190,29 +135,5 @@ public class ModbusService extends ActiveService {
     @Override
     public String toString() {
         return "ModbusService[" + host + ":" + port + ", unitId=" + unitId + "]";
-    }
-
-    // ======================== helpers ========================
-
-    private static String getString(Map<String, Object> props, String key, String defaultVal) {
-        Object val = props.get(key);
-        return val != null ? val.toString() : defaultVal;
-    }
-
-    private static int getInt(Map<String, Object> props, String key, int defaultVal) {
-        Object val = props.get(key);
-        if (val == null) return defaultVal;
-        return toInt(val, defaultVal);
-    }
-
-    private static int toInt(Object val, int defaultVal) {
-        if (val instanceof Number n) {
-            return n.intValue();
-        }
-        try {
-            return Integer.parseInt(val.toString());
-        } catch (NumberFormatException e) {
-            return defaultVal;
-        }
     }
 }

@@ -399,8 +399,10 @@ H2 脚本需去除 `ENGINE=InnoDB`、`COLLATE`、`COMMENT`，用 `MERGE INTO` �
    - 主动驱动：继承 `ActiveService`，实现 `createConnection()`
    - 被动驱动：继承 `PassiveService`，实现 `receive()` 数据处理
 3. **连接管理**：实现 `MonitorConnection` 接口（connect/disconnect/detect）
-4. **配置数据**：在 `t_service` 表中注册 `driver_class` 全限定类名
+4. **类型定义 XML**：在驱动包 resources 下（`com/systar/monitor/drivers/<proto>/`）放置 `<proto>-services.xml`、`<proto>-probes.xml` 等——启动时由 `XmlAssetTypeLoader` 目录扫描**自注册**，无需登记任何全局索引（详见 `xml-asset-type-config-design.md`）
 5. **单元测试**：编写驱动测试
+
+**私有驱动扩展**：不愿公开进仓库的驱动类型，经 `systar.asset-type.scan-paths` 配置外置 `file:` 扫描目录加载（XML-only 扩展指向内置驱动类，或配合 Spring Boot `loader.path` 挂载私有 JAR），配置方法见 `xml-asset-type-config-design.md`。
 
 ### 7.3 现有驱动参考
 

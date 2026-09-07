@@ -4,6 +4,9 @@ server:
 systar:
   database:
     type: mysql
+  asset-type:
+    # 额外类型 XML 扫描路径（逗号分隔，支持 file: 外置目录），用于私有驱动类型扩展；留空仅扫描内置路径
+    # scan-paths: file:./config/drivers/*.xml
   security:
     secret: ${SYSTAR_SECRET:changeme-default-secret}
     whitelist: /actuator/health,/error,/api/auth/login,/api/auth/logout,/api/sys/notice/active

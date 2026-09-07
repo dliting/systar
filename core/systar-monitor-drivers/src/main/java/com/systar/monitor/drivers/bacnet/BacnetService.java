@@ -32,7 +32,7 @@ public class BacnetService extends ActiveService {
     private static final Logger LOG = LoggerFactory.getLogger(BacnetService.class);
 
     static final int DEFAULT_BACNET_PORT = 47808;
-    static final int DEFAULT_DEVICE_ID = 100;
+    static final int DEFAULT_DEVICE_ID = 0;
     static final int DEFAULT_TIMEOUT_MS = 5000;
     static final int LOCAL_DEVICE_ID = 1;
     /** BACnet write priority (1=highest, 16=lowest/relinquishable). 16 = manual operator default. */

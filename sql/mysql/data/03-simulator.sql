@@ -16,22 +16,20 @@ ON DUPLICATE KEY UPDATE caption = VALUES(caption);
 
 -- ============================================================================
 -- 2. 服务属性 (t_asset_attribute)
--- Modbus 使用小写键名，因为 ModbusService.resolveConfig() 用 getMetadata("host") 读取
--- OPC UA 使用 Property 名，通过 bindProperties() → setEndpointUrl() 绑定
+-- 键名 = 类型 XML 的 Property Name，经 bindProperties() 反射绑定到驱动 setter
+-- (Host/Port/UnitId → ModbusService，EndpointUrl → OpcUaService)
+-- timeout 无 XML Property，由 ModbusService 字段初值 (5000) 兜底，不再入库
 -- ============================================================================
 INSERT INTO t_asset_attribute (id, asset_id, attr_key, attr_value, attr_type) VALUES
-    (200, 110, 'host',      'localhost',                'STRING'),
-    (201, 110, 'port',      '55502',                    'INT'),
-    (202, 110, 'unitId',    '1',                        'INT'),
-    (203, 110, 'timeout',   '5000',                     'INT'),
-    (204, 111, 'host',      'localhost',                'STRING'),
-    (205, 111, 'port',      '55502',                    'INT'),
-    (206, 111, 'unitId',    '2',                        'INT'),
-    (207, 111, 'timeout',   '5000',                     'INT'),
-    (208, 112, 'host',      'localhost',                'STRING'),
-    (209, 112, 'port',      '55502',                    'INT'),
-    (210, 112, 'unitId',    '3',                        'INT'),
-    (211, 112, 'timeout',   '5000',                     'INT'),
+    (200, 110, 'Host',   'localhost', 'STRING'),
+    (201, 110, 'Port',   '55502',     'INT'),
+    (202, 110, 'UnitId', '1',         'INT'),
+    (204, 111, 'Host',   'localhost', 'STRING'),
+    (205, 111, 'Port',   '55502',     'INT'),
+    (206, 111, 'UnitId', '2',         'INT'),
+    (208, 112, 'Host',   'localhost', 'STRING'),
+    (209, 112, 'Port',   '55502',     'INT'),
+    (210, 112, 'UnitId', '3',         'INT'),
     (212, 113, 'EndpointUrl', 'opc.tcp://localhost:55503/systar-simulator', 'STRING')
 ON DUPLICATE KEY UPDATE attr_value = VALUES(attr_value);
 

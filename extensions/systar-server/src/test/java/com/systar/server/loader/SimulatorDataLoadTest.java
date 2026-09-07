@@ -75,13 +75,20 @@ class SimulatorDataLoadTest {
     }
 
     @Test
-    @DisplayName("Modbus services have host/port attributes")
+    @DisplayName("Modbus services have Host/Port/UnitId attributes bound to driver fields")
     void modbusServiceHasHostPort() {
         Asset<?> svc = store.findAsset(110);
         assertThat(svc).isNotNull();
-        assertThat((String) svc.getMetadata("host")).isEqualTo("localhost");
-        assertThat((String) svc.getMetadata("port")).isEqualTo("55502");
-        assertThat((String) svc.getMetadata("unitId")).isEqualTo("1");
+        assertThat((String) svc.getMetadata("Host")).isEqualTo("localhost");
+        assertThat((String) svc.getMetadata("Port")).isEqualTo("55502");
+        assertThat((String) svc.getMetadata("UnitId")).isEqualTo("1");
+
+        // Attributes must reach the driver fields via bindProperties.
+        com.systar.monitor.drivers.modbus.ModbusService driver =
+                (com.systar.monitor.drivers.modbus.ModbusService) svc;
+        assertThat(driver.getHost()).isEqualTo("localhost");
+        assertThat(driver.getPort()).isEqualTo(55502);
+        assertThat(driver.getUnitId()).isEqualTo(1);
     }
 
     @Test

@@ -9,7 +9,7 @@
             <Property Name="Port" Caption="端口号" Default="4840" Required="true">
                 <DataType Min="1" Max="65535">INT</DataType>
             </Property>
-            <Property Name="SecurityMode" Caption="安全模式" Default="None" Required="false">
+            <Property Name="SecurityPolicy" Caption="安全策略" Default="None" Required="false">
                 <DataType MaxLength="31">STRING</DataType>
             </Property>
             <Property Name="EndpointUrl" Caption="服务器端点URL" Default="opc.tcp://localhost:4840" Required="true">

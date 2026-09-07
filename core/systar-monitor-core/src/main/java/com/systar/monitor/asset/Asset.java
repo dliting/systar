@@ -165,8 +165,13 @@ public abstract class Asset<T extends AssetType> {
     // ======================== reflective property binding ========================
 
     /**
-     * Reflectively binds metadata values to typed setter methods on the concrete
+     * Reflectively binds property values to typed setter methods on the concrete
      * subclass, based on the type's PropertyList definitions.
+     * <p>
+     * Each property resolves in priority order: instance metadata (runtime
+     * overrides) first, then the type property's default value (design-time
+     * configuration). Properties with neither source are skipped, leaving the
+     * field at its Java-initialized value (built-in defaults).
      * <p>
      * This bridges the gap between generic KV metadata and typed driver fields
      * (e.g., BacnetControl.objectType, OpcUaControl.nodeIdStr). Only iterates
@@ -184,6 +189,9 @@ public abstract class Asset<T extends AssetType> {
 
         for (AssetTypeProperty prop : type.getProperties()) {
             Object rawValue = getMetadata(prop.getName());
+            if (rawValue == null) {
+                rawValue = prop.getDefaultValue();
+            }
             if (rawValue == null) continue;
 
             try {

@@ -404,6 +404,10 @@ public class AssetRepository {
         setCommonProps(service, row.caption(), row.parentId());
         if (row.maxConnections() != null && service instanceof ActiveService active) {
             active.setMaxConnections(row.maxConnections());
+            // Mirror the t_service column into metadata so the value survives
+            // bindProperties as instance data, outranking the type default.
+            // An explicit t_asset_attribute row (loaded later) still wins.
+            service.setMetadata("MaxConnections", row.maxConnections());
         }
         serviceIndex.put(row.id(), service);
         applyDefaults(service);
@@ -869,7 +873,11 @@ public class AssetRepository {
         Map<Integer, MonitorService> index = new HashMap<>();
         var rows = jdbc.query(SELECT_SERVICE + " WHERE id=?",
                 (rs, i) -> toService(mapServiceRow(rs), index), id);
-        return rows.isEmpty() ? null : rows.get(0);
+        if (rows.isEmpty()) return null;
+        MonitorService service = rows.get(0);
+        loadAttributes(service);
+        service.bindProperties();
+        return service;
     }
 
     public Probe findProbeById(int id) {
