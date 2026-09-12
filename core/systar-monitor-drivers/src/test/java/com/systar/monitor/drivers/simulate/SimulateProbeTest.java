@@ -323,7 +323,6 @@ class SimulateProbeTest {
     @DisplayName("SimulateProbe accepts visitor with correct visit method")
     void probeAcceptsVisitor() {
         com.systar.monitor.asset.AssetVisitor<String> visitor = new com.systar.monitor.asset.AssetVisitor<>() {
-            @Override public String visit(com.systar.monitor.asset.type.Space space) { return "space"; }
             @Override public String visit(com.systar.monitor.asset.type.Device device) { return "device"; }
             @Override public String visit(com.systar.monitor.asset.Probe probe) { return "probe"; }
             @Override public String visit(com.systar.monitor.asset.VirtualProbe vp) { return "virtualProbe"; }

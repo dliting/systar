@@ -2,7 +2,6 @@ package com.systar.monitor.integration;
 
 import com.systar.monitor.asset.*;
 import com.systar.monitor.asset.type.ProbeType;
-import com.systar.monitor.asset.type.SpaceType;
 import com.systar.monitor.asset.type.VirtualProbeType;
 import com.systar.monitor.result.MonitorResult;
 import com.systar.monitor.result.MonitorResultEvent;
@@ -34,7 +33,6 @@ class VirtualProbeLifecycleIT {
     @BeforeEach
     void setUp() {
         store = new AssetStore();
-        store.createRoot(new SpaceType("root"), "root");
         collectedResults = new CopyOnWriteArrayList<>();
         dispatcher = new ResultDispatcher();
         dispatcher.setApplicationEventPublisher(event -> {

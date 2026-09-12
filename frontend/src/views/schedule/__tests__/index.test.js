@@ -14,9 +14,21 @@ vi.mock('@/api/iot/scheduledTask', () => ({
 }))
 
 vi.mock('@/api/iot/asset', () => ({
-  getAssetTree: vi.fn().mockResolvedValue({
-    data: { id: 1, name: 'root', caption: 'Root', kind: 'SPACE', children: [] }
-  })
+  getAssetTree: vi.fn().mockResolvedValue({ data: [
+    { key: 'KIND:SERVICE', nodeKind: 'ASSET', assetKind: 'SERVICE', id: null, children: [] },
+    { key: 'KIND:DEVICE', nodeKind: 'ASSET', assetKind: 'DEVICE', id: null, children: [
+      { key: 'ASSET:10', nodeKind: 'ASSET', assetKind: 'DEVICE', id: 10, name: 'ups_001', caption: 'UPS', state: 'NORMAL', enabled: true, children: [] }
+    ] }
+  ] }),
+  listGroupTrees: vi.fn().mockResolvedValue({ data: [] }),
+  listGroups: vi.fn().mockResolvedValue({ data: [] }),
+  createGroup: vi.fn().mockResolvedValue({}),
+  updateGroup: vi.fn().mockResolvedValue({}),
+  deleteGroup: vi.fn().mockResolvedValue({}),
+  replaceGroupAssets: vi.fn().mockResolvedValue({}),
+  createGroupTree: vi.fn().mockResolvedValue({}),
+  updateGroupTree: vi.fn().mockResolvedValue({}),
+  deleteGroupTree: vi.fn().mockResolvedValue({})
 }))
 
 vi.mock('@/utils/errorHandler', () => ({
@@ -69,6 +81,34 @@ describe('Schedule', () => {
     await flushPromises()
     const { getAssetTree } = await import('@/api/iot/asset')
     expect(getAssetTree).toHaveBeenCalled()
+  })
+
+  it('fills the target monitor from a probe tree node while the dialog is open', async () => {
+    const wrapper = mountSchedule()
+    await flushPromises()
+    const vm = wrapper.vm
+    vm.handleAdd()
+    vm.handleTreeNodeClick({ key: 'ASSET:5', nodeKind: 'ASSET', assetKind: 'PROBE', id: 5, caption: '温度探头' })
+    expect(vm.form.controlId).toBe(5)
+  })
+
+  it('fills the target monitor from a control tree node', async () => {
+    const wrapper = mountSchedule()
+    await flushPromises()
+    const vm = wrapper.vm
+    vm.handleAdd()
+    vm.handleTreeNodeClick({ key: 'ASSET:6', nodeKind: 'ASSET', assetKind: 'CONTROL', id: 6, caption: '开关' })
+    expect(vm.form.controlId).toBe(6)
+  })
+
+  it('ignores group nodes and id-less synthetic nodes when filling the target', async () => {
+    const wrapper = mountSchedule()
+    await flushPromises()
+    const vm = wrapper.vm
+    vm.handleAdd()
+    vm.handleTreeNodeClick({ key: 'GROUP:1', nodeKind: 'GROUP', id: 1, caption: '一楼', children: [] })
+    vm.handleTreeNodeClick({ key: 'KIND:PROBE', nodeKind: 'ASSET', assetKind: 'PROBE', id: null, caption: '孤儿监测器' })
+    expect(vm.form.controlId).toBeFalsy()
   })
 
   it('renders without errors', () => {

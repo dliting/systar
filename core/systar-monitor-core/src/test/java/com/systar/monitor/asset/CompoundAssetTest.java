@@ -1,8 +1,8 @@
 package com.systar.monitor.asset;
 
+import com.systar.monitor.asset.type.Device;
+import com.systar.monitor.asset.type.DeviceType;
 import com.systar.monitor.asset.type.ProbeType;
-import com.systar.monitor.asset.type.Space;
-import com.systar.monitor.asset.type.SpaceType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,13 +17,13 @@ import static org.mockito.Mockito.*;
 @Timeout(value = 3, unit = TimeUnit.MINUTES)
 class CompoundAssetTest {
 
-    private Space root;
+    private Device root;
     private ProbeType probeType;
 
     @BeforeEach
     void setUp() {
-        root = new Space();
-        root.init(new SpaceType("rootType"), 1, "root");
+        root = new Device();
+        root.init(new DeviceType("rootType"), 1, "root");
         probeType = new ProbeType("pt");
     }
 
@@ -55,8 +55,8 @@ class CompoundAssetTest {
         child.init(probeType, 10, "child1");
         root.addChild(child);
 
-        Space other = new Space();
-        other.init(new SpaceType("other"), 2, "other");
+        Device other = new Device();
+        other.init(new DeviceType("other"), 2, "other");
         assertThatThrownBy(() -> other.addChild(child))
                 .isInstanceOf(AssetException.class)
                 .hasMessageContaining("already has a parent");
@@ -140,8 +140,8 @@ class CompoundAssetTest {
     @Test
     @DisplayName("findChild finds nested child recursively")
     void findChildRecursive() {
-        Space sub = new Space();
-        sub.init(new SpaceType("subType"), 20, "subSpace");
+        Device sub = new Device();
+        sub.init(new DeviceType("subType"), 20, "subDevice");
         root.addChild(sub);
 
         Probe deep = new Probe();
@@ -188,9 +188,9 @@ class CompoundAssetTest {
     // ---- kind flags ----
 
     @Test
-    @DisplayName("Space: kind is SPACE, is compound, not monitor")
-    void spaceKindFlags() {
-        assertThat(root.getKind()).isEqualTo(AssetKind.SPACE);
+    @DisplayName("Device: kind is DEVICE, is compound, not monitor")
+    void deviceKindFlags() {
+        assertThat(root.getKind()).isEqualTo(AssetKind.DEVICE);
         assertThat(root.isCompound()).isTrue();
         assertThat(root.isMonitor()).isFalse();
     }
@@ -198,10 +198,10 @@ class CompoundAssetTest {
     // ---- visitor dispatch ----
 
     @Test
-    @DisplayName("Space dispatches visitor correctly")
-    void spaceVisitorDispatch() {
+    @DisplayName("Device dispatches visitor correctly")
+    void deviceVisitorDispatch() {
         AssetVisitor<String> visitor = mock(AssetVisitor.class);
-        when(visitor.visit(any(Space.class))).thenReturn("visited");
+        when(visitor.visit(any(Device.class))).thenReturn("visited");
         assertThat(root.accept(visitor)).isEqualTo("visited");
         verify(visitor).visit(root);
     }

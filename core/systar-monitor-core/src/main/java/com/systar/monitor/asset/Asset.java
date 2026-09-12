@@ -13,11 +13,11 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Abstract base class for all assets (spaces, devices, probes, controls, services).
+ * Abstract base class for all assets (devices, services, probes, controls).
  * <p>
  * An asset is the fundamental unit in the monitoring model. It carries identity,
  * state, type metadata, and participates in a parent-child hierarchy. State changes
- * bubble up to parent assets so that compound assets (spaces/devices) always reflect
+ * bubble up to parent assets so that compound assets (devices) always reflect
  * the most severe state among their children.
  *
  * @param <T> the concrete {@link AssetType} of this asset

@@ -375,7 +375,7 @@
 
 | 端点 | 方法 | 参数 | 缓存 |
 |------|------|------|------|
-| `/api/ops/statistics/alarm` | GET | startDate, endDate, deviceId?, spaceId?, granularity? | 无 |
+| `/api/ops/statistics/alarm` | GET | startDate, endDate, deviceId?, granularity? | 无 |
 | `/api/ops/statistics/work-order` | GET | 同上 | 无 |
 | `/api/ops/statistics/inspection` | GET | 同上 | 无 |
 | `/api/ops/statistics/device-runtime` | GET | 同上 | 无 |

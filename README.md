@@ -32,8 +32,8 @@ interactive trend chart (pan / zoom / automatic granularity switching):
 
 ## Features
 
-- **Hierarchical asset modeling** — a tree of Spaces → Devices → Services →
-  Probes (monitoring points) / Controls (actuation points)
+- **Hierarchical asset modeling** — Devices and Services as top-level assets, with
+  Probes (monitoring points) and Controls (actuation points) attached to Devices
 - **Multi-protocol acquisition** — 14 protocol drivers: Modbus TCP, OPC UA, BACnet/IP,
   SNMP, Siemens S7, IEC 60870-5-104, MQTT, WebSocket, raw TCP/IP, UPS (SNMP),
   weather (HTTP API), environmental sensors (passive TCP), a built-in simulator and
@@ -180,7 +180,9 @@ cd frontend && npm test   # frontend unit tests
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/monitor/tree` | full asset tree |
+| GET | `/api/monitor/asset-tree` | asset forest (`tree=kind` by-type tree or group-tree id) |
+| GET/POST/PUT/DELETE | `/api/monitor/group-trees` | group-tree CRUD |
+| GET/POST/PUT/DELETE | `/api/monitor/groups` | group CRUD; PUT `/groups/{id}/assets` replaces members |
 | GET/POST/PUT/DELETE | `/api/monitor/assets` | asset CRUD |
 | PUT | `/api/monitor/assets/{id}/start\|stop\|enable\|disable` | runtime lifecycle control |
 | GET | `/api/monitor/probe-values` | current probe values |
@@ -236,8 +238,10 @@ systar/
 | Architecture design | [docs/design/architecture.md](docs/design/architecture.md) |
 | Asset CRUD design | [docs/design/asset-crud-design.md](docs/design/asset-crud-design.md) |
 | Statistics pipeline design | [docs/design/stats-pipeline-design.md](docs/design/stats-pipeline-design.md) |
+| Operations statistics design | [docs/design/ops-statistics-design.md](docs/design/ops-statistics-design.md) |
 | Virtual probe design | [docs/design/virtual-probe-design.md](docs/design/virtual-probe-design.md) |
 | XML asset type configuration | [docs/design/xml-asset-type-config-design.md](docs/design/xml-asset-type-config-design.md) |
+| Protocol driver development guide | [docs/driver-development-guide.md](docs/driver-development-guide.md) |
 | Nginx deployment template | [docs/deployment/nginx-systar.conf](docs/deployment/nginx-systar.conf) |
 | Frontend interaction test checklists | [docs/test/](docs/test/) |
 

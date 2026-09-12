@@ -3,8 +3,8 @@
  */
 
 const STATE_TAG_MAP = { NORMAL: 'success', WARNING: 'warning', ERROR: 'danger', OFFLINE: 'info' }
-const KIND_LABEL_MAP = { SPACE: '空间', DEVICE: '设备', PROBE: '监测器', CONTROL: '控制器', SERVICE: '服务' }
-const KIND_TAG_MAP = { SPACE: 'info', DEVICE: 'primary', PROBE: 'success', CONTROL: 'warning', SERVICE: 'info' }
+const KIND_LABEL_MAP = { DEVICE: '设备', PROBE: '监测器', CONTROL: '控制器', SERVICE: '服务', GROUP: '分组' }
+const KIND_TAG_MAP = { DEVICE: 'primary', PROBE: 'success', CONTROL: 'warning', SERVICE: 'info', GROUP: 'info' }
 
 export function stateTagType(state) {
   return STATE_TAG_MAP[state] || 'info'

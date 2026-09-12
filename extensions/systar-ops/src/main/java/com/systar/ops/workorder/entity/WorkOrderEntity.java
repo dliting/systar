@@ -22,7 +22,6 @@ public class WorkOrderEntity {
     private Integer alarmMessageId;
     private Long inspectionTaskId;
     private Integer deviceId;
-    private Integer spaceId;
     private Integer priority;
     private String status;
     private Long assigneeId;

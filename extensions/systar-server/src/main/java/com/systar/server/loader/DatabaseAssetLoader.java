@@ -14,7 +14,7 @@ import java.util.Map;
  * Loads the asset tree from database tables into an {@link AssetStore}.
  * <p>
  * Loading order follows the parent-before-child constraint:
- * Space → Device → Service → Probe → Control.
+ * Device → Service → Probe → Control.
  * <p>
  * After all assets are loaded, instance-level KV attributes from
  * {@code t_asset_attribute} are applied to each asset via
@@ -37,7 +37,6 @@ public class DatabaseAssetLoader implements AssetLoader {
     public void load(AssetStore store) {
         Map<Integer, MonitorService> serviceIndex = new HashMap<>();
 
-        for (Space space : repo.findAllSpaces()) store.addAsset(space);
         for (Device device : repo.findAllDevices()) store.addAsset(device);
         for (MonitorService svc : repo.findAllServices(serviceIndex)) store.addAsset(svc);
         for (Probe probe : repo.findAllProbes(serviceIndex)) store.addAsset(probe);
@@ -55,6 +54,6 @@ public class DatabaseAssetLoader implements AssetLoader {
             }
         }
 
-        log.info("Asset tree loaded: spaces/devices/services loaded from database.");
+        log.info("Asset tree loaded: devices/services/probes/controls loaded from database.");
     }
 }

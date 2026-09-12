@@ -4,9 +4,7 @@ import com.systar.monitor.asset.*;
 import com.systar.monitor.asset.type.*;
 import com.systar.monitor.server.MonitorServer;
 import com.systar.common.api.Result;
-import com.systar.server.controller.vo.AssetNodeVO;
 import com.systar.server.controller.vo.AssetVO;
-import com.systar.server.controller.vo.MonitorAssetNodeVO;
 import com.systar.server.controller.vo.MonitorAssetVO;
 import com.systar.server.dto.BatchAssetRequest;
 import com.systar.server.dto.BatchResult;
@@ -46,116 +44,6 @@ class AssetControllerTest {
     @SuppressWarnings("unchecked")
     private void stubFindAsset(int id, Asset<?> asset) {
         doReturn(asset).when(monitorServer).findAsset(id);
-    }
-
-    @Nested
-    @DisplayName("GET /api/monitor/tree")
-    class GetAssetTree {
-
-        @Test
-        @DisplayName("returns virtual root when no spaces loaded")
-        void noRoot() {
-            // AssetStore self-initializes virtual root anchor (id=-1, empty name).
-            // With no children loaded, the virtual root is returned as-is.
-            Result<AssetNodeVO> result = controller.getAssetTree();
-            assertThat(result.getCode()).isEqualTo(0);
-            assertThat(result.getData()).isNotNull();
-            assertThat(result.getData().getId()).isEqualTo(AssetStore.VIRTUAL_ROOT_ID);
-        }
-
-        @Test
-        @DisplayName("returns tree with root node")
-        void withRoot() {
-            assetStore.createRoot(new SpaceType("root"), "root-space");
-            Result<AssetNodeVO> result = controller.getAssetTree();
-            assertThat(result.getCode()).isEqualTo(0);
-            assertThat(result.getData()).isNotNull();
-            assertThat(result.getData().getName()).isEqualTo("root-space");
-            assertThat(result.getData().getKind()).isEqualTo("SPACE");
-            assertThat(result.getData().isEnabled()).isTrue();
-        }
-
-        @Test
-        @DisplayName("tree node includes stateCaption, typeName, typeCaption")
-        void nodeIncludesCaptions() {
-            SpaceType type = new SpaceType("Building");
-            type.setCaption("建筑");
-            Space space = new Space();
-            space.init(type, 10, "bld-a");
-            assetStore.addAsset(space);
-
-            Result<AssetNodeVO> result = controller.getAssetTree();
-            AssetNodeVO node = findNode(result.getData(), 10);
-            assertThat(node).isNotNull();
-            assertThat(node.getStateCaption()).isEqualTo("正常");
-            assertThat(node.getTypeName()).isEqualTo("Building");
-            assertThat(node.getTypeCaption()).isEqualTo("建筑");
-        }
-
-        @Test
-        @DisplayName("tree node for Probe returns MonitorAssetNodeVO with dataType/viewType")
-        void probeTreeNodeReturnsMonitorNode() {
-            ProbeType pt = new ProbeType("SimulateFloat");
-            pt.setDataType(com.systar.monitor.asset.type.DataType.FLOAT);
-            pt.setViewType(com.systar.monitor.asset.type.ViewType.SLIDER);
-            Probe probe = new Probe() {
-                @Override public void detect(com.systar.monitor.result.IMonitorResult r) {}
-            };
-            probe.init(pt, 20, "probe-temp");
-            assetStore.addAsset(probe);
-
-            Result<AssetNodeVO> result = controller.getAssetTree();
-            AssetNodeVO node = findNode(result.getData(), 20);
-            assertThat(node).isNotNull();
-            assertThat(node).isInstanceOf(MonitorAssetNodeVO.class);
-            MonitorAssetNodeVO mNode = (MonitorAssetNodeVO) node;
-            assertThat(mNode.getDataType()).isEqualTo("FLOAT");
-            assertThat(mNode.getViewType()).isEqualTo("SLIDER");
-        }
-
-        @Test
-        @DisplayName("tree node for Space returns plain AssetNodeVO without Monitor fields")
-        void spaceTreeNodeReturnsPlainNode() {
-            Space space = new Space();
-            space.init(new SpaceType("Room"), 30, "room-1");
-            assetStore.addAsset(space);
-
-            Result<AssetNodeVO> result = controller.getAssetTree();
-            AssetNodeVO node = findNode(result.getData(), 30);
-            assertThat(node).isNotNull();
-            assertThat(node).isNotInstanceOf(MonitorAssetNodeVO.class);
-        }
-
-        @Test
-        @DisplayName("tree node for Control returns MonitorAssetNodeVO with dataType/viewType")
-        void controlTreeNodeReturnsMonitorNode() {
-            ControlType ct = new ControlType("SwitchControl");
-            ct.setDataType(com.systar.monitor.asset.type.DataType.BOOLEAN);
-            ct.setViewType(com.systar.monitor.asset.type.ViewType.YESNO);
-            Control control = new Control() {
-                @Override public void execute(String command) {}
-            };
-            control.init(ct, 40, "ctrl-switch");
-            assetStore.addAsset(control);
-
-            Result<AssetNodeVO> result = controller.getAssetTree();
-            AssetNodeVO node = findNode(result.getData(), 40);
-            assertThat(node).isNotNull();
-            assertThat(node).isInstanceOf(MonitorAssetNodeVO.class);
-            MonitorAssetNodeVO mNode = (MonitorAssetNodeVO) node;
-            assertThat(mNode.getDataType()).isEqualTo("BOOLEAN");
-            assertThat(mNode.getViewType()).isEqualTo("YESNO");
-        }
-
-        private AssetNodeVO findNode(AssetNodeVO root, int id) {
-            if (root.getId() == id) return root;
-            if (root.getChildren() == null) return null;
-            for (AssetNodeVO child : root.getChildren()) {
-                AssetNodeVO found = findNode(child, id);
-                if (found != null) return found;
-            }
-            return null;
-        }
     }
 
     @Nested
@@ -323,11 +211,11 @@ class AssetControllerTest {
         }
 
         @Test
-        @DisplayName("returns plain AssetVO for Space")
-        void spaceReturnsPlainAssetVO() {
-            Space space = new Space();
-            space.init(new SpaceType("st"), 2, "space-1");
-            stubFindAsset(2, space);
+        @DisplayName("returns plain AssetVO for Device")
+        void deviceReturnsPlainAssetVO() {
+            Device device = new Device();
+            device.init(new DeviceType("st"), 2, "device-1");
+            stubFindAsset(2, device);
             Result<AssetVO> result = controller.getAsset(2);
             assertThat(result.getData()).isInstanceOf(AssetVO.class);
             assertThat(result.getData()).isNotInstanceOf(MonitorAssetVO.class);
@@ -358,21 +246,22 @@ class AssetControllerTest {
     class CreateAsset {
 
         @Test
-        @DisplayName("returns new id on success")
+        @DisplayName("returns the t_asset row id on success (group-membership id, not the runtime id)")
         void success() {
-            var req = new com.systar.server.dto.AssetCreateRequest("SPACE", 0, "x", null, null, null, null);
-            when(orchestrator.createAsset(req)).thenReturn(42);
-            Result<Integer> result = controller.createAsset(req);
+            var req = new com.systar.server.dto.AssetCreateRequest("DEVICE", 0, "x", null, null, null, null);
+            when(orchestrator.createAsset(req))
+                    .thenReturn(new AssetOrchestrator.CreateResult(42, 1042L));
+            Result<Long> result = controller.createAsset(req);
             assertThat(result.getCode()).isEqualTo(0);
-            assertThat(result.getData()).isEqualTo(42);
+            assertThat(result.getData()).isEqualTo(1042L);
         }
 
         @Test
         @DisplayName("returns 400 when service throws AssetException")
         void badRequest() {
-            var req = new com.systar.server.dto.AssetCreateRequest("SPACE", 0, "x", null, null, null, null);
+            var req = new com.systar.server.dto.AssetCreateRequest("DEVICE", 0, "x", null, null, null, null);
             when(orchestrator.createAsset(req)).thenThrow(new AssetException("bad"));
-            Result<Integer> result = controller.createAsset(req);
+            Result<Long> result = controller.createAsset(req);
             assertThat(result.getCode()).isEqualTo(Result.CODE_BAD_REQUEST);
             assertThat(result.getMessage()).isEqualTo("bad");
         }
@@ -385,13 +274,13 @@ class AssetControllerTest {
         @Test
         @DisplayName("returns success when update succeeds")
         void success() {
-            Space space = new Space();
-            space.init(new SpaceType("st"), 1, "s");
-            stubFindAsset(1, space);
+            Device device = new Device();
+            device.init(new DeviceType("st"), 1, "d");
+            stubFindAsset(1, device);
             var req = new com.systar.server.dto.AssetUpdateRequest(null, "new-cap", null, null, null);
             Result<Void> result = controller.updateAsset(1, req);
             assertThat(result.getCode()).isEqualTo(0);
-            verify(orchestrator).updateAsset(eq(1), eq(AssetKind.SPACE), any());
+            verify(orchestrator).updateAsset(eq(1), eq(AssetKind.DEVICE), any());
         }
 
         @Test
@@ -495,12 +384,12 @@ class AssetControllerTest {
         @Test
         @DisplayName("returns success")
         void success() {
-            Space space = new Space();
-            space.init(new SpaceType("st"), 1, "s");
-            stubFindAsset(1, space);
+            Device device = new Device();
+            device.init(new DeviceType("st"), 1, "d");
+            stubFindAsset(1, device);
             Result<Void> result = controller.disableAsset(1);
             assertThat(result.getCode()).isEqualTo(0);
-            verify(orchestrator).disableAsset(1, AssetKind.SPACE);
+            verify(orchestrator).disableAsset(1, AssetKind.DEVICE);
         }
 
         @Test

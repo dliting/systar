@@ -5,11 +5,8 @@ import com.systar.common.security.RequirePermission;
 import com.systar.monitor.asset.*;
 import com.systar.monitor.asset.type.AssetType;
 import com.systar.monitor.asset.type.MonitorType;
-import com.systar.monitor.asset.type.Space;
 import com.systar.monitor.server.MonitorServer;
-import com.systar.server.controller.vo.AssetNodeVO;
 import com.systar.server.controller.vo.AssetVO;
-import com.systar.server.controller.vo.MonitorAssetNodeVO;
 import com.systar.server.controller.vo.MonitorAssetVO;
 import com.systar.server.dto.AssetCreateRequest;
 import com.systar.server.dto.AssetUpdateRequest;
@@ -43,20 +40,6 @@ public class AssetController {
     }
 
     // ======================== query ========================
-
-    @RequirePermission("iot:asset:list")
-    @GetMapping("/tree")
-    public Result<AssetNodeVO> getAssetTree() {
-        Space root = assetStore.getRoot();
-        if (root == null) {
-            return Result.success(null);
-        }
-        if (root.getId() == AssetStore.VIRTUAL_ROOT_ID && !root.children().isEmpty()) {
-            Asset<?> firstChild = root.children().iterator().next();
-            return Result.success(buildTreeNode(firstChild));
-        }
-        return Result.success(buildTreeNode(root));
-    }
 
     @RequirePermission("iot:asset:list")
     @GetMapping("/assets")
@@ -99,10 +82,11 @@ public class AssetController {
 
     @RequirePermission("iot:asset:add")
     @PostMapping("/assets")
-    public Result<Integer> createAsset(@RequestBody AssetCreateRequest request) {
+    public Result<Long> createAsset(@RequestBody AssetCreateRequest request) {
         try {
-            int id = orchestrator.createAsset(request);
-            return Result.success(id);
+            // The response id is the t_asset row id (group-membership id), NOT
+            // the runtime id — tree mount writes address members by row id.
+            return Result.success(orchestrator.createAsset(request).assetRowId());
         } catch (AssetException e) {
             return Result.error(Result.CODE_BAD_REQUEST, e.getMessage());
         }
@@ -275,7 +259,6 @@ public class AssetController {
     @GetMapping("/asset-types")
     public Result<Map<String, List<String>>> getAssetTypes() {
         return Result.success(Map.of(
-                "SPACE", typeNames(assetStore.getSpaceTypes()),
                 "DEVICE", typeNames(assetStore.getDeviceTypes()),
                 "SERVICE", typeNames(assetStore.getServiceTypes()),
                 "PROBE", typeNames(assetStore.getProbeTypes()),
@@ -289,7 +272,6 @@ public class AssetController {
         try {
             AssetKind assetKind = AssetKind.valueOf(kind.toUpperCase());
             List<String> names = switch (assetKind) {
-                case SPACE -> typeNames(assetStore.getSpaceTypes());
                 case DEVICE -> typeNames(assetStore.getDeviceTypes());
                 case SERVICE -> typeNames(assetStore.getServiceTypes());
                 case PROBE -> typeNames(assetStore.getProbeTypes());
@@ -308,7 +290,6 @@ public class AssetController {
         try {
             AssetKind assetKind = AssetKind.valueOf(kind.toUpperCase());
             var manager = switch (assetKind) {
-                case SPACE -> assetStore.getSpaceTypes();
                 case DEVICE -> assetStore.getDeviceTypes();
                 case SERVICE -> assetStore.getServiceTypes();
                 case PROBE -> assetStore.getProbeTypes();
@@ -352,39 +333,6 @@ public class AssetController {
         return manager.getAll().stream()
                 .map(com.systar.monitor.asset.type.AssetType::getName)
                 .collect(Collectors.toList());
-    }
-
-    private AssetNodeVO buildTreeNode(Asset<?> asset) {
-        AssetNodeVO node = asset instanceof Monitor<?>
-                ? new MonitorAssetNodeVO()
-                : new AssetNodeVO();
-
-        node.setId(asset.getId());
-        node.setName(asset.getName());
-        node.setCaption(asset.getCaption());
-        node.setKind(asset.getKind().name());
-        node.setState(asset.getState().name());
-        node.setStateCaption(asset.getState().getCaption());
-        if (asset.getType() != null) {
-            node.setTypeName(asset.getType().getName());
-            node.setTypeCaption(asset.getType().getCaption());
-        }
-        node.setEnabled(asset.isEnabled());
-
-        AssetType at = asset.getType();
-        if (at instanceof MonitorType mt && node instanceof MonitorAssetNodeVO mNode) {
-            if (mt.getDataType() != null) mNode.setDataType(mt.getDataType().name());
-            if (mt.getViewType() != null) mNode.setViewType(mt.getViewType().name());
-        }
-
-        if (asset instanceof CompoundAsset<?> compound) {
-            List<AssetNodeVO> children = new java.util.ArrayList<>();
-            for (Asset<?> child : compound.children()) {
-                children.add(buildTreeNode(child));
-            }
-            node.setChildren(children);
-        }
-        return node;
     }
 
     private AssetVO toAssetVO(Asset<?> asset) {

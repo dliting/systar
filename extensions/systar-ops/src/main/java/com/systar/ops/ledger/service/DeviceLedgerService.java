@@ -43,8 +43,8 @@ public class DeviceLedgerService {
         this.databaseDialect = databaseDialect;
     }
 
-    public PagedResult<DeviceDto> getDeviceLedger(int page, int size, Integer spaceId, Short catalog, String lifecycleStatus) {
-        return deviceInfo.listDevices(spaceId, catalog, lifecycleStatus, page, size);
+    public PagedResult<DeviceDto> getDeviceLedger(int page, int size, Short catalog, String lifecycleStatus) {
+        return deviceInfo.listDevices(catalog, lifecycleStatus, page, size);
     }
 
     public Map<String, Object> getDeviceDetail(Integer deviceId) {

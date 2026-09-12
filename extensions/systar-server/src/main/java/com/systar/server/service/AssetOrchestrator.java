@@ -36,10 +36,19 @@ public class AssetOrchestrator {
 
     // ======================== create ========================
 
+    /**
+     * Outcome of an asset create: {@code runtimeId} is the per-kind id the
+     * runtime store and the /assets CRUD API address, {@code assetRowId} is
+     * the asset's {@code t_asset} row id — the group-membership id
+     * ({@code t_asset_group_rel.asset_id}) the create API responds with.
+     */
+    public record CreateResult(int runtimeId, long assetRowId) {}
+
     @Transactional
-    public int createAsset(AssetCreateRequest req) {
+    public CreateResult createAsset(AssetCreateRequest req) {
         AssetKind kind = parseKind(req.kind());
         validateTypeName(kind, req.typeName());
+        validateTopLevel(kind, req.parentId());
         validateParentExists(req.parentId());
 
         int newId = repo.nextId(kind);
@@ -48,38 +57,41 @@ public class AssetOrchestrator {
         // create paths (SERVICE/PROBE/CONTROL) call find*ById to build the
         // CREATED event asset, which loads attributes from t_asset_attribute —
         // persisting afterwards would publish an event carrying default instead
-        // of configured values. (SPACE/DEVICE finders load no attributes; the
+        // of configured values. (DEVICE finders load no attributes; the
         // ordering is a no-op for them.)
         repo.saveAttributes(newId, req.attributes());
 
         Asset<?> asset = switch (kind) {
-            case SPACE -> createSpace(newId, req);
             case DEVICE -> createDevice(newId, req);
             case SERVICE -> createService(newId, req);
             case PROBE -> createProbe(newId, req);
             case CONTROL -> createControl(newId, req);
         };
 
+        // One unified-view row per created asset, written here so the four
+        // per-kind paths stay free of the duplicated call and the row id is
+        // captured in one place.
+        long assetRowId = repo.insertAssetView(req.name(), req.caption(), kind,
+                viewParentRuntimeId(kind, req.parentId()), newId);
+
         eventPublisher.publishEvent(new AssetChangedEvent(Action.CREATED, newId, kind, asset));
         log.info("Created asset: kind={} id={} name={}", kind, newId, req.name());
-        return newId;
+        return new CreateResult(newId, assetRowId);
     }
 
-    private Asset<?> createSpace(int newId, AssetCreateRequest req) {
-        var p = req.properties();
-        var row = new AssetRepository.SpaceRow(newId, req.name(), req.caption(), req.parentId(),
-                getIntProp(p, "area"),
-                getIntProp(p, "sequence", 0),
-                getIntProp(p, "showInClient", 1),
-                req.typeName());
-        repo.insertSpace(row);
-        repo.insertAssetView(req.name(), req.caption(), AssetKind.SPACE, req.parentId(), newId);
-        return repo.findSpaceById(newId);
+    /**
+     * Parent runtime id for the view row: only monitors (PROBE/CONTROL) hang
+     * under a parent; DEVICE/SERVICE are validated to be top-level.
+     */
+    private static int viewParentRuntimeId(AssetKind kind, int parentId) {
+        return kind == AssetKind.PROBE || kind == AssetKind.CONTROL
+                ? parentId
+                : Asset.INVALID_ID;
     }
 
     private Asset<?> createDevice(int newId, AssetCreateRequest req) {
         var p = req.properties();
-        var row = new AssetRepository.DeviceRow(newId, req.name(), req.caption(), req.parentId(),
+        var row = new AssetRepository.DeviceRow(newId, req.name(), req.caption(),
                 getShortProp(p, "catalog"), getStrProp(p, "vendor"),
                 null, null, getFloatProp(p, "healthIndex"),
                 getStrProp(p, "model"), getStrProp(p, "serialNumber"),
@@ -88,7 +100,6 @@ public class AssetOrchestrator {
                 getStrProp(p, "supplierContact"), getIntProp(p, "maintenanceCycle"),
                 null, getStrProp(p, "remark"), req.typeName());
         repo.insertDevice(row);
-        repo.insertAssetView(req.name(), req.caption(), AssetKind.DEVICE, req.parentId(), newId);
         return repo.findDeviceById(newId);
     }
 
@@ -98,11 +109,10 @@ public class AssetOrchestrator {
         if (mode == null) {
             mode = deriveModeFromDriver(req.name(), req.typeName(), getStrProp(p, "driverClass"));
         }
-        var row = new AssetRepository.ServiceRow(newId, req.name(), req.caption(), req.parentId(),
+        var row = new AssetRepository.ServiceRow(newId, req.name(), req.caption(),
                 mode, getStrProp(p, "driverClass"),
                 getIntProp(p, "maxConnections"), req.typeName());
         repo.insertService(row);
-        repo.insertAssetView(req.name(), req.caption(), AssetKind.SERVICE, req.parentId(), newId);
         return repo.findServiceById(newId);
     }
 
@@ -159,7 +169,6 @@ public class AssetOrchestrator {
                 getFloatProp(p, "minValue"), getFloatProp(p, "maxValue"), req.typeName(),
                 getIntProp(p, "isVirtual"), getStrProp(p, "expression"), getStrProp(p, "dependsOn"));
         repo.insertProbe(row);
-        repo.insertAssetView(req.name(), req.caption(), AssetKind.PROBE, req.parentId(), newId);
         return repo.findProbeById(newId);
     }
 
@@ -172,7 +181,6 @@ public class AssetOrchestrator {
                 getShortProp(p, "catalog"), getIntProp(p, "refreshDelay"),
                 getFloatProp(p, "minValue"), getFloatProp(p, "maxValue"), req.typeName());
         repo.insertControl(row);
-        repo.insertAssetView(req.name(), req.caption(), AssetKind.CONTROL, req.parentId(), newId);
         return repo.findControlById(newId);
     }
 
@@ -192,7 +200,6 @@ public class AssetOrchestrator {
         }
 
         Asset<?> asset = switch (kind) {
-            case SPACE -> updateSpace(id, req);
             case DEVICE -> updateDevice(id, req);
             case SERVICE -> updateService(id, req);
             case PROBE -> updateProbe(id, req);
@@ -203,22 +210,10 @@ public class AssetOrchestrator {
         log.info("Updated asset: kind={} id={}", kind, id);
     }
 
-    private Asset<?> updateSpace(int id, AssetUpdateRequest req) {
-        var p = req.properties();
-        var fields = new AssetRepository.SpaceUpdateFields(
-                req.name(), req.caption(), null,
-                getIntProp(p, "area"), getIntProp(p, "sequence"),
-                getIntProp(p, "showInClient"), req.typeName());
-        repo.updateSpace(id, fields);
-        Asset<?> asset = repo.findSpaceById(id);
-        repo.updateAssetView(id, AssetKind.SPACE, asset.getName(), asset.getCaption());
-        return asset;
-    }
-
     private Asset<?> updateDevice(int id, AssetUpdateRequest req) {
         var p = req.properties();
         var fields = new AssetRepository.DeviceUpdateFields(
-                req.name(), req.caption(), null, getShortProp(p, "catalog"),
+                req.name(), req.caption(), getShortProp(p, "catalog"),
                 getStrProp(p, "vendor"), null, null, getFloatProp(p, "healthIndex"),
                 getStrProp(p, "model"), getStrProp(p, "serialNumber"), null,
                 getStrProp(p, "lifecycleStatus"), getStrProp(p, "responsiblePerson"),
@@ -234,7 +229,7 @@ public class AssetOrchestrator {
     private Asset<?> updateService(int id, AssetUpdateRequest req) {
         var p = req.properties();
         var fields = new AssetRepository.ServiceUpdateFields(
-                req.name(), req.caption(), null, extractMode(p),
+                req.name(), req.caption(), extractMode(p),
                 getStrProp(p, "driverClass"), getIntProp(p, "maxConnections"),
                 req.typeName());
         repo.updateService(id, fields);
@@ -282,7 +277,6 @@ public class AssetOrchestrator {
         validateDeleteConstraints(id, kind);
 
         switch (kind) {
-            case SPACE -> repo.deleteSpace(id);
             case DEVICE -> repo.deleteDevice(id);
             case SERVICE -> repo.deleteService(id);
             case PROBE -> repo.deleteProbe(id);
@@ -432,7 +426,6 @@ public class AssetOrchestrator {
     private void validateTypeName(AssetKind kind, String typeName) {
         if (typeName == null || typeName.isBlank()) return;
         AssetTypeManager<?> manager = switch (kind) {
-            case SPACE -> assetStore.getSpaceTypes();
             case DEVICE -> assetStore.getDeviceTypes();
             case SERVICE -> assetStore.getServiceTypes();
             case PROBE -> assetStore.getProbeTypes();
@@ -449,6 +442,17 @@ public class AssetOrchestrator {
         if (parentId <= 0) return;
         if (assetStore.findAsset(parentId) == null) {
             throw new AssetException("Parent asset not found: " + parentId);
+        }
+    }
+
+    /**
+     * DEVICE and SERVICE assets are always top-level (they attach to the
+     * store's neutral anchor); a create request carrying a non-zero parent
+     * for them is a client error.
+     */
+    private static void validateTopLevel(AssetKind kind, int parentId) {
+        if ((kind == AssetKind.DEVICE || kind == AssetKind.SERVICE) && parentId != Asset.INVALID_ID) {
+            throw new AssetException(kind + " assets are top-level; parentId must be 0.");
         }
     }
 

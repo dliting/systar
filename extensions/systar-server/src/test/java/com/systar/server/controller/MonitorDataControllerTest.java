@@ -10,9 +10,9 @@ import com.systar.data.service.SystemSettingService;
 import com.systar.data.service.retention.RetentionResult;
 import com.systar.data.service.retention.RetentionSummary;
 import com.systar.monitor.asset.*;
+import com.systar.monitor.asset.type.Device;
+import com.systar.monitor.asset.type.DeviceType;
 import com.systar.monitor.asset.type.ProbeType;
-import com.systar.monitor.asset.type.Space;
-import com.systar.monitor.asset.type.SpaceType;
 import com.systar.monitor.server.MonitorServer;
 import com.systar.common.api.Result;
 import com.systar.server.controller.vo.ProbeValueVO;
@@ -100,11 +100,9 @@ class MonitorDataControllerTest {
         @Test
         @DisplayName("skips non-monitor assets")
         void skipsNonMonitorAssets() {
-            Space space = new Space();
-            space.setId(1);
-            space.setName("s1");
-            space.setType(new SpaceType("root"));
-            stubFindAsset(1, space);
+            Device device = new Device();
+            device.init(new DeviceType("root"), 1, "s1");
+            stubFindAsset(1, device);
             Result<List<ProbeValueVO>> result = controller.getProbeValues("1");
             assertThat(result.getCode()).isEqualTo(0);
             assertThat(result.getData()).isEmpty();

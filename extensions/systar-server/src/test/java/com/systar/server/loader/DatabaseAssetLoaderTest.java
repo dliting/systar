@@ -1,6 +1,5 @@
 package com.systar.server.loader;
 
-import com.systar.common.util.TimeSpan;
 import com.systar.monitor.asset.*;
 import com.systar.monitor.asset.type.*;
 import com.systar.server.repository.AssetRepository;
@@ -28,9 +27,7 @@ class DatabaseAssetLoaderTest {
         store = new AssetStore();
         VirtualProbeEngine engine = mock(VirtualProbeEngine.class);
         loader = new DatabaseAssetLoader(repo, engine);
-        store.createRoot(new SpaceType("root"), "root");
 
-        when(repo.findAllSpaces()).thenReturn(Collections.emptyList());
         when(repo.findAllDevices()).thenReturn(Collections.emptyList());
         when(repo.findAllServices(any())).thenReturn(Collections.emptyList());
         when(repo.findAllProbes(any())).thenReturn(Collections.emptyList());
@@ -38,10 +35,10 @@ class DatabaseAssetLoaderTest {
     }
 
     @Test
-    @DisplayName("Loads spaces into asset store")
-    void loadsSpaces() {
-        Space space = createTestSpace(1, "floor1", "First Floor");
-        when(repo.findAllSpaces()).thenReturn(List.of(space));
+    @DisplayName("Loads devices into asset store")
+    void loadsDevices() {
+        Device device = createTestDevice(1, "floor1", "First Floor");
+        when(repo.findAllDevices()).thenReturn(List.of(device));
 
         loader.load(store);
 
@@ -49,7 +46,7 @@ class DatabaseAssetLoaderTest {
         assertThat(asset).isNotNull();
         assertThat(asset.getName()).isEqualTo("floor1");
         assertThat(asset.getCaption()).isEqualTo("First Floor");
-        assertThat(asset.getKind()).isEqualTo(AssetKind.SPACE);
+        assertThat(asset.getKind()).isEqualTo(AssetKind.DEVICE);
     }
 
     @Test
@@ -80,20 +77,17 @@ class DatabaseAssetLoaderTest {
     }
 
     @Test
-    @DisplayName("Empty database produces no extra assets beyond root")
+    @DisplayName("Empty database produces an empty store (anchor is not an asset)")
     void emptyDb() {
         loader.load(store);
-        assertThat(store.getAssets()).hasSize(1);
+        assertThat(store.getAssets()).isEmpty();
         assertThat(store.getRoot()).isNotNull();
     }
 
     @Test
-    @DisplayName("Tree hierarchy: Space -> Device -> children")
+    @DisplayName("Tree hierarchy: Device top-level, probe attached to device")
     void buildsTreeHierarchy() {
-        Space space = createTestSpace(1, "floor1", null);
-        Device device = new Device();
-        device.init(new DeviceType("test-device"), 10, "deviceA");
-        device.setParentId(1);
+        Device device = createTestDevice(10, "deviceA", null);
 
         var svc = new com.systar.monitor.asset.ActiveService() {
             @Override public void start() {}
@@ -107,7 +101,6 @@ class DatabaseAssetLoaderTest {
         probe.setParentId(10);
         probe.setSource(svc);
 
-        when(repo.findAllSpaces()).thenReturn(List.of(space));
         when(repo.findAllDevices()).thenReturn(List.of(device));
         when(repo.findAllServices(any())).thenReturn(List.of(svc));
         when(repo.findAllProbes(any())).thenReturn(List.of(probe));
@@ -123,7 +116,7 @@ class DatabaseAssetLoaderTest {
     @Test
     @DisplayName("Loads attributes after asset loading")
     void loadsAttributes() {
-        when(repo.findAllSpaces()).thenReturn(List.of(createTestSpace(1, "floor1", null)));
+        when(repo.findAllDevices()).thenReturn(List.of(createTestDevice(1, "floor1", null)));
         loader.load(store);
         verify(repo).loadAllAttributes(any());
     }
@@ -163,10 +156,11 @@ class DatabaseAssetLoaderTest {
         public void setAddress(int address)   { this.address = address; }
     }
 
-    private Space createTestSpace(int id, String name, String caption) {
-        Space space = new Space();
-        space.init(new SpaceType("test-space"), id, name);
-        if (caption != null) space.setCaption(caption);
-        return space;
+    private Device createTestDevice(int id, String name, String caption) {
+        Device device = new Device();
+        device.init(new DeviceType("test-device"), id, name);
+        device.setParentId(Asset.INVALID_ID);
+        if (caption != null) device.setCaption(caption);
+        return device;
     }
 }

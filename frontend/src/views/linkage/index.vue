@@ -110,8 +110,8 @@
                 >
                   <template #default="{ node, data }">
                     <span class="tree-node-label">
-                      <el-icon v-if="data.kind === 'PROBE'" class="node-icon probe"><Monitor /></el-icon>
-                      <el-icon v-else-if="data.kind === 'SPACE' || data.kind === 'DEVICE'" class="node-icon folder"><FolderOpened /></el-icon>
+                      <el-icon v-if="data.assetKind === 'PROBE'" class="node-icon probe"><Monitor /></el-icon>
+                      <el-icon v-else-if="data.nodeKind === 'GROUP' || data.assetKind === 'DEVICE'" class="node-icon folder"><FolderOpened /></el-icon>
                       <el-icon v-else class="node-icon"><Coin /></el-icon>
                       {{ node.label }}
                     </span>
@@ -158,8 +158,8 @@
                 >
                   <template #default="{ node, data }">
                     <span class="tree-node-label">
-                      <el-icon v-if="data.kind === 'CONTROL'" class="node-icon control"><Switch /></el-icon>
-                      <el-icon v-else-if="data.kind === 'SPACE' || data.kind === 'DEVICE'" class="node-icon folder"><FolderOpened /></el-icon>
+                      <el-icon v-if="data.assetKind === 'CONTROL'" class="node-icon control"><Switch /></el-icon>
+                      <el-icon v-else-if="data.nodeKind === 'GROUP' || data.assetKind === 'DEVICE'" class="node-icon folder"><FolderOpened /></el-icon>
                       <el-icon v-else class="node-icon"><Coin /></el-icon>
                       {{ node.label }}
                     </span>
@@ -205,8 +205,8 @@
                 >
                   <template #default="{ node, data }">
                     <span class="tree-node-label">
-                      <el-icon v-if="data.kind === 'PROBE'" class="node-icon probe"><Monitor /></el-icon>
-                      <el-icon v-else-if="data.kind === 'SPACE' || data.kind === 'DEVICE'" class="node-icon folder"><FolderOpened /></el-icon>
+                      <el-icon v-if="data.assetKind === 'PROBE'" class="node-icon probe"><Monitor /></el-icon>
+                      <el-icon v-else-if="data.nodeKind === 'GROUP' || data.assetKind === 'DEVICE'" class="node-icon folder"><FolderOpened /></el-icon>
                       <el-icon v-else class="node-icon"><Coin /></el-icon>
                       {{ node.label }}
                     </span>
@@ -248,8 +248,8 @@
                 >
                   <template #default="{ node, data }">
                     <span class="tree-node-label">
-                      <el-icon v-if="data.kind === 'CONTROL'" class="node-icon control"><Switch /></el-icon>
-                      <el-icon v-else-if="data.kind === 'SPACE' || data.kind === 'DEVICE'" class="node-icon folder"><FolderOpened /></el-icon>
+                      <el-icon v-if="data.assetKind === 'CONTROL'" class="node-icon control"><Switch /></el-icon>
+                      <el-icon v-else-if="data.nodeKind === 'GROUP' || data.assetKind === 'DEVICE'" class="node-icon folder"><FolderOpened /></el-icon>
                       <el-icon v-else class="node-icon"><Coin /></el-icon>
                       {{ node.label }}
                     </span>
@@ -364,7 +364,7 @@ const selectedEffectIds = computed(() => form.value.effects.map(e => e.effectMon
 
 function extractLeaves(node, kind, result) {
   if (!node) return
-  if (node.kind === kind) {
+  if (node.nodeKind === 'ASSET' && node.assetKind === kind) {
     result.push(node)
   }
   if (node.children) {
@@ -386,7 +386,10 @@ function pruneTree(node, keepIds) {
   const children = (node.children || [])
     .map(c => pruneTree(c, keepIds))
     .filter(Boolean)
-  if (keepIds.has(node.id) || children.length > 0) {
+  // Group ids live in t_group and may collide with asset ids — only real
+  // assets are kept by id; groups survive only when they still have children.
+  const isKeptAsset = node.nodeKind === 'ASSET' && keepIds.has(node.id)
+  if (isKeptAsset || children.length > 0) {
     return { ...node, children }
   }
   return null
@@ -394,7 +397,11 @@ function pruneTree(node, keepIds) {
 
 function buildNameMap(node, map) {
   if (!node) return
-  map[node.id] = node.caption || node.name
+  // Same id-collision rule: the name map is keyed by asset id, so groups and
+  // id-less synthetic roots are skipped.
+  if (node.nodeKind === 'ASSET' && node.id != null) {
+    map[node.id] = node.caption || node.name
+  }
   if (node.children) {
     for (const child of node.children) {
       buildNameMap(child, map)
@@ -405,13 +412,18 @@ function buildNameMap(node, map) {
 async function loadTreeData() {
   try {
     const res = await getAssetTree()
-    const root = res.data
-    if (!root) return
+    const forest = res.data || []
     const map = {}
-    buildNameMap(root, map)
-    assetNameMap.value    = map
-    monitorTreeData.value  = [filterByKind(root, 'PROBE')].filter(Boolean)
-    controlTreeData.value  = [filterByKind(root, 'CONTROL')].filter(Boolean)
+    for (const root of forest) {
+      buildNameMap(root, map)
+    }
+    assetNameMap.value = map
+    monitorTreeData.value = forest
+      .map(root => filterByKind(root, 'PROBE'))
+      .filter(Boolean)
+    controlTreeData.value = forest
+      .map(root => filterByKind(root, 'CONTROL'))
+      .filter(Boolean)
   } catch (e) {
     showSystarError(e, '加载资产树失败')
   }
@@ -433,7 +445,7 @@ watch(alarmSearchKey, v => alarmTreeRef.value?.filter(v))
 function onCauseCheck() {
   const checked = causeTreeRef.value.getCheckedNodes()
   form.value.causes = checked
-    .filter(n => n.kind === 'PROBE')
+    .filter(n => n.assetKind === 'PROBE')
     .map(n => {
       const existing = form.value.causes.find(c => c.causeMonitorId === n.id)
       return existing || { causeMonitorId: n.id, triggerValue: '1' }
@@ -443,7 +455,7 @@ function onCauseCheck() {
 function onEffectCheck() {
   const checked = effectTreeRef.value.getCheckedNodes()
   form.value.effects = checked
-    .filter(n => n.kind === 'CONTROL')
+    .filter(n => n.assetKind === 'CONTROL')
     .map(n => {
       const existing = form.value.effects.find(e => e.effectMonitorId === n.id)
       return existing || { effectMonitorId: n.id, effectCommand: '-1' }
@@ -453,7 +465,7 @@ function onEffectCheck() {
 function onAlarmCheck() {
   const checked = alarmTreeRef.value.getCheckedNodes()
   form.value.causes = checked
-    .filter(n => n.kind === 'PROBE')
+    .filter(n => n.assetKind === 'PROBE')
     .map(n => {
       const existing = form.value.causes.find(c => c.causeMonitorId === n.id)
       return existing || { causeMonitorId: n.id, triggerValue: 'ALARM' }

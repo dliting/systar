@@ -11,7 +11,6 @@ import com.systar.monitor.asset.*;
 import com.systar.monitor.asset.type.ControlType;
 import com.systar.monitor.asset.type.ProbeType;
 import com.systar.monitor.asset.type.ServiceType;
-import com.systar.monitor.asset.type.SpaceType;
 import com.systar.monitor.linkage.CauseType;
 import com.systar.monitor.linkage.LinkageHandler;
 import com.systar.monitor.linkage.LinkageRepository;
@@ -58,7 +57,6 @@ class ConcurrentDetectionIT {
     @BeforeEach
     void setUp() {
         store = new AssetStore();
-        store.createRoot(new SpaceType("root"), "root");
         collectedResults = new CopyOnWriteArrayList<>();
         dispatcher = new ResultDispatcher();
         // Collect every dispatched result

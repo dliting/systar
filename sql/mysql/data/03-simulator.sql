@@ -1,17 +1,17 @@
 -- ============================================================================
 -- Simulator Integration Data for MySQL
 -- 设备/监测器/控制器连接到 IoT Simulator 进行端到端测试
--- 前置条件: 01-init.sql 已执行 (空间、字典、类型配置)
+-- 前置条件: 01-init.sql 已执行 (字典、类型配置)
 -- ============================================================================
 
 -- ============================================================================
 -- 1. 监控服务 (每个 Modbus unitId 一个服务实例)
 -- ============================================================================
-INSERT INTO t_service (id, name, caption, parent, mode, driver_class, max_connections, type_name) VALUES
-    (110, 'modbus_svc_hvac', 'Modbus TCP-HVAC模拟',  1, 0, 'com.systar.monitor.drivers.modbus.ModbusService',    5, 'ModbusTcpMaster'),
-    (111, 'modbus_svc_ups',  'Modbus TCP-UPS模拟',   1, 0, 'com.systar.monitor.drivers.modbus.ModbusService',    5, 'ModbusTcpMaster'),
-    (112, 'modbus_svc_pdu',  'Modbus TCP-PDU模拟',   1, 0, 'com.systar.monitor.drivers.modbus.ModbusService',    5, 'ModbusTcpMaster'),
-    (113, 'opcua_svc_sim',   'OPC UA模拟服务',       1, 0, 'com.systar.monitor.drivers.opcua.OpcUaService',     5,  'OpcUaService')
+INSERT INTO t_service (id, name, caption, mode, driver_class, max_connections, type_name) VALUES
+    (110, 'modbus_svc_hvac', 'Modbus TCP-HVAC模拟',  0, 'com.systar.monitor.drivers.modbus.ModbusService',    5, 'ModbusTcpMaster'),
+    (111, 'modbus_svc_ups',  'Modbus TCP-UPS模拟',   0, 'com.systar.monitor.drivers.modbus.ModbusService',    5, 'ModbusTcpMaster'),
+    (112, 'modbus_svc_pdu',  'Modbus TCP-PDU模拟',   0, 'com.systar.monitor.drivers.modbus.ModbusService',    5, 'ModbusTcpMaster'),
+    (113, 'opcua_svc_sim',   'OPC UA模拟服务',       0, 'com.systar.monitor.drivers.opcua.OpcUaService',     5,  'OpcUaService')
 ON DUPLICATE KEY UPDATE caption = VALUES(caption);
 
 -- ============================================================================
@@ -36,11 +36,11 @@ ON DUPLICATE KEY UPDATE attr_value = VALUES(attr_value);
 -- ============================================================================
 -- 3. 设备
 -- ============================================================================
-INSERT INTO t_device (id, name, caption, parent, catalog, vendor, purchase_date, warranty_date, health_index) VALUES
-    (1101, 'ahu_sim_01',     'AHU空调机组模拟',  15, 206, 'Simulator', '2026-01-01 00:00:00', '2030-01-01', 1.00),
-    (1102, 'ups_sim_01',     'UPS电源模拟',      15, 208, 'Simulator', '2026-01-01 00:00:00', '2030-01-01', 1.00),
-    (1103, 'pdu_sim_01',     'PDU配电柜模拟',    15, 202, 'Simulator', '2026-01-01 00:00:00', '2030-01-01', 1.00),
-    (1104, 'weather_sim_01', '气象站模拟',        10, 201, 'Simulator', '2026-01-01 00:00:00', '2030-01-01', 1.00)
+INSERT INTO t_device (id, name, caption, catalog, vendor, purchase_date, warranty_date, health_index) VALUES
+    (1101, 'ahu_sim_01',     'AHU空调机组模拟',  206, 'Simulator', '2026-01-01 00:00:00', '2030-01-01', 1.00),
+    (1102, 'ups_sim_01',     'UPS电源模拟',      208, 'Simulator', '2026-01-01 00:00:00', '2030-01-01', 1.00),
+    (1103, 'pdu_sim_01',     'PDU配电柜模拟',    202, 'Simulator', '2026-01-01 00:00:00', '2030-01-01', 1.00),
+    (1104, 'weather_sim_01', '气象站模拟',        201, 'Simulator', '2026-01-01 00:00:00', '2030-01-01', 1.00)
 ON DUPLICATE KEY UPDATE caption = VALUES(caption);
 
 -- ============================================================================
@@ -159,44 +159,44 @@ ON DUPLICATE KEY UPDATE command = VALUES(command);
 -- ============================================================================
 -- 8. 统一资产视图 (t_asset)
 -- ============================================================================
-INSERT INTO t_asset (id, name, caption, kind, type_id, parent_id, state, enabled, sort, space_id, device_id, service_id, probe_id, control_id) VALUES
+INSERT INTO t_asset (id, name, caption, kind, type_id, parent_id, state, enabled, sort, device_id, service_id, probe_id, control_id) VALUES
     -- Services
-    (50,  'modbus_svc_hvac', 'Modbus TCP-HVAC模拟',  2, 103, 1,  0, 1, 7,  NULL, NULL, 110, NULL,  NULL),
-    (51,  'modbus_svc_ups',  'Modbus TCP-UPS模拟',   2, 103, 1,  0, 1, 8,  NULL, NULL, 111, NULL,  NULL),
-    (52,  'modbus_svc_pdu',  'Modbus TCP-PDU模拟',   2, 103, 1,  0, 1, 9,  NULL, NULL, 112, NULL,  NULL),
-    (53,  'opcua_svc_sim',   'OPC UA模拟服务',       2, 103, 1,  0, 1, 10, NULL, NULL, 113, NULL,  NULL),
+    (50,  'modbus_svc_hvac', 'Modbus TCP-HVAC模拟',  2, 103, 0,  0, 1, 7,  NULL, 110, NULL,  NULL),
+    (51,  'modbus_svc_ups',  'Modbus TCP-UPS模拟',   2, 103, 0,  0, 1, 8,  NULL, 111, NULL,  NULL),
+    (52,  'modbus_svc_pdu',  'Modbus TCP-PDU模拟',   2, 103, 0,  0, 1, 9,  NULL, 112, NULL,  NULL),
+    (53,  'opcua_svc_sim',   'OPC UA模拟服务',       2, 103, 0,  0, 1, 10, NULL, 113, NULL,  NULL),
     -- Devices
-    (60,  'ahu_sim_01',      'AHU空调机组模拟',      1, 102, 7,  0, 1, 8,  NULL, 1101, NULL, NULL, NULL),
-    (61,  'ups_sim_01',      'UPS电源模拟',          1, 102, 7,  0, 1, 9,  NULL, 1102, NULL, NULL, NULL),
-    (62,  'pdu_sim_01',      'PDU配电柜模拟',        1, 102, 7,  0, 1, 10, NULL, 1103, NULL, NULL, NULL),
-    (63,  'weather_sim_01',  '气象站模拟',           1, 102, 2,  0, 1, 4,  NULL, 1104, NULL, NULL, NULL),
+    (60,  'ahu_sim_01',      'AHU空调机组模拟',      1, 102, 0,  0, 1, 8,  1101, NULL, NULL, NULL),
+    (61,  'ups_sim_01',      'UPS电源模拟',          1, 102, 0,  0, 1, 9,  1102, NULL, NULL, NULL),
+    (62,  'pdu_sim_01',      'PDU配电柜模拟',        1, 102, 0,  0, 1, 10, 1103, NULL, NULL, NULL),
+    (63,  'weather_sim_01',  '气象站模拟',           1, 102, 0,  0, 1, 4,  1104, NULL, NULL, NULL),
     -- HVAC Probes
-    (70,  'sim_supply_temp',     '送风温度',     3, 104, 60, 0, 1, 1, NULL, NULL, NULL, 1201, NULL),
-    (71,  'sim_return_temp',     '回风温度',     3, 104, 60, 0, 1, 2, NULL, NULL, NULL, 1202, NULL),
-    (72,  'sim_supply_humidity', '送风湿度',     3, 104, 60, 0, 1, 3, NULL, NULL, NULL, 1203, NULL),
-    (73,  'sim_fan_running',     '风机运行',     3, 104, 60, 0, 1, 4, NULL, NULL, NULL, 1204, NULL),
-    (74,  'sim_damper_pos',      '风门位置',     3, 104, 60, 0, 1, 5, NULL, NULL, NULL, 1205, NULL),
+    (70,  'sim_supply_temp',     '送风温度',     3, 104, 60, 0, 1, 1, NULL, NULL, 1201, NULL),
+    (71,  'sim_return_temp',     '回风温度',     3, 104, 60, 0, 1, 2, NULL, NULL, 1202, NULL),
+    (72,  'sim_supply_humidity', '送风湿度',     3, 104, 60, 0, 1, 3, NULL, NULL, 1203, NULL),
+    (73,  'sim_fan_running',     '风机运行',     3, 104, 60, 0, 1, 4, NULL, NULL, 1204, NULL),
+    (74,  'sim_damper_pos',      '风门位置',     3, 104, 60, 0, 1, 5, NULL, NULL, 1205, NULL),
     -- UPS Probes
-    (75,  'sim_battery_level',   '电池电量',     3, 104, 61, 0, 1, 1, NULL, NULL, NULL, 1206, NULL),
-    (76,  'sim_load_percent',    '负载百分比',   3, 104, 61, 0, 1, 2, NULL, NULL, NULL, 1207, NULL),
-    (77,  'sim_input_voltage',   '输入电压',     3, 104, 61, 0, 1, 3, NULL, NULL, NULL, 1208, NULL),
-    (78,  'sim_output_voltage',  '输出电压',     3, 104, 61, 0, 1, 4, NULL, NULL, NULL, 1209, NULL),
-    (79,  'sim_on_battery',      '电池供电状态', 3, 104, 61, 0, 1, 5, NULL, NULL, NULL, 1210, NULL),
+    (75,  'sim_battery_level',   '电池电量',     3, 104, 61, 0, 1, 1, NULL, NULL, 1206, NULL),
+    (76,  'sim_load_percent',    '负载百分比',   3, 104, 61, 0, 1, 2, NULL, NULL, 1207, NULL),
+    (77,  'sim_input_voltage',   '输入电压',     3, 104, 61, 0, 1, 3, NULL, NULL, 1208, NULL),
+    (78,  'sim_output_voltage',  '输出电压',     3, 104, 61, 0, 1, 4, NULL, NULL, 1209, NULL),
+    (79,  'sim_on_battery',      '电池供电状态', 3, 104, 61, 0, 1, 5, NULL, NULL, 1210, NULL),
     -- PDU Probes
-    (80,  'sim_voltage_l1',      'L1电压',       3, 104, 62, 0, 1, 1, NULL, NULL, NULL, 1211, NULL),
-    (81,  'sim_voltage_l2',      'L2电压',       3, 104, 62, 0, 1, 2, NULL, NULL, NULL, 1212, NULL),
-    (82,  'sim_voltage_l3',      'L3电压',       3, 104, 62, 0, 1, 3, NULL, NULL, NULL, 1213, NULL),
-    (83,  'sim_current_total',   '总电流',       3, 104, 62, 0, 1, 4, NULL, NULL, NULL, 1214, NULL),
-    (84,  'sim_power_total',     '总有功功率',   3, 104, 62, 0, 1, 5, NULL, NULL, NULL, 1215, NULL),
+    (80,  'sim_voltage_l1',      'L1电压',       3, 104, 62, 0, 1, 1, NULL, NULL, 1211, NULL),
+    (81,  'sim_voltage_l2',      'L2电压',       3, 104, 62, 0, 1, 2, NULL, NULL, 1212, NULL),
+    (82,  'sim_voltage_l3',      'L3电压',       3, 104, 62, 0, 1, 3, NULL, NULL, 1213, NULL),
+    (83,  'sim_current_total',   '总电流',       3, 104, 62, 0, 1, 4, NULL, NULL, 1214, NULL),
+    (84,  'sim_power_total',     '总有功功率',   3, 104, 62, 0, 1, 5, NULL, NULL, 1215, NULL),
     -- OPC UA Probes
-    (85,  'sim_outdoor_temp',    '室外温度',     3, 104, 63, 0, 1, 1, NULL, NULL, NULL, 1216, NULL),
-    (86,  'sim_outdoor_humi',    '室外湿度',     3, 104, 63, 0, 1, 2, NULL, NULL, NULL, 1217, NULL),
-    (87,  'sim_wind_speed',      '风速',         3, 104, 63, 0, 1, 3, NULL, NULL, NULL, 1218, NULL),
-    (88,  'sim_rainfall',        '降雨量',       3, 104, 63, 0, 1, 4, NULL, NULL, NULL, 1219, NULL),
+    (85,  'sim_outdoor_temp',    '室外温度',     3, 104, 63, 0, 1, 1, NULL, NULL, 1216, NULL),
+    (86,  'sim_outdoor_humi',    '室外湿度',     3, 104, 63, 0, 1, 2, NULL, NULL, 1217, NULL),
+    (87,  'sim_wind_speed',      '风速',         3, 104, 63, 0, 1, 3, NULL, NULL, 1218, NULL),
+    (88,  'sim_rainfall',        '降雨量',       3, 104, 63, 0, 1, 4, NULL, NULL, 1219, NULL),
     -- Controls
-    (90,  'sim_fan_switch',      '风机开关',     4, 105, 60, 0, 1, 1, NULL, NULL, NULL, NULL, 3201),
-    (91,  'sim_damper_set',      '风门设定',     4, 105, 60, 0, 1, 2, NULL, NULL, NULL, NULL, 3202),
-    (92,  'sim_ups_switch',      'UPS开关',      4, 105, 61, 0, 1, 1, NULL, NULL, NULL, NULL, 3203)
+    (90,  'sim_fan_switch',      '风机开关',     4, 105, 60, 0, 1, 1, NULL, NULL, NULL, 3201),
+    (91,  'sim_damper_set',      '风门设定',     4, 105, 60, 0, 1, 2, NULL, NULL, NULL, 3202),
+    (92,  'sim_ups_switch',      'UPS开关',      4, 105, 61, 0, 1, 1, NULL, NULL, NULL, 3203)
 ON DUPLICATE KEY UPDATE caption = VALUES(caption), probe_id = VALUES(probe_id), control_id = VALUES(control_id);
 
 -- ============================================================================

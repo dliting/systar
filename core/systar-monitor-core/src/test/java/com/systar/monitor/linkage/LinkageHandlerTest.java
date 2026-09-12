@@ -40,7 +40,6 @@ class LinkageHandlerTest {
     @BeforeEach
     void setUp() {
         store = new AssetStore();
-        store.createRoot(new com.systar.monitor.asset.type.SpaceType("root"), "root");
         linkageRepository = Mockito.mock(LinkageRepository.class);
         handler = new LinkageHandler(store, linkageRepository);
     }

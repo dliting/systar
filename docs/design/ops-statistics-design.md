@@ -12,7 +12,7 @@
 
 | 域 | 主键 | 说明 |
 |---|---|---|
-| 资产树 `t_asset` | `t_asset.id` | 统计与展示用的资产视图行；kind：0空间 / 1设备 / 2服务 / 3监测器 / 4操控器 |
+| 资产树 `t_asset` | `t_asset.id` | 统计与展示用的资产视图行；kind：1设备 / 2服务 / 3监测器 / 4操控器（无空间层级，设备与服务均为顶层） |
 | 监测器运行时 `t_probe` / `t_control` | 各自表的 `id` | 采集与控制运行时对象；id 由配置显式分配，两表 id 空间按约定不重叠 |
 | 设备运行时 `t_device` | `t_device.id` | 设备台账与生命周期（`lifecycle_status`） |
 
@@ -71,14 +71,7 @@ UPDATE t_asset c
 
 -- CONTROL 行：同 PROBE，改用 t_control / control_id / kind=4
 
--- DEVICE 行：父为空间（t_device.parent=t_space.id）
-UPDATE t_asset c
-  JOIN t_device d  ON c.device_id = d.id
-  JOIN t_asset spa ON spa.kind = 0 AND spa.space_id = d.parent
-  SET c.parent_id = spa.id
- WHERE c.kind = 1 AND c.parent_id <> spa.id;
-
--- SERVICE / SPACE 行：同 DEVICE，按 t_service.parent / t_space.parent 解析到 kind=0 行
+-- DEVICE / SERVICE 行：顶层资产（去 Space 重构后无父级），无需修复
 ```
 
 **修复后核查**：父资产已删除等原因会被上面的语句跳过（保留旧值），

@@ -22,18 +22,11 @@ public interface DeviceInfoProvider {
     /**
      * List devices with optional filters, paginated.
      */
-    PagedResult<DeviceDto> listDevices(Integer spaceId, Short catalog,
+    PagedResult<DeviceDto> listDevices(Short catalog,
                                         String lifecycleStatus, int page, int size);
 
     /**
      * Find devices whose warranty expires before the given date.
      */
     List<DeviceDto> findWarrantyExpiring(LocalDate before);
-
-    /**
-     * Walk up the parent chain to find the owning space ID.
-     *
-     * @return space ID, or null if not resolvable
-     */
-    Integer resolveSpaceId(Integer deviceId);
 }

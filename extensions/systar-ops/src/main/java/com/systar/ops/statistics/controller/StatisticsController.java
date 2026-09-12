@@ -23,9 +23,8 @@ public class StatisticsController {
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate,
             @RequestParam(required = false) Integer deviceId,
-            @RequestParam(required = false) Integer spaceId,
             @RequestParam(required = false, defaultValue = "DAY") String granularity) {
-        StatisticsQuery query = new StatisticsQuery(startDate, endDate, deviceId, spaceId, granularity);
+        StatisticsQuery query = new StatisticsQuery(startDate, endDate, deviceId, granularity);
         return statisticsService.getAlarmStats(query);
     }
 
@@ -34,9 +33,8 @@ public class StatisticsController {
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate,
             @RequestParam(required = false) Integer deviceId,
-            @RequestParam(required = false) Integer spaceId,
             @RequestParam(required = false, defaultValue = "DAY") String granularity) {
-        StatisticsQuery query = new StatisticsQuery(startDate, endDate, deviceId, spaceId, granularity);
+        StatisticsQuery query = new StatisticsQuery(startDate, endDate, deviceId, granularity);
         return statisticsService.getWorkOrderStats(query);
     }
 
@@ -45,9 +43,8 @@ public class StatisticsController {
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate,
             @RequestParam(required = false) Integer deviceId,
-            @RequestParam(required = false) Integer spaceId,
             @RequestParam(required = false, defaultValue = "DAY") String granularity) {
-        StatisticsQuery query = new StatisticsQuery(startDate, endDate, deviceId, spaceId, granularity);
+        StatisticsQuery query = new StatisticsQuery(startDate, endDate, deviceId, granularity);
         return statisticsService.getInspectionStats(query);
     }
 
@@ -56,9 +53,8 @@ public class StatisticsController {
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate,
             @RequestParam(required = false) Integer deviceId,
-            @RequestParam(required = false) Integer spaceId,
             @RequestParam(required = false, defaultValue = "DAY") String granularity) {
-        StatisticsQuery query = new StatisticsQuery(startDate, endDate, deviceId, spaceId, granularity);
+        StatisticsQuery query = new StatisticsQuery(startDate, endDate, deviceId, granularity);
         return statisticsService.getDeviceRuntimeStats(query);
     }
 
@@ -67,9 +63,8 @@ public class StatisticsController {
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate,
             @RequestParam(required = false) Integer deviceId,
-            @RequestParam(required = false) Integer spaceId,
             @RequestParam(required = false, defaultValue = "DAY") String granularity) {
-        StatisticsQuery query = new StatisticsQuery(startDate, endDate, deviceId, spaceId, granularity);
+        StatisticsQuery query = new StatisticsQuery(startDate, endDate, deviceId, granularity);
         return statisticsService.getMaintenanceStats(query);
     }
 
@@ -85,7 +80,7 @@ public class StatisticsController {
             @RequestParam int level,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        StatisticsQuery query = new StatisticsQuery(startDate, endDate, null, null, "DAY");
+        StatisticsQuery query = new StatisticsQuery(startDate, endDate, null, "DAY");
         return statisticsService.getAlarmDetail(query, level, page, size);
     }
 
@@ -96,7 +91,7 @@ public class StatisticsController {
             @RequestParam String status,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        StatisticsQuery query = new StatisticsQuery(startDate, endDate, null, null, "DAY");
+        StatisticsQuery query = new StatisticsQuery(startDate, endDate, null, "DAY");
         return statisticsService.getWorkOrderDetail(query, status, page, size);
     }
 
@@ -105,7 +100,7 @@ public class StatisticsController {
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate,
             @RequestParam int deviceId) {
-        StatisticsQuery query = new StatisticsQuery(startDate, endDate, null, null, "DAY");
+        StatisticsQuery query = new StatisticsQuery(startDate, endDate, null, "DAY");
         return statisticsService.getDeviceHistory(query, deviceId);
     }
 }

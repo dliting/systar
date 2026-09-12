@@ -50,10 +50,14 @@
         :node-key="nodeKey"
         :check-strictly="checkStrictly"
         :show-checkbox="showCheckbox"
+        :draggable="draggable"
+        :allow-drop="allowDrop"
         @node-click="onNodeClick"
         @check="onCheck"
         @node-expand="onNodeExpand"
         @node-collapse="onNodeCollapse"
+        @node-drop="onNodeDrop"
+        @node-contextmenu="onNodeContextmenu"
       >
         <template #default="{ node, data }">
           <slot name="node" :node="node" :data="data">
@@ -178,6 +182,16 @@ const props = defineProps({
   filterMethod: {
     type: Function,
     default: null
+  },
+  // 是否开启节点拖拽
+  draggable: {
+    type: Boolean,
+    default: false
+  },
+  // 拖拽放置位置的校验函数 (draggingNode, dropNode, type) => boolean
+  allowDrop: {
+    type: Function,
+    default: undefined
   }
 })
 
@@ -189,6 +203,8 @@ const emit = defineEmits([
   'check',
   'node-expand',
   'node-collapse',
+  'node-drop',
+  'node-contextmenu',
   'search'
 ])
 
@@ -374,6 +390,16 @@ const onNodeExpand = (data, node, e) => {
 // 节点折叠事件
 const onNodeCollapse = (data, node, e) => {
   emit('node-collapse', data, node, e)
+}
+
+// 节点拖拽完成事件
+const onNodeDrop = (draggingNode, dropNode, dropType, e) => {
+  emit('node-drop', draggingNode, dropNode, dropType, e)
+}
+
+// 节点右键事件
+const onNodeContextmenu = (event, data, node, e) => {
+  emit('node-contextmenu', event, data, node, e)
 }
 
 const setCurrentKey = (key) => {

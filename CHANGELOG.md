@@ -1,203 +1,233 @@
-# 更新日志
+# Changelog
 
-本项目的所有重要变更均记录在此文件中。
+English | [简体中文](CHANGELOG.zh-CN.md)
 
-格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
+All notable changes to this project are documented in this file.
+
+Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [未发布]
+## [Unreleased]
 
-### 修复
+### Added
 
-**统计前端（frontend）**
-- 修复统计报表全部 6 个页面的图表从未渲染：页面模板此前使用未声明的字符串 ref（如 `ref="pieRef"`），`useChart()` 内部的 `chartRef` 从未绑定到 DOM，`initChart()` 静默返回 null，图表区域一直空白（仅标题/图例）。`useChart` 新增 `bindChart(el)` 绑定入口（多图页面统一 `:ref="xxx.bindChart"`），且未绑定时 `initChart()` 明确报错不再静默
-- 演示种子（03-simulator.sql，双方言）补充上一期（第 8~13 天前）告警历史 15 条，使"环比对比"面板双柱可见
-- 统计页 fetch 失败不再静默吞掉：6 个概览页与趋势页的加载异常现在先记录 `console.error` 再回退空态（此前后端 500/断网只显示"暂无数据"，控制台无任何线索）
+**Protocol drivers**
+- New protocol driver development guide (`docs/driver-development-guide.md`): driver module structure, type-XML self-registration, and external scan-path deployment recipes
 
-**资产视图（systar-server）**
-- 修复 UI 创建资产的统计漏计：`t_asset.parent_id` 此前误存父资产的运行时 id（`t_device.id` 等），现统一存父资产行 id，与种子数据及统计 SQL 的 parent 链对齐；存量库修复 SQL 见 `docs/design/ops-statistics-design.md` 第 5 节
+### Changed
+
+**Protocol drivers (systar-monitor-drivers / systar-server)**
+- Driver modularization: protocol type-definition XMLs moved from server `config/assets/` into the drivers module (co-located with the driver classes); the loader now self-registers types via directory scanning and the global index `Assets.xml` was deleted — adding or removing a driver no longer requires index maintenance
+- New `systar.asset-type.scan-paths` config: supports `file:` external scan directories so private driver types can stay out of the repository
+- ModbusService's hand-written config resolution chain (metadata > type default > built-in default) unified into the framework property binding (`bindProperties`)
+- Type-config version numbers now increment only when content actually changes, fixing the version inflation caused by an unconditional version+1 on every startup
+- Timeout/MaxConnections are now configurable per instance (with type-level defaults)
+
+**Asset model (systar-monitor-core / systar-server)**
+- AssetKind decoupled from ordinal: `t_asset.kind` now stores an explicit code (1/2/3/4 = Device/Service/Probe/Control), so enum reordering can no longer corrupt stored data
+- Space asset kind removed: devices and services are now top-level assets; AssetStore mounts top-level assets on a neutral tree anchor that never enters the flat asset index, so the anchor cannot appear in `/assets` or statistics; the `/tree` endpoint temporarily returns the first top-level subtree (to be replaced by the grouped forest API `/asset-tree`)
+- Create requests for Device/Service carrying a parentId are now rejected explicitly (must be top-level)
+
+### Removed
+
+- Dead spaceId plumbing across ops: the spaceId parameter of the 5 statistics endpoints, the device-ledger filter, the work-order backfill and its `space_id` entity field, `DeviceInfoProvider.resolveSpaceId`, and the dead `DeviceDto.parentId` component (verified reader-less end to end)
+- Database schema cleanup (MySQL + H2 scripts): the `t_space` table and its index, the `t_asset.space_id`, `t_device.parent`, `t_service.parent` and `t_work_order.space_id` columns dropped (along with the work-order `i_wo_space` index); seeds rewritten — kind=0 rows deleted, devices/services seeded at top level (parent_id=0), dead space-type code-dictionary entries removed
+
+### Fixed
+
+**Assets & statistics**
+- Fixed UI asset creation being blocked: the type-dropdown name filter was lost and the SERVICE mode default was derived incorrectly
+- Statistics now log a warn (including the code and the row id) when reading an unknown or corrupt `t_asset.kind` code, instead of skipping it silently
+
+**Statistics frontend (frontend)**
+- Fixed all 6 statistics report pages never rendering charts: page templates previously used undeclared string refs (e.g. `ref="pieRef"`), so `useChart()`'s internal `chartRef` never bound to the DOM and `initChart()` silently returned null, leaving chart areas permanently blank (titles/legends only). `useChart` now exposes a `bindChart(el)` entry point (multi-chart pages uniformly use `:ref="xxx.bindChart"`), and `initChart()` reports an explicit error instead of failing silently when unbound
+- Demo seeds (03-simulator.sql, both dialects) now include 15 historical alarms from the previous period (days 8–13 ago) so the period-over-period comparison panel shows both bars
+- Statistics pages no longer swallow fetch failures: load errors on the 6 overview pages and the trend page now log `console.error` before falling back to the empty state (previously a backend 500 or offline state only showed "no data" with no console clue)
+
+**Asset view (systar-server)**
+- Fixed statistics undercounting UI-created assets: `t_asset.parent_id` previously stored the parent's runtime id (e.g. `t_device.id`); it now uniformly stores the parent asset-row id, aligned with seed data and the statistics SQL parent chain; see section 5 of `docs/design/ops-statistics-design.md` for the repair SQL of existing databases
 
 ## [1.1.0] - 2026-06-07
 
-运维业务扩展、技术债清理、数据保留策略、前端 UX 改进。
+Operations business extensions, tech-debt cleanup, data retention policy, frontend UX improvements.
 
-### 新增
+### Added
 
-**运维业务（systar-ops）**
-- 工单系统：告警自动生成工单、派发、处理、关闭/取消闭环
-- 设备台账：全生命周期管理（采购→安装→维护→退役）
-- 巡检管理：计划、任务、结果、调度、异常联动工单
-- 统计分析：告警/工单/巡检/设备运行/维护 5 维度聚合 + Dashboard 缓存 + ECharts 可视化
-- 异常检测：Z-Score 异常检测 + 移动平均趋势预测 + 加权健康评估
+**Operations (systar-ops)**
+- Work orders: alarm-driven auto creation, dispatch, processing, close/cancel lifecycle
+- Device ledger: full lifecycle management (procurement → installation → maintenance → decommission)
+- Inspection management: plans, tasks, results, scheduling, anomaly-to-work-order linkage
+- Statistics: 5-dimension aggregation (alarm/work-order/inspection/device-runtime/maintenance) + dashboard caching + ECharts visualization
+- Anomaly detection: Z-Score detection + moving-average trend prediction + weighted health scoring
 
-**系统管理（systar-system）**
-- 用户/角色/菜单/部门/通知/日志 6 个 Controller + RequirePermission AOP
-- 前端系统管理页面（用户/角色/菜单/部门/日志/通知）
+**System administration (systar-system)**
+- 6 controllers (user/role/menu/department/notification/log) + RequirePermission AOP
+- Frontend admin pages (users/roles/menus/departments/logs/notifications)
 
-**虚拟监测点引擎（P1.5）**
-- VirtualProbeType / ProbeRef：SpEL 表达式类型 + `#probe[id].value` 引用解析
-- VirtualProbe 类：继承 Probe，detect() 通过 SpEL 表达式计算派生值
-- VirtualProbeEngine：依赖索引 + @EventListener 监听 MonitorResultEvent 触发重计算
-- 循环依赖检测：computing Set 防止无限递归
-- SpEL 安全沙箱：RestrictedSpelContext + 属性白名单
-- 前端 UI：探针多选下拉 + 表达式提取按钮 + isVirtual 开关
+**Virtual probe engine (P1.5)**
+- VirtualProbeType / ProbeRef: SpEL expression types + `#probe[id].value` reference resolution
+- VirtualProbe class: extends Probe; detect() computes derived values via SpEL expressions
+- VirtualProbeEngine: dependency indexing + @EventListener on MonitorResultEvent to trigger recomputation
+- Cycle detection: computing Set prevents infinite recursion
+- SpEL sandbox: RestrictedSpelContext + property whitelist
+- Frontend UI: probe multi-select dropdown + expression extraction button + isVirtual toggle
 
-**数据保留策略（Phase 8）**
-- DataRetentionService：按配置天数每月分批删除过期数据
-- 定时调度 + REST API（GET/PUT）+ 前端配置页
-- 安全校验：最小保留天数限制
+**Data retention policy (Phase 8)**
+- DataRetentionService: monthly batch deletion of expired data by configured retention days
+- Scheduled execution + REST API (GET/PUT) + frontend config page
+- Safety checks: minimum retention-day limits
 
-**告警关联**
-- AlarmCorrelationService：时间窗口聚合 + 告警抑制
-- AlarmPusher：WS 告警广播，monitor result 增加 type 字段
+**Alarm correlation**
+- AlarmCorrelationService: time-window aggregation + alarm suppression
+- AlarmPusher: WS alarm broadcast; monitor result gains a type field
 
-**前端 UX 改进（Phase 1）**
-- 导航分组菜单：子菜单分组 + 告警页签路由
-- NotificationBell 组件：未读计数 + 告警列表弹窗
-- Breadcrumb 组件：全局面包屑导航
-- useKeyboard 组合式函数：Esc/Enter 快捷键支持
+**Frontend UX improvements (Phase 1)**
+- Grouped navigation menu: submenu groups + alarm tab routing
+- NotificationBell component: unread count + alarm list popover
+- Breadcrumb component: global breadcrumb navigation
+- useKeyboard composable: Esc/Enter shortcut support
 
-**前端组件**
-- EnhancedTable 组件：排序/筛选/导出（告警页面已迁移）
-- CronWizard 组件：Cron 表达式可视化编辑器
-- DurationInput 组件：时间间隔编辑
-- Dashboard 科技风大屏：ECharts 环形图、设备在线率、KPI 统计条、告警趋势、工单分布
+**Frontend components**
+- EnhancedTable component: sorting/filtering/export (alarm page migrated)
+- CronWizard component: visual cron expression editor
+- DurationInput component: time-interval editing
+- Dashboard tech-style large screen: ECharts ring charts, device online rate, KPI bars, alarm trends, work-order distribution
 
-**MQTT 协议驱动**
-- Eclipse Paho 1.2.5，MqttClient + topic routing + JSON path 提取
+**MQTT protocol driver**
+- Eclipse Paho 1.2.5, MqttClient + topic routing + JSON path extraction
 
-**协议驱动完善**
-- BACnet：补全 APDU 编码，从部分实现升级为完整实现
-- IEC 104：补全 ASDU 编码，从部分实现升级为完整实现
+**Protocol driver completion**
+- BACnet: APDU encoding completed, upgraded from partial to full implementation
+- IEC 104: ASDU encoding completed, upgraded from partial to full implementation
 
-### 变更
+### Changed
 
-- 前端重构为独立 Vue3 项目（`frontend/`）
-- 移除第三方承载目录与代理模块，前端直连后端 API
-- 移除 integrations 目录
-- 前端页面扩展至 11 个（新增 dashboard/inspection/ledger/login/operations/system/workorder）
-- 联动引擎扩展：CauseType(ALARM/MONITOR) + LinkageRuleBean + CRUD API + 双树 UI
-- 定时控制：CRUD API（8 端点）+ 启停持久化 + 前端管理页面 + CronWizard
-- 告警去重：相同 monitorId+level 的告警不重复插入
-- WebSocket 推送扩展：同时推送监测值变化和告警消息
+- Frontend rebuilt as a standalone Vue3 project (`frontend/`)
+- Removed the third-party host directory and proxy modules; the frontend now calls backend APIs directly
+- Removed the integrations directory
+- Frontend expanded to 11 pages (added dashboard/inspection/ledger/login/operations/system/workorder)
+- Linkage engine extensions: CauseType(ALARM/MONITOR) + LinkageRuleBean + CRUD API + dual-tree UI
+- Scheduled control: CRUD API (8 endpoints) + start/stop persistence + frontend admin page + CronWizard
+- Alarm deduplication: alarms with identical monitorId+level are no longer inserted twice
+- WebSocket push extensions: monitor value changes and alarm messages are both pushed
 
-### 测试
+### Tests
 
-- systar-data：覆盖率 20%→90%（109 测试用例）
-- systar-ops：覆盖率 18%→80%+（17 个测试文件）
-- systar-server：覆盖率 39%→80%+
-- systar-system：关键 Service 测试
-- 前端：28 测试文件，含 Vitest 单元测试和页面级测试
+- systar-data: coverage 20%→90% (109 test cases)
+- systar-ops: coverage 18%→80%+ (17 test files)
+- systar-server: coverage 39%→80%+
+- systar-system: key service tests
+- Frontend: 28 test files, including Vitest unit tests and page-level tests
 
 ---
 
 ## [1.0.0] - 2026-05-13
 
-目录结构重组 + 前端集成完善 + 告警过滤。
+Directory restructure + frontend integration completion + alarm filtering.
 
-### 变更
+### Changed
 
-**目录重组**
-- 核心模块移入 `core/`（systar-common、systar-monitor-core、systar-monitor-drivers、systar-data）
-- 扩展模块移入 `extensions/`（systar-server、systar-websocket）
-- 版本统一为 1.0.0（修复根 POM 与子模块不一致）
+**Directory restructure**
+- Core modules moved into `core/` (systar-common, systar-monitor-core, systar-monitor-drivers, systar-data)
+- Extension modules moved into `extensions/` (systar-server, systar-websocket)
+- Versions unified to 1.0.0 (fixing the root POM / submodule mismatch)
 
-**前端与集成完善**
-- IoT 前端 7 页面功能交互测试通过（资产 CRUD、监控数据、告警筛选、控制执行）
-- 告警消息过滤（state、recovered 参数穿透前端→API→QueryWrapper）
-- 启动脚本健康检查、stop-before-build、`--force`/`--skip-build` 标志
+**Frontend & integration completion**
+- IoT frontend 7 pages passed functional interaction tests (asset CRUD, monitoring data, alarm filtering, control execution)
+- Alarm message filtering (state and recovered parameters threaded through frontend → API → QueryWrapper)
+- Startup script health check, stop-before-build, `--force`/`--skip-build` flags
 
 ---
 
 ## [0.1.0] - 2026-05-10
 
-初始开发版本。完成基础监控引擎、协议驱动骨架、MySQL/H2 双数据库适配，初步跑通端到端流程（采集→存储→告警→联动）。核心引擎和数据库 Schema 仍在调整中。
+Initial development release. Basic monitoring engine, protocol driver skeletons, and MySQL/H2 dual-database adaptation completed; the end-to-end pipeline (acquisition → storage → alarming → linkage) works end to end. The core engine and database schema were still in flux.
 
-> **注意**：本版本为开发中间状态，接口和配置可能随移植进度变化。
+> **Note**: this version is a development intermediate state; interfaces and configuration may change as porting progresses.
 
-### 新增
+### Added
 
-**核心监控引擎（systar-monitor-core）**
-- 资产模型体系：Asset/CompoundAsset/Monitor 抽象层级，Space/Device/Service/Probe/Control 具体实现
-- AssetStore 内存资产仓库，支持资产树的增删查和路径计算
-- 两阶段结果分发：ResultDispatcher 同步预处理 + MonitorResultEvent 异步分发
-- 采集调度器：MonitorScheduler + DetectTask + TaskDispatcher，支持按服务类型并发限制
-- 告警引擎：3 种策略（ONLY_ONCE/CONTINUOUS/SELECTIVE），多级告警，自动恢复检测
-- 联动引擎：因果规则匹配，监测值变化触发控制命令
-- 定时控制：Cron 表达式驱动的计划任务执行器
-- MonitorServer 门面：集成所有子系统，提供统一入口
+**Core monitoring engine (systar-monitor-core)**
+- Asset model hierarchy: Asset/CompoundAsset/Monitor abstraction layers with Space/Device/Service/Probe/Control concrete implementations
+- AssetStore in-memory asset repository supporting tree add/remove/query and path computation
+- Two-phase result dispatch: ResultDispatcher synchronous preprocessing + MonitorResultEvent asynchronous dispatch
+- Collection scheduler: MonitorScheduler + DetectTask + TaskDispatcher, with per-service-type concurrency limits
+- Alarm engine: 3 strategies (ONLY_ONCE/CONTINUOUS/SELECTIVE), multi-level alarms, automatic recovery detection
+- Linkage engine: cause-rule matching; monitor value changes trigger control commands
+- Scheduled control: cron-expression-driven scheduled task executor
+- MonitorServer facade: integrates all subsystems behind a single entry point
 
-**通用工具（systar-common）**
-- AssetIdGenerator：高 16 位站点编码的 ID 生成器
-- CodeDictManager/CodeCatalog/CodeItem：代码字典管理
-- SystemConfigManager/SystemConfigItem：系统配置键值存储
-- TimeSpan：不可变时间间隔工具，支持 "10s"/"5m"/"2h"/"1d" 格式
+**Common utilities (systar-common)**
+- AssetIdGenerator: ID generator with a 16-bit station code in the high bits
+- CodeDictManager/CodeCatalog/CodeItem: code dictionary management
+- SystemConfigManager/SystemConfigItem: system configuration key-value store
+- TimeSpan: immutable time-interval utility supporting "10s"/"5m"/"2h"/"1d" formats
 
-**数据访问层（systar-data）**
-- 16 个 MyBatis-Plus 实体类和映射器
-- 7 个 Service 接口和实现
-- SampleRepository/AlarmRepository/LinkageRepository 持久化仓库
-- MySQL/H2 双数据库适配（DatabaseDialect 适配器模式）
+**Data access layer (systar-data)**
+- 16 MyBatis-Plus entity classes and mappers
+- 7 service interfaces and implementations
+- SampleRepository/AlarmRepository/LinkageRepository persistence repositories
+- MySQL/H2 dual-database adaptation (DatabaseDialect adapter pattern)
 
-**协议驱动（systar-monitor-drivers）**
-- Modbus TCP：功能码 01-06，寄存器读写（已实现）
-- OPC UA：Eclipse Milo 客户端，NodeId 读取（已实现）
-- BACnet：BACnet4J，对象/属性解析器（部分实现，缺少 APDU 编码）
-- SNMP：SNMP4J，CommunityTarget GET/GETNEXT（已实现）
-- Siemens S7：S7Connector，DB/标记读取 + 字节类型转换（已实现）
-- IEC 104：j60870，TCP 连接 + YC/YX 解析（部分实现，缺少 ASDU 编码）
-- Weather：HTTP API，5 分钟缓存 + JSON 解析（已实现）
-- UPS：SNMP，RFC 1628 UPS-MIB 标准 OID（已实现）
-- Environmental：TCP 服务器，25 字节帧解码器（已实现，被动模式）
-- WebSocket：Java-WebSocket 客户端 + JSON 路由（已实现，被动模式）
-- TCP/IP：原始 Socket + 连接性检查（已实现）
-- Simulate：随机/正弦/固定/递增模拟数据
-- Input：手动数据输入（被动模式）
+**Protocol drivers (systar-monitor-drivers)**
+- Modbus TCP: function codes 01-06, register read/write (implemented)
+- OPC UA: Eclipse Milo client, NodeId reads (implemented)
+- BACnet: BACnet4J, object/property resolvers (partial; APDU encoding missing)
+- SNMP: SNMP4J, CommunityTarget GET/GETNEXT (implemented)
+- Siemens S7: S7Connector, DB/mark reads + byte type conversion (implemented)
+- IEC 104: j60870, TCP connection + YC/YX parsing (partial; ASDU encoding missing)
+- Weather: HTTP API, 5-minute cache + JSON parsing (implemented)
+- UPS: SNMP, RFC 1628 UPS-MIB standard OIDs (implemented)
+- Environmental: TCP server, 25-byte frame decoder (implemented, passive mode)
+- WebSocket: Java-WebSocket client + JSON routing (implemented, passive mode)
+- TCP/IP: raw socket + connectivity check (implemented)
+- Simulate: random/sine/fixed/increment simulation data
+- Input: manual data entry (passive mode)
 
-**服务启动（systar-server）**
-- Spring Boot 应用入口 + 启动生命周期编排
-- REST API：资产树、实时/历史数据、控制命令、告警和联动规则
-- DatabaseAssetLoader：从数据库加载资产树
-- DatabaseDialect + MySQLDialect + H2Dialect 适配器
-- DatabaseInitializer：DDL 和种子数据初始化
-- 统一响应封装（Result<T>）
+**Server bootstrap (systar-server)**
+- Spring Boot application entry + startup lifecycle orchestration
+- REST APIs: asset tree, live/historical data, control commands, alarms and linkage rules
+- DatabaseAssetLoader: loads the asset tree from the database
+- DatabaseDialect + MySQLDialect + H2Dialect adapters
+- DatabaseInitializer: DDL and seed data initialization
+- Unified response envelope (Result<T>)
 
-**WebSocket（systar-websocket）**
-- MonitorWebSocketHandler：按会话订阅 + 变更检测推送
-- MonitorResultPusher：桥接 MonitorResultEvent 到 WebSocket
+**WebSocket (systar-websocket)**
+- MonitorWebSocketHandler: per-session subscription + change-detection push
+- MonitorResultPusher: bridges MonitorResultEvent to WebSocket
 
-**测试**
-- systar-common：140 个单元测试
-- systar-monitor-core：237 个单元测试
-- systar-data：14 个 H2 集成测试
-- systar-monitor-drivers/websocket/server：104 个测试
-- JaCoCo 覆盖率插件集成
+**Tests**
+- systar-common: 140 unit tests
+- systar-monitor-core: 237 unit tests
+- systar-data: 14 H2 integration tests
+- systar-monitor-drivers/websocket/server: 104 tests
+- JaCoCo coverage plugin integration
 
-**基础设施**
-- Maven 多模块项目结构
-- 数据库初始化脚本（sql/mysql/init.sh, sql/mysql/init.bat）
-- MySQL/H2 独立 schema 和 seed data 文件
+**Infrastructure**
+- Maven multi-module project structure
+- Database initialization scripts (sql/mysql/init.sh, sql/mysql/init.bat)
+- Separate MySQL/H2 schema and seed data files
 
-### 修复
+### Fixed
 
-- Asset.metadata 线程安全：改用 ConcurrentHashMap
-- Asset.setState 原子性：添加 volatile + synchronized
-- Monitor.mode 可见性：添加 volatile
-- WebSocket CORS：收紧为 localhost
-- REST API 输入校验：添加 MAX_IDS_LENGTH 限制
-- Modbus 模块日志：统一改用 SLF4J
-- LinkageRuleCauseEntity 移除不存在的 ruleId 列映射
-- PassiveService.resultDispatcher 类型：替换为 ResultDispatcher
-- 枚举类型数据库映射：MonitorMode.getCode/fromCode + EnumOrdinalTypeHandler
-- seed data TimeSpan 格式统一为短格式
-- seed data driver_class 路径修正
-- 非数值 effectCommand 存储为 Integer 时记录警告
-- 联动日志补充 effectCommand 字段
-- 优雅关闭时排空告警和联动队列
+- Asset.metadata thread safety: switched to ConcurrentHashMap
+- Asset.setState atomicity: volatile + synchronized added
+- Monitor.mode visibility: volatile added
+- WebSocket CORS: tightened to localhost
+- REST API input validation: MAX_IDS_LENGTH limit added
+- Modbus module logging: unified on SLF4J
+- LinkageRuleCauseEntity: removed mapping of the non-existent ruleId column
+- PassiveService.resultDispatcher type: replaced with ResultDispatcher
+- Enum database mapping: MonitorMode.getCode/fromCode + EnumOrdinalTypeHandler
+- Seed data TimeSpan format unified to the short format
+- Seed data driver_class path fixed
+- Non-numeric effectCommand stored as Integer now logs a warning
+- Linkage log gained the effectCommand field
+- Alarm and linkage queues drained on graceful shutdown
 
 ---
 
-## 项目起源 — 2026-05-09
+## Project origin — 2026-05-09
 
-确立项目目标：独立的 IoT 通用工业监控运维核心框架。
+Project goal established: an independent, general-purpose industrial IoT monitoring and operations core framework.

@@ -9,7 +9,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
  * Abstract base class for compound (container) assets that hold children.
  * <p>
  * Uses a thread-safe {@link ConcurrentSkipListMap} keyed by child name.
- * Subclasses ({@code Space}, {@code Device}) provide the concrete asset kind
+ * Subclasses ({@code Device}) provide the concrete asset kind
  * and visitor dispatch.
  *
  * @param <T> the concrete {@link AssetType} of this asset

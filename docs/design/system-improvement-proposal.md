@@ -116,12 +116,12 @@
 **实现路径**：
 1. 添加 Sparkplug B 依赖（Eclipse Tahu 或自实现编解码，需评估 Protobuf 依赖对离线部署的影响）
 2. 扩展 `MqttService`：添加 Sparkplug B topic 过滤（`spBv1.0/...`）和消息处理分支
-3. 实现 `SparkplugBDiscoveryService`：BIRTH → 自动创建 Space/Device/Probe 资产
+3. 实现 `SparkplugBDiscoveryService`：BIRTH → 自动创建 Device/Probe 资产
 4. 升级 Paho 客户端到 v5 或切换到 HiveMQ 客户端以支持 MQTT 5.0 共享订阅
 5. 前端添加 Sparkplug B 设备自动发现配置页面
 
 **验收标准**：
-- BIRTH 消息自动创建 Space/Device/Probe 资产树
+- BIRTH 消息自动创建 Device/Probe 资产（可挂入分组树）
 - DEATH 消息触发设备离线告警
 - DATA 消息正常解析并存储采样数据
 - Protobuf 负载正确解码（metrics 数值、属性、时间戳）

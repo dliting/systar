@@ -54,7 +54,6 @@ class MonitorServerTest {
     @BeforeEach
     void setUp() {
         store = new AssetStore();
-        store.createRoot(new SpaceType("root"), "root");
 
         dispatcher = mock(ResultDispatcher.class);
         scheduler = mock(MonitorScheduler.class);
@@ -222,7 +221,11 @@ class MonitorServerTest {
     @Test
     @DisplayName("getAssets returns store assets")
     void getAssets() {
-        assertThat(server.getAssets()).isNotEmpty(); // has root
+        Probe probe = new Probe();
+        probe.init(new ProbeType("pt"), 10, "p1");
+        store.addAsset(probe);
+
+        assertThat(server.getAssets()).hasSize(1); // anchor excluded
     }
 
     // ---- getAssetsByKind ----
@@ -248,7 +251,7 @@ class MonitorServerTest {
         store.addAsset(probe);
 
         String path = server.getAssetPath(10);
-        assertThat(path).isEqualTo("root->sensor1");
+        assertThat(path).isEqualTo("sensor1");
     }
 
     @Test
@@ -343,7 +346,11 @@ class MonitorServerTest {
     @Test
     @DisplayName("startMonitor throws for non-monitor asset")
     void startMonitorNonMonitor() {
-        assertThatThrownBy(() -> server.startMonitor(store.getRoot().getId()))
+        Device dev = new Device();
+        dev.init(new DeviceType("dt"), 10, "dev1");
+        store.addAsset(dev);
+
+        assertThatThrownBy(() -> server.startMonitor(dev.getId()))
                 .isInstanceOf(AssetException.class)
                 .hasMessageContaining("not a monitor");
     }
@@ -372,7 +379,11 @@ class MonitorServerTest {
     @Test
     @DisplayName("stopMonitor throws for non-monitor asset")
     void stopMonitorNonMonitor() {
-        assertThatThrownBy(() -> server.stopMonitor(store.getRoot().getId()))
+        Device dev = new Device();
+        dev.init(new DeviceType("dt"), 10, "dev1");
+        store.addAsset(dev);
+
+        assertThatThrownBy(() -> server.stopMonitor(dev.getId()))
                 .isInstanceOf(AssetException.class)
                 .hasMessageContaining("not a monitor");
     }
@@ -422,7 +433,6 @@ class MonitorServerTest {
             ResultDispatcher dispatcher = mock(ResultDispatcher.class);
 
             AssetStore store = new AssetStore();
-            store.createRoot(new SpaceType("rootType"), "r");
             store.addAsset(probe);
 
             MonitorServer svr = detectOnceServer(store, dispatcher);
@@ -436,7 +446,6 @@ class MonitorServerTest {
         @DisplayName("throws when asset not found")
         void throwsNotFound() {
             AssetStore store = new AssetStore();
-            store.createRoot(new SpaceType("rootType"), "r");
             MonitorServer svr = detectOnceServer(store, null);
             assertThatThrownBy(() -> svr.detectOnce(999))
                     .isInstanceOf(AssetException.class)
@@ -446,13 +455,12 @@ class MonitorServerTest {
         @Test
         @DisplayName("throws when asset is not a Monitor")
         void throwsNotMonitor() {
-            Space space = new Space();
-            space.init(new SpaceType("st"), 1, "s");
+            Device dev = new Device();
+            dev.init(new DeviceType("dt"), 1, "d1");
 
             AssetStore store = spy(new AssetStore());
-            store.createRoot(new SpaceType("rootType"), "r");
-            store.addAsset(space);
-            doReturn(space).when(store).findAsset(1);
+            store.addAsset(dev);
+            doReturn(dev).when(store).findAsset(1);
 
             MonitorServer svr = detectOnceServer(store, null);
             assertThatThrownBy(() -> svr.detectOnce(1))
@@ -477,7 +485,6 @@ class MonitorServerTest {
             Probe probe = new Probe() {};
             probe.init(new ProbeType("pt"), 1, "p");
             AssetStore store = spy(new AssetStore());
-            store.createRoot(new SpaceType("rootType"), "r");
             doReturn(probe).when(store).findAsset(1);
 
             MonitorServer svr = detectOnceServer(store, mock(ResultDispatcher.class));
@@ -489,7 +496,6 @@ class MonitorServerTest {
         @DisplayName("throws AssetException when asset not found")
         void throwsNotFound() {
             AssetStore store = new AssetStore();
-            store.createRoot(new SpaceType("rootType"), "r");
             MonitorServer svr = detectOnceServer(store, mock(ResultDispatcher.class));
             assertThatThrownBy(() -> svr.detectImmediately(999))
                     .isInstanceOf(AssetException.class)
@@ -499,11 +505,10 @@ class MonitorServerTest {
         @Test
         @DisplayName("throws AssetException when asset is not a Monitor")
         void throwsNotMonitor() {
-            Space space = new Space();
-            space.init(new SpaceType("st"), 1, "s");
+            Device dev = new Device();
+            dev.init(new DeviceType("dt"), 1, "d1");
             AssetStore store = spy(new AssetStore());
-            store.createRoot(new SpaceType("rootType"), "r");
-            doReturn(space).when(store).findAsset(1);
+            doReturn(dev).when(store).findAsset(1);
 
             MonitorServer svr = detectOnceServer(store, mock(ResultDispatcher.class));
             assertThatThrownBy(() -> svr.detectImmediately(1))
@@ -518,7 +523,6 @@ class MonitorServerTest {
             probe.init(new ProbeType("pt"), 1, "p");
             probe.setMode(MonitorMode.PASSIVE);
             AssetStore store = spy(new AssetStore());
-            store.createRoot(new SpaceType("rootType"), "r");
             doReturn(probe).when(store).findAsset(1);
 
             MonitorServer svr = detectOnceServer(store, mock(ResultDispatcher.class));

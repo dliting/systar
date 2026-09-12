@@ -1,7 +1,7 @@
 import { systarApi } from '@/api/request'
 
-export function getAssetTree() {
-  return systarApi({ url: '/api/monitor/tree', method: 'get' })
+export function getAssetTree(tree = 'kind') {
+  return systarApi({ url: '/api/monitor/asset-tree', method: 'get', params: { tree } })
 }
 export function listAssets(query) {
   return systarApi({ url: '/api/monitor/assets', method: 'get', params: query })
@@ -56,4 +56,34 @@ export function batchEnable(ids) { return batchOp('enable', ids) }
 export function batchDisable(ids) { return batchOp('disable', ids) }
 export function batchDelete(ids) {
   return systarApi({ url: '/api/monitor/assets/batch', method: 'delete', data: { ids } })
+}
+
+// Group trees and asset groups
+export function listGroupTrees() {
+  return systarApi({ url: '/api/monitor/group-trees', method: 'get' })
+}
+export function createGroupTree(data) {
+  return systarApi({ url: '/api/monitor/group-trees', method: 'post', data })
+}
+export function updateGroupTree(id, data) {
+  return systarApi({ url: '/api/monitor/group-trees/' + id, method: 'put', data })
+}
+export function deleteGroupTree(id) {
+  return systarApi({ url: '/api/monitor/group-trees/' + id, method: 'delete' })
+}
+
+export function listGroups(treeId) {
+  return systarApi({ url: '/api/monitor/groups', method: 'get', params: { treeId } })
+}
+export function createGroup(data) {
+  return systarApi({ url: '/api/monitor/groups', method: 'post', data })
+}
+export function updateGroup(id, data) {
+  return systarApi({ url: '/api/monitor/groups/' + id, method: 'put', data })
+}
+export function deleteGroup(id) {
+  return systarApi({ url: '/api/monitor/groups/' + id, method: 'delete' })
+}
+export function replaceGroupAssets(id, assetIds) {
+  return systarApi({ url: '/api/monitor/groups/' + id + '/assets', method: 'put', data: { assetIds } })
 }

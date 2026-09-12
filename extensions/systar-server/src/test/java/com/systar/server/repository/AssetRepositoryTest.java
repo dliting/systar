@@ -99,19 +99,6 @@ class AssetRepositoryTest {
     class AbstractTypeEnforcement {
 
         @Test
-        @DisplayName("throws when resolving abstract Space type")
-        void abstractSpaceTypeThrows() {
-            SpaceType abstractType = new SpaceType("AbstractSpace");
-            abstractType.setAbstractType(true);
-            store.getSpaceTypes().register(abstractType);
-
-            var resolver = new AssetRepository.TypeResolver(store);
-            assertThatThrownBy(() -> resolver.resolveSpaceType("AbstractSpace", 1, "test"))
-                    .isInstanceOf(AssetException.class)
-                    .hasMessageContaining("abstract type");
-        }
-
-        @Test
         @DisplayName("throws when resolving abstract Device type")
         void abstractDeviceTypeThrows() {
             DeviceType abstractType = new DeviceType("AbstractDevice");
@@ -166,11 +153,11 @@ class AssetRepositoryTest {
         @Test
         @DisplayName("concrete type with same name as abstract type is allowed (if registered first)")
         void concreteTypeAllowed() {
-            SpaceType concrete = new SpaceType("Building");
-            store.getSpaceTypes().register(concrete);
+            DeviceType concrete = new DeviceType("Building");
+            store.getDeviceTypes().register(concrete);
 
             var resolver = new AssetRepository.TypeResolver(store);
-            SpaceType resolved = resolver.resolveSpaceType("Building", 1, "bld");
+            DeviceType resolved = resolver.resolveDeviceType("Building", 1, "bld");
             assertThat(resolved).isSameAs(concrete);
         }
     }
@@ -181,9 +168,9 @@ class AssetRepositoryTest {
 
         @Test
         @DisplayName("throws when type is not registered and typeName is not null/blank")
-        void missingSpaceTypeThrows() {
+        void missingDeviceTypeThrows() {
             var resolver = new AssetRepository.TypeResolver(store);
-            assertThatThrownBy(() -> resolver.resolveSpaceType("NonExistent", 1, "test"))
+            assertThatThrownBy(() -> resolver.resolveDeviceType("NonExistent", 1, "test"))
                     .isInstanceOf(AssetException.class)
                     .hasMessageContaining("not registered");
         }
@@ -192,18 +179,18 @@ class AssetRepositoryTest {
         @DisplayName("returns fallback type when typeName is null")
         void nullTypeNameReturnsFallback() {
             var resolver = new AssetRepository.TypeResolver(store);
-            SpaceType fallback = resolver.resolveSpaceType(null, 42, "fallback-space");
+            DeviceType fallback = resolver.resolveDeviceType(null, 42, "fallback-device");
             assertThat(fallback).isNotNull();
-            assertThat(fallback.getName()).isEqualTo("space-42");
+            assertThat(fallback.getName()).isEqualTo("device-42");
         }
 
         @Test
         @DisplayName("returns fallback type when typeName is blank")
         void blankTypeNameReturnsFallback() {
             var resolver = new AssetRepository.TypeResolver(store);
-            SpaceType fallback = resolver.resolveSpaceType("   ", 7, "blank-space");
+            DeviceType fallback = resolver.resolveDeviceType("   ", 7, "blank-device");
             assertThat(fallback).isNotNull();
-            assertThat(fallback.getName()).isEqualTo("space-7");
+            assertThat(fallback.getName()).isEqualTo("device-7");
         }
     }
 }

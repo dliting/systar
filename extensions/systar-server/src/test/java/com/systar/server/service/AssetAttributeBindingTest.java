@@ -69,7 +69,7 @@ class AssetAttributeBindingTest {
     private int createService(String name, Map<String, String> attributes) {
         int id = orchestrator.createAsset(new AssetCreateRequest(
                 "SERVICE", ROOT_PARENT_ID, name, name, "BACnetService",
-                Map.of("mode", "ACTIVE"), attributes));
+                Map.of("mode", "ACTIVE"), attributes)).runtimeId();
         createdIds.add(id);
         return id;
     }
@@ -139,7 +139,7 @@ class AssetAttributeBindingTest {
     void createServiceBindsTimeoutOverride() {
         int id = orchestrator.createAsset(new AssetCreateRequest(
                 "SERVICE", ROOT_PARENT_ID, "timeout_svc", "timeout_svc", "ModbusTcpMaster",
-                Map.of("mode", "ACTIVE"), Map.of("Timeout", "8000")));
+                Map.of("mode", "ACTIVE"), Map.of("Timeout", "8000"))).runtimeId();
         createdIds.add(id);
 
         ModbusService overridden = (ModbusService) monitorServer.findAsset(id);
@@ -147,7 +147,7 @@ class AssetAttributeBindingTest {
 
         int plainId = orchestrator.createAsset(new AssetCreateRequest(
                 "SERVICE", ROOT_PARENT_ID, "timeout_default_svc", "timeout_default_svc",
-                "ModbusTcpMaster", Map.of("mode", "ACTIVE"), Map.of()));
+                "ModbusTcpMaster", Map.of("mode", "ACTIVE"), Map.of())).runtimeId();
         createdIds.add(plainId);
 
         ModbusService withDefault = (ModbusService) monitorServer.findAsset(plainId);
@@ -159,7 +159,7 @@ class AssetAttributeBindingTest {
     void updateProbeRebindsAttributes() {
         int id = orchestrator.createAsset(new AssetCreateRequest(
                 "PROBE", ROOT_PARENT_ID, "update_probe", "update_probe", "ModbusFloatFC3",
-                Map.of("unit", "V"), Map.of("RegisterAddr", "100")));
+                Map.of("unit", "V"), Map.of("RegisterAddr", "100"))).runtimeId();
         createdIds.add(id);
 
         orchestrator.updateAsset(id, AssetKind.PROBE, new AssetUpdateRequest(

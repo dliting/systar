@@ -17,7 +17,7 @@
 | 决策 | 选择 | 理由 |
 |------|------|------|
 | UI 交互 | 现有资产树页面扩展（方案 A） | 改动最小，与 monitor/control 页体验一致 |
-| 覆盖类型 | Space/Device/Probe/Control | Service 较复杂，单独迭代 |
+| 覆盖类型 | Device/Probe/Control | Service 较复杂，单独迭代 |
 | 数据流 | DB 主写 + Spring Event 内存同步 | DB 是真相源，与现有加载方向一致 |
 | 运行时状态 | 三态：Started/Stopped/Disabled | 区分运行时暂停和配置级停用 |
 | 安全约束 | 硬约束（禁止不安全操作） | 防止运行时误操作 |
@@ -33,11 +33,11 @@
 加载链路：`XmlAssetTypeLoader.load()`（类型定义）→ `DatabaseAssetLoader.load()`（实例加载）。
 
 具体机制：
-1. **驱动 XML 是类型定义源**：`XmlAssetTypeLoader` 按目录扫描发现类型 XML（驱动模块包内 `classpath*:com/systar/monitor/drivers/**/*.xml` 自注册 + `config/assets/generic-*.xml` + 可选 `systar.asset-type.scan-paths` 外置路径，详见 `xml-asset-type-config-design.md`），解析 Space/Device/Service/Probe/Control 类型定义、Java 实现类、属性名称/数据类型/默认值、version。
+1. **驱动 XML 是类型定义源**：`XmlAssetTypeLoader` 按目录扫描发现类型 XML（驱动模块包内 `classpath*:com/systar/monitor/drivers/**/*.xml` 自注册 + 可选 `systar.asset-type.scan-paths` 外置路径，详见 `xml-asset-type-config-design.md`），解析 Device/Service/Probe/Control 类型定义、Java 实现类、属性名称/数据类型/默认值、version。
 2. **XML 解析后注册到内存**：解析出的类型注册到 `AssetStore` 的各类 `AssetTypeManager`，运行时实例加载通过 `type_name` 在内存查找类型，而非从 DB 重建类型。
 3. **XML 同步 DB**：解析后的配置内容/version/属性 schema 同步到 `t_asset_type_config`。DB 表是 XML 的投影，用于资产实例 `type_name` 关联、前端 schema 查询、导入校验和版本比对审计，不是人工维护的主数据源。
 4. **XML 变更驱动类型变更**：开发人员修改 XML 中 Probe/Control 的属性类型、名称、默认值、实现类或 version 后，系统重启时重新解析 XML 并同步更新 DB `t_asset_type_config`。
-5. **实例属性后加载**：`DatabaseAssetLoader` 按 Space→Device→Service→Probe→Control 创建实例，`AssetEntityConverter` 应用主表字段和类型默认属性，再加载 `t_asset_attribute` 实例 KV 属性覆盖默认值，最后构建树。
+5. **实例属性后加载**：`DatabaseAssetLoader` 按 Device→Service→Probe→Control 创建实例，`AssetEntityConverter` 应用主表字段和类型默认属性，再加载 `t_asset_attribute` 实例 KV 属性覆盖默认值，最后构建树。
 
 **实现进度**：
 
@@ -67,7 +67,7 @@ Phase 2 已完成：CRUD Service、Event、Listener、Controller 扩展、运行
 - `XmlAssetTypeLoader` 在 `systar-server` 实现，作为 Spring Bean 注册
 - `MonitorServer.loadAssets()` 注入 `List<AssetTypeLoader>`，逐个调用
 - 未来驱动模块可提供自己的 `AssetTypeLoader` Bean 和 XML，无需修改核心代码
-- XML 路径：无主索引；驱动类型 XML 在 `core/systar-monitor-drivers` 的包 resources 内（放入即自注册），通用 Space/Device 类型在 `extensions/systar-server` 的 `config/assets/generic-*.xml`，外置扩展路径经 `systar.asset-type.scan-paths` 配置
+- XML 路径：无主索引；驱动类型 XML 在 `core/systar-monitor-drivers` 的包 resources 内（放入即自注册），服务端通用 Device 类型 XML 在 `extensions/systar-server/src/main/resources/config/assets/`（`generic-*.xml`，如 `generic-devices.xml`），外置扩展路径经 `systar.asset-type.scan-paths` 配置
 - CRUD 创建资产时，用户选择 `typeName` → 后端校验 typeName 已注册且 kind 匹配
 - 前端根据 typeName 获取属性定义，动态渲染表单
 - `DatabaseAssetLoader` 重构：从 `new ProbeType("probe-" + id)` 改为通过 typeName 查找注册的类型
@@ -99,7 +99,7 @@ Phase 2 已完成：CRUD Service、Event、Listener、Controller 扩展、运行
 **错误处理原则**（已实施）：
 
 采用 fail-fast 模式，所有配置错误和引用缺失均抛 `AssetException` 中断启动：
-- 类型 XML 根元素不在合法集合（Spaces/Devices/Services/ProbeList/ControlList）→ 抛异常
+- 类型 XML 根元素不在合法集合（Devices/Services/ProbeList/ControlList）→ 抛异常
 - 类型名同类别内跨扫描路径重复 → 抛异常
 - 匿名类型（无 Name 属性）→ 抛异常
 - Super type 未注册 → 抛异常
@@ -113,7 +113,7 @@ Phase 2 已完成：CRUD Service、Event、Listener、Controller 扩展、运行
 
 - Probe/Control CRUD 涉及 MonitorScheduler 的 schedule/unschedule/reschedule 操作（MonitorServer 已封装）
 - 运行时暂停（stop）不写 DB，重启后自动恢复；配置级停用（disable）写 DB，重启后保持停用
-- 禁用 Space/Device 时级联到所有子节点；启用时只恢复 Stopped 状态的子节点，跳过 Disabled 的
+- 禁用 Device 时级联到其下监测器/控制器；启用时只恢复 Stopped 状态的子节点，跳过 Disabled 的
 - 启用/禁用操作前需弹窗确认，展示级联影响范围
 - 扩展属性机制采用通用 KV 表 `t_asset_attribute`，同类资产可携带不同属性
 - AssetType 的 properties 定义决定了前端动态表单渲染的字段
@@ -133,7 +133,7 @@ Phase 2 已完成：CRUD Service、Event、Listener、Controller 扩展、运行
 AssetController（扩展：加 POST/PUT/DELETE）
     ↓
 AssetManagementService（新建：编排 DB + Event）
-    ├── 写入主表（t_space/t_device/t_probe/t_control）
+    ├── 写入子表（t_device/t_service/t_probe/t_control，按 kind 分表）
     ├── 写入统一表（t_asset）
     ├── 写入扩展属性（t_asset_attribute）
     └── 发布 AssetChangedEvent（Spring Event）
@@ -181,8 +181,8 @@ AssetCrudListener（新建：监听事件）
 ### 2.5 写入顺序与 ID 关联
 
 新增资产时，写入顺序（两阶段加载）：
-1. 写入子表（`t_space`/`t_device`/`t_probe`/`t_control`）获取子表 ID，`type` 列引用 `t_asset_type_config.type_name`
-2. 写入统一表 `t_asset`，`kind` 标识类型，`spaceId`/`deviceId`/`serviceId` 关联子表；`parent_id` 存**父资产行 id**（由创建请求中的运行时父 id 翻译，规则见 `ops-statistics-design.md` 第 3 节）
+1. 写入子表（`t_device`/`t_service`/`t_probe`/`t_control`）获取子表 ID，`type_name` 列引用 `t_asset_type_config.type_name`
+2. 写入统一表 `t_asset`，`kind` 标识类型，`deviceId`/`serviceId`/`probeId`/`controlId` 关联子表；`parent_id` 存**父资产行 id**（由创建请求中的运行时父 id 翻译，规则见 `ops-statistics-design.md` 第 3 节）
 3. 写入扩展属性 `t_asset_attribute`（如有）
 4. 发布 `AssetChangedEvent`
 
@@ -306,15 +306,14 @@ Started ──stop──→ Stopped ──start──→ Started
                   Stopped ──disable──→ Disabled
 ```
 
-Space/Device 不涉及调度器，只有 enabled 开关 + 级联传导。
+Device/Service 不涉及调度器，只有 enabled 开关 + 级联传导。
 
 ---
 
 ## 5. 级联规则
 
 **禁用（向下级联全部）**：
-- 禁用 Space → 递归所有子节点 → Disabled
-- 禁用 Device → 递归其下 Service/Probe/Control → Disabled
+- 禁用 Device → 递归其下监测器/控制器（Probe/Control）→ Disabled
 - 确认弹窗展示影响范围
 
 **启用（智能级联）**：
@@ -389,19 +388,18 @@ CREATE TABLE IF NOT EXISTS t_asset_type_config (
 
 ### 7.3 现有表变更：新增 `type_name` 列
 
-资产的 `type_name` 列引用 `t_asset_type_config` 的类型名，决定驱动实例化。原 `t_probe`、`t_control`、`t_device`、`t_space`、`t_service` 均缺少此列。
+资产的 `type_name` 列引用 `t_asset_type_config` 的类型名，决定驱动实例化。`t_probe`、`t_control`、`t_device`、`t_service` 均已补上此列（原空间表 `t_space` 已随"去 Space"重构删除，不在变更范围）。
 
-**新增列**（所有 5 张子表）：
+**新增列**（所有 4 张子表）：
 
 ```sql
 ALTER TABLE t_probe    ADD COLUMN type_name VARCHAR(100) NULL COMMENT '引用 t_asset_type_config.type_name';
 ALTER TABLE t_control  ADD COLUMN type_name VARCHAR(100) NULL;
 ALTER TABLE t_device   ADD COLUMN type_name VARCHAR(100) NULL;
-ALTER TABLE t_space    ADD COLUMN type_name VARCHAR(100) NULL;
 ALTER TABLE t_service  ADD COLUMN type_name VARCHAR(100) NULL;
 ```
 
-**Entity 变更**：`ProbeEntity`、`ControlEntity`、`DeviceEntity`、`SpaceEntity`、`MonitorServiceEntity` 各新增 `private String typeName;` 字段。
+**Entity 变更**：`ProbeEntity`、`ControlEntity`、`DeviceEntity`、`MonitorServiceEntity` 各新增 `private String typeName;` 字段。
 
 **`DatabaseAssetLoader` 变更**：加载时从 `typeName` 查找 `AssetTypeManager` 中注册的类型，替代当前的匿名类型创建。
 
@@ -471,7 +469,7 @@ ALTER TABLE t_service  ADD COLUMN type_name VARCHAR(100) NULL;
 
 1. `./mvnw test -o` — 全量后端单元测试通过
 2. CRUD 端点 Controller 单元测试（每种类型的增删改）
-3. 级联逻辑测试（禁用 Space → 子节点全停；启用 → 只恢复 Stopped）
+3. 级联逻辑测试（禁用 Device → 子节点全停；启用 → 只恢复 Stopped）
 4. 约束校验测试（有子资产不能删、调度中不能删、关联告警不能删）
 5. 三态转换测试（Started→Stopped→Started, Started→Disabled→Started）
 6. 前端 `npm run dev` → 资产管理页 CRUD 全流程
@@ -492,7 +490,7 @@ ALTER TABLE t_service  ADD COLUMN type_name VARCHAR(100) NULL;
 
 | 规则 | Systar 实现 |
 |------|------------|
-| 导入顺序 | Space → Device → Service → Probe/Control |
+| 导入顺序 | Device → Service → Probe/Control |
 | 类型标识 | 不依赖文件名，Excel 内用 `kind` 列标识 |
 | ID 生成 | 使用 `AssetIdGenerator`（高16位站点编码+序号） |
 | 父级解析 | 通过 parentId 或 parentName 列匹配 |
@@ -530,8 +528,7 @@ ALTER TABLE t_service  ADD COLUMN type_name VARCHAR(100) NULL;
 | type | 否 | 数据类型 |
 | `{扩展属性名}` | 否 | 列标题含 `{}` 的写入 KV 表 |
 
-**Space 列**：kind, name, caption, parent
-**Device 列**：kind, name, caption, parent, catalog, vendor, model, serialNumber
+**Device 列**：kind, name, caption, catalog, vendor, model, serialNumber
 
 ### 11.4 导入流程
 
@@ -543,7 +540,7 @@ ALTER TABLE t_service  ADD COLUMN type_name VARCHAR(100) NULL;
    - io 与 kind 一致性（如 io=AI 但 kind=CONTROL → 警告，不阻止，因为映射由驱动决定）
    - 必填字段完整性
 3. **前端展示预览** → 表格展示每行数据 + 校验状态（通过/失败/警告）
-4. **用户确认** → 按顺序导入（Space → Device → Service → Probe/Control）
+4. **用户确认** → 按顺序导入（Device → Service → Probe/Control）
 5. **批量写入** → 每条记录：DB 写入 + 发布 Event 同步内存
 6. **返回结果** → 成功/跳过/失败数量
 

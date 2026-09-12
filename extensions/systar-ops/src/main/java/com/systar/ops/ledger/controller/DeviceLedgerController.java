@@ -44,15 +44,14 @@ public class DeviceLedgerController {
     public PagedResult<DeviceDto> list(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) Integer spaceId,
             @RequestParam(required = false) Short catalog,
             @RequestParam(required = false) String lifecycleStatus) {
-        return deviceLedgerService.getDeviceLedger(page, size, spaceId, catalog, lifecycleStatus);
+        return deviceLedgerService.getDeviceLedger(page, size, catalog, lifecycleStatus);
     }
 
     @GetMapping("/stats")
     public Map<String, Object> stats() {
-        PagedResult<DeviceDto> devices = deviceLedgerService.getDeviceLedger(1, Integer.MAX_VALUE, null, null, null);
+        PagedResult<DeviceDto> devices = deviceLedgerService.getDeviceLedger(1, Integer.MAX_VALUE, null, null);
         long inService = devices.records().stream()
                 .filter(device -> "IN_SERVICE".equals(device.lifecycleStatus()))
                 .count();

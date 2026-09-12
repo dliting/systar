@@ -1,8 +1,8 @@
 package com.systar.monitor.asset;
 
+import com.systar.monitor.asset.type.Device;
+import com.systar.monitor.asset.type.DeviceType;
 import com.systar.monitor.asset.type.ProbeType;
-import com.systar.monitor.asset.type.Space;
-import com.systar.monitor.asset.type.SpaceType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -124,8 +124,8 @@ class AssetTest {
     @Test
     @DisplayName("setState bubbles more-severe state to parent")
     void setStateBubblesUpToParent() {
-        Space parent = new Space();
-        parent.init(new SpaceType("root"), 100, "rootSpace");
+        Device parent = new Device();
+        parent.init(new DeviceType("rootDevice"), 100, "rootDevice");
 
         probe.setParent(parent);
         probe.setState(AssetState.ERROR);
@@ -137,8 +137,8 @@ class AssetTest {
     @DisplayName("setState triggers recompute when child becomes less severe than parent")
     void setStateTriggersRecomputeOnLessSevere() {
         // Set up parent with two children
-        Space parent = new Space();
-        parent.init(new SpaceType("root"), 100, "rootSpace");
+        Device parent = new Device();
+        parent.init(new DeviceType("rootDevice"), 100, "rootDevice");
 
         Probe child1 = new Probe();
         child1.init(type, 1, "c1");
@@ -176,8 +176,8 @@ class AssetTest {
     @Test
     @DisplayName("setParent assigns parent")
     void setParentWorks() {
-        Space parent = new Space();
-        parent.init(new SpaceType("root"), 100, "rootSpace");
+        Device parent = new Device();
+        parent.init(new DeviceType("rootDevice"), 100, "rootDevice");
 
         probe.setParent(parent);
         assertThat(probe.getParent()).isSameAs(parent);

@@ -327,7 +327,7 @@ public class MyProtoProbe extends Probe {
 启动（`ServerLifeCycle` 编排，详见 `docs/design/architecture.md` §6.2）：
 
 1. `XmlAssetTypeLoader` 扫描类型 XML → 注册进 `AssetStore` + 同步 `t_asset_type_config`
-2. `DatabaseAssetLoader` 按序加载资产实例（Space → Device → Service → Probe → Control），每实例 `loadAttributes` + `bindProperties()`
+2. `DatabaseAssetLoader` 按序加载资产实例（Device → Service → Probe → Control），每实例 `loadAttributes` + `bindProperties()`
 3. `MonitorServer` 启动：被动服务 `setResultDispatcher` → `start()` → 注册被动路由；随后调度器轮询主动监控器
 
 运行中：

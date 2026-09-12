@@ -1,5 +1,9 @@
 package com.systar.ops.statistics.service;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.systar.ops.inspection.InspectionTaskStatus;
 import com.systar.ops.inspection.entity.InspectionResultEntity;
@@ -16,6 +20,7 @@ import com.systar.ops.workorder.mapper.WorkOrderMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -41,11 +46,15 @@ import static org.assertj.core.api.Assertions.*;
 @Timeout(value = 3, unit = TimeUnit.MINUTES)
 class StatisticsServiceTest {
 
-    private static final int TOP_DEVICE_ID        = 9101;
-    private static final int TOP_DEVICE_ASSET_ID  = 9101;
-    private static final int TOP_PROBE_ASSET_ID   = 9102;
-    private static final int TOP_PROBE_ID         = 9201;
-    private static final String TOP_DEVICE_NAME   = "stats_top_dev";
+    private static final int TOP_DEVICE_ID             = 9101;
+    private static final int TOP_DEVICE_ASSET_ID       = 9101;
+    private static final int TOP_PROBE_ASSET_ID        = 9102;
+    private static final int TOP_PROBE_ID              = 9201;
+    private static final String TOP_DEVICE_NAME        = "stats_top_dev";
+    private static final int UNKNOWN_KIND_DEVICE_ID    = 9301;
+    private static final int UNKNOWN_KIND_ASSET_ID     = 9302;
+    private static final int UNKNOWN_KIND_PROBE_ID     = 9303;
+    private static final int UNKNOWN_ASSET_KIND_CODE   = 99;
 
     @Autowired
     private StatisticsService statisticsService;
@@ -84,7 +93,7 @@ class StatisticsServiceTest {
 
     @Test
     void validateQuery_shouldThrowWhenStartAfterEnd() {
-        assertThatThrownBy(() -> new StatisticsQuery(today, yesterday, null, null, "DAY"))
+        assertThatThrownBy(() -> new StatisticsQuery(today, yesterday, null, "DAY"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("endDate must be after startDate");
     }
@@ -92,28 +101,28 @@ class StatisticsServiceTest {
     @Test
     void validateQuery_shouldThrowWhenRangeExceeds365Days() {
         assertThatThrownBy(() -> new StatisticsQuery(
-                today.minusDays(366), today, null, null, "DAY"))
+                today.minusDays(366), today, null, "DAY"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("365");
     }
 
     @Test
     void validateQuery_shouldThrowWhenNullDates() {
-        assertThatThrownBy(() -> new StatisticsQuery(null, today, null, null, "DAY"))
+        assertThatThrownBy(() -> new StatisticsQuery(null, today, null, "DAY"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void validateQuery_shouldThrowOnInvalidGranularity() {
         assertThatThrownBy(() -> new StatisticsQuery(
-                yesterday, today, null, null, "YEARLY"))
+                yesterday, today, null, "YEARLY"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Invalid granularity");
     }
 
     @Test
     void validateQuery_shouldDefaultGranularityToDay() {
-        StatisticsQuery query = new StatisticsQuery(yesterday, today, null, null, null);
+        StatisticsQuery query = new StatisticsQuery(yesterday, today, null, null);
         assertThat(query.granularity()).isEqualTo("DAY");
     }
 
@@ -125,7 +134,7 @@ class StatisticsServiceTest {
         createWorkOrder(WorkOrderStatus.CREATED, yesterday);
         createWorkOrder(WorkOrderStatus.CLOSED, yesterday);
 
-        StatisticsQuery query = new StatisticsQuery(threeDaysAgo, today, null, null, "DAY");
+        StatisticsQuery query = new StatisticsQuery(threeDaysAgo, today, null, "DAY");
         WorkOrderStatsVO vo = statisticsService.getWorkOrderStats(query);
 
         assertThat(vo.getByStatus()).containsEntry("CREATED", 2L);
@@ -140,7 +149,7 @@ class StatisticsServiceTest {
         wo.setClosedAt(LocalDateTime.now().minusHours(5));
         workOrderMapper.updateById(wo);
 
-        StatisticsQuery query = new StatisticsQuery(threeDaysAgo, today, null, null, "DAY");
+        StatisticsQuery query = new StatisticsQuery(threeDaysAgo, today, null, "DAY");
         WorkOrderStatsVO vo = statisticsService.getWorkOrderStats(query);
 
         assertThat(vo.getMttrHours()).isGreaterThan(0);
@@ -150,7 +159,7 @@ class StatisticsServiceTest {
     void getWorkOrderStats_shouldCalculateAging() {
         createWorkOrder(WorkOrderStatus.CREATED, threeDaysAgo.minusDays(5)); // over 7d
 
-        StatisticsQuery query = new StatisticsQuery(threeDaysAgo, today, null, null, "DAY");
+        StatisticsQuery query = new StatisticsQuery(threeDaysAgo, today, null, "DAY");
         WorkOrderStatsVO vo = statisticsService.getWorkOrderStats(query);
 
         assertThat(vo.getAgingDistribution()).containsKey("within24h");
@@ -161,7 +170,7 @@ class StatisticsServiceTest {
     void getWorkOrderStats_shouldReturnZerosForEmptyRange() {
         // Use a date range far in the past with no data
         StatisticsQuery query = new StatisticsQuery(
-                today.minusDays(100), today.minusDays(90), null, null, "DAY");
+                today.minusDays(100), today.minusDays(90), null, "DAY");
         WorkOrderStatsVO vo = statisticsService.getWorkOrderStats(query);
 
         assertThat(vo.getByStatus()).isEmpty();
@@ -176,7 +185,7 @@ class StatisticsServiceTest {
         InspectionTaskEntity t1 = createInspectionTask(InspectionTaskStatus.COMPLETED, yesterday, 1L);
         InspectionTaskEntity t2 = createInspectionTask(InspectionTaskStatus.PENDING, yesterday, 2L);
 
-        StatisticsQuery query = new StatisticsQuery(threeDaysAgo, today, null, null, "DAY");
+        StatisticsQuery query = new StatisticsQuery(threeDaysAgo, today, null, "DAY");
         InspectionStatsVO vo = statisticsService.getInspectionStats(query);
 
         assertThat(vo.getTotalTasks()).isEqualTo(2);
@@ -190,7 +199,7 @@ class StatisticsServiceTest {
         createInspectionResult(task.getId(), "ABNORMAL", yesterday, 1L);
         createInspectionResult(task.getId(), "NORMAL", yesterday, 2L);
 
-        StatisticsQuery query = new StatisticsQuery(threeDaysAgo, today, null, null, "DAY");
+        StatisticsQuery query = new StatisticsQuery(threeDaysAgo, today, null, "DAY");
         InspectionStatsVO vo = statisticsService.getInspectionStats(query);
 
         assertThat(vo.getAnomalyCount()).isEqualTo(1);
@@ -199,7 +208,7 @@ class StatisticsServiceTest {
     @Test
     void getInspectionStats_shouldReturnZerosForEmptyRange() {
         StatisticsQuery query = new StatisticsQuery(
-                today.minusDays(100), today.minusDays(90), null, null, "DAY");
+                today.minusDays(100), today.minusDays(90), null, "DAY");
         InspectionStatsVO vo = statisticsService.getInspectionStats(query);
 
         assertThat(vo.getTotalTasks()).isEqualTo(0);
@@ -214,7 +223,7 @@ class StatisticsServiceTest {
         createMaintenanceRecord("MAINTENANCE", new BigDecimal("200.00"), yesterday);
         createMaintenanceRecord("REPAIR", new BigDecimal("100.00"), yesterday);
 
-        StatisticsQuery query = new StatisticsQuery(threeDaysAgo, today, null, null, "DAY");
+        StatisticsQuery query = new StatisticsQuery(threeDaysAgo, today, null, "DAY");
         MaintenanceStatsVO vo = statisticsService.getMaintenanceStats(query);
 
         assertThat(vo.getTotalRecords()).isEqualTo(3);
@@ -226,7 +235,7 @@ class StatisticsServiceTest {
     @Test
     void getMaintenanceStats_shouldReturnZerosForEmptyRange() {
         StatisticsQuery query = new StatisticsQuery(
-                today.minusDays(100), today.minusDays(90), null, null, "DAY");
+                today.minusDays(100), today.minusDays(90), null, "DAY");
         MaintenanceStatsVO vo = statisticsService.getMaintenanceStats(query);
 
         assertThat(vo.getTotalRecords()).isEqualTo(0);
@@ -237,7 +246,7 @@ class StatisticsServiceTest {
 
     @Test
     void getAlarmStats_shouldReturnEmptyForNoData() {
-        StatisticsQuery query = new StatisticsQuery(threeDaysAgo, today, null, null, "DAY");
+        StatisticsQuery query = new StatisticsQuery(threeDaysAgo, today, null, "DAY");
         AlarmStatsVO vo = statisticsService.getAlarmStats(query);
 
         assertThat(vo.getTotalAlarms()).isEqualTo(0);
@@ -254,7 +263,7 @@ class StatisticsServiceTest {
         insertAlarmHistoryFixture();
 
         AlarmStatsVO vo = statisticsService.getAlarmStats(
-                new StatisticsQuery(threeDaysAgo, today, null, null, "DAY"));
+                new StatisticsQuery(threeDaysAgo, today, null, "DAY"));
 
         assertThat(vo.getTopDevices()).hasSize(1);
         assertThat(vo.getTopDevices().get(0).deviceId()).isEqualTo(TOP_DEVICE_ID);
@@ -268,7 +277,7 @@ class StatisticsServiceTest {
         insertAlarmHistoryFixture();
 
         Map<String, Object> history = statisticsService.getDeviceHistory(
-                new StatisticsQuery(threeDaysAgo, today, null, null, "DAY"), TOP_DEVICE_ID);
+                new StatisticsQuery(threeDaysAgo, today, null, "DAY"), TOP_DEVICE_ID);
 
         // H2 uppercases unquoted column aliases; StatisticsService.getValue is
         // the shared case-insensitive lookup used by production code paths.
@@ -307,7 +316,7 @@ class StatisticsServiceTest {
                 TOP_DEVICE_ID, yesterday.atTime(10, 0));
 
         Map<String, Object> history = statisticsService.getDeviceHistory(
-                new StatisticsQuery(threeDaysAgo, today, null, null, "DAY"), TOP_DEVICE_ID);
+                new StatisticsQuery(threeDaysAgo, today, null, "DAY"), TOP_DEVICE_ID);
 
         assertThat(((Number) StatisticsService.getValue(history, "alarmCount")).longValue())
                 .isEqualTo(2);
@@ -316,6 +325,38 @@ class StatisticsServiceTest {
         // ΣC = 60 + 40 = 100; the flat-join bug reported 2 × 100 = 200.
         assertThat(((Number) StatisticsService.getValue(history, "totalMaintenanceCost")).doubleValue())
                 .isEqualTo(100.0);
+    }
+
+    // ==================== Unknown asset kind ====================
+
+    @Test
+    void getAlarmStats_unknownAssetKindCode_logsWarnAndStillMapsRow() {
+        Logger serviceLogger = (Logger) LoggerFactory.getLogger(StatisticsService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        serviceLogger.addAppender(appender);
+        Level originalLevel = serviceLogger.getLevel();
+        serviceLogger.setLevel(Level.DEBUG);
+        try {
+            insertUnknownKindAlarmFixture();
+
+            AlarmStatsVO vo = statisticsService.getAlarmStats(
+                    new StatisticsQuery(threeDaysAgo, today, null, "DAY"));
+
+            // The alarm row is still counted; the unknown-kind asset yields no
+            // resolvable top device, but mapping must not blow up.
+            assertThat(vo.getTotalAlarms()).isEqualTo(1);
+            assertThat(vo.getTopDevices()).isEmpty();
+            assertThat(appender.list).anySatisfy(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .contains(String.valueOf(UNKNOWN_ASSET_KIND_CODE))
+                        .contains(String.valueOf(UNKNOWN_KIND_ASSET_ID));
+            });
+        } finally {
+            serviceLogger.detachAppender(appender);
+            serviceLogger.setLevel(originalLevel);
+        }
     }
 
     // ==================== Dashboard ====================
@@ -355,7 +396,7 @@ class StatisticsServiceTest {
         createWorkOrder(WorkOrderStatus.CREATED, yesterday);
         createWorkOrder(WorkOrderStatus.CREATED, yesterday);
 
-        StatisticsQuery query = new StatisticsQuery(yesterday, today, null, null, "DAY");
+        StatisticsQuery query = new StatisticsQuery(yesterday, today, null, "DAY");
         WorkOrderStatsVO vo = statisticsService.getWorkOrderStats(query);
 
         assertThat(vo.getCurrentPeriodTotal()).isEqualTo(2);
@@ -369,7 +410,7 @@ class StatisticsServiceTest {
         createWorkOrder(WorkOrderStatus.CREATED, yesterday);
         createWorkOrder(WorkOrderStatus.CREATED, yesterday);
 
-        StatisticsQuery query = new StatisticsQuery(threeDaysAgo, today, null, null, "WEEK");
+        StatisticsQuery query = new StatisticsQuery(threeDaysAgo, today, null, "WEEK");
         WorkOrderStatsVO vo = statisticsService.getWorkOrderStats(query);
 
         assertThat(vo.getTrend()).isNotEmpty();
@@ -379,7 +420,7 @@ class StatisticsServiceTest {
 
     @Test
     void getAlarmDetail_shouldReturnFilteredList() {
-        StatisticsQuery query = new StatisticsQuery(threeDaysAgo, today, null, null, "DAY");
+        StatisticsQuery query = new StatisticsQuery(threeDaysAgo, today, null, "DAY");
         Map<String, Object> result = statisticsService.getAlarmDetail(query, 1, 1, 20);
         assertThat(result).containsKeys("records", "total", "page", "size");
     }
@@ -387,14 +428,14 @@ class StatisticsServiceTest {
     @Test
     void getWorkOrderDetail_shouldReturnFilteredList() {
         createWorkOrder(WorkOrderStatus.CREATED, yesterday);
-        StatisticsQuery query = new StatisticsQuery(threeDaysAgo, today, null, null, "DAY");
+        StatisticsQuery query = new StatisticsQuery(threeDaysAgo, today, null, "DAY");
         Map<String, Object> result = statisticsService.getWorkOrderDetail(query, "CREATED", 1, 20);
         assertThat(result).containsKeys("records", "total", "page", "size");
     }
 
     @Test
     void getDeviceHistory_shouldReturnRuntimeData() {
-        StatisticsQuery query = new StatisticsQuery(threeDaysAgo, today, null, null, "DAY");
+        StatisticsQuery query = new StatisticsQuery(threeDaysAgo, today, null, "DAY");
         Map<String, Object> history = statisticsService.getDeviceHistory(query, 1001);
         assertThat(history).containsKeys("deviceId", "onlineDays", "totalDays", "onlineRate");
     }
@@ -408,8 +449,8 @@ class StatisticsServiceTest {
      */
     private void insertAlarmHistoryFixture() {
         jdbcTemplate.update(
-                "INSERT INTO t_device (id, name, caption, parent, lifecycle_status) "
-                        + "VALUES (?, ?, ?, 0, 'IN_SERVICE')",
+                "INSERT INTO t_device (id, name, caption, lifecycle_status) "
+                        + "VALUES (?, ?, ?, 'IN_SERVICE')",
                 TOP_DEVICE_ID, TOP_DEVICE_NAME, "统计回归设备");
         jdbcTemplate.update(
                 "INSERT INTO t_asset (id, name, kind, device_id) VALUES (?, ?, 1, ?)",
@@ -428,6 +469,32 @@ class StatisticsServiceTest {
                         + "(log_id, caption, state, auto, alarm_time, recovered, warn_id, device_id) "
                         + "VALUES ((SELECT MAX(id) FROM t_error_message_log), ?, 2, 1, ?, 1, 3, ?)",
                 "PDU L1电压偏低告警", alarmTime, TOP_DEVICE_ID);
+    }
+
+    /**
+     * Seeds one device whose asset row carries an unknown (corrupt) kind code,
+     * plus a single handled alarm routed through that asset's probe id.
+     */
+    private void insertUnknownKindAlarmFixture() {
+        jdbcTemplate.update(
+                "INSERT INTO t_device (id, name, caption, lifecycle_status) "
+                        + "VALUES (?, ?, ?, 'IN_SERVICE')",
+                UNKNOWN_KIND_DEVICE_ID, "stats_unknown_dev", "统计未知类型设备");
+        jdbcTemplate.update(
+                "INSERT INTO t_asset (id, name, kind, device_id, probe_id) VALUES (?, ?, ?, ?, ?)",
+                UNKNOWN_KIND_ASSET_ID, "stats_unknown_asset", UNKNOWN_ASSET_KIND_CODE,
+                UNKNOWN_KIND_DEVICE_ID, UNKNOWN_KIND_PROBE_ID);
+        LocalDateTime alarmTime = yesterday.atTime(15, 0);
+        jdbcTemplate.update(
+                "INSERT INTO t_error_message_log "
+                        + "(asset_id, monitor_name, error_message, \"value\", state, warn_id, time) "
+                        + "VALUES (?, 'L1电压', 'PDU L1电压偏低', '197', 2, 3, ?)",
+                UNKNOWN_KIND_PROBE_ID, alarmTime);
+        jdbcTemplate.update(
+                "INSERT INTO t_alarm_message "
+                        + "(log_id, caption, state, auto, alarm_time, recovered, warn_id, device_id) "
+                        + "VALUES ((SELECT MAX(id) FROM t_error_message_log), ?, 2, 1, ?, 1, 3, ?)",
+                "PDU L1电压偏低告警", alarmTime, UNKNOWN_KIND_DEVICE_ID);
     }
 
     private WorkOrderEntity createWorkOrder(WorkOrderStatus status, LocalDate createdDate) {

@@ -56,7 +56,7 @@ class AssetTypeManagerTest {
     @Test
     @DisplayName("getAll returns all types in insertion order")
     void getAll() {
-        AssetType t1 = new AssetType("a", AssetKind.SPACE);
+        AssetType t1 = new AssetType("a", AssetKind.DEVICE);
         AssetType t2 = new AssetType("b", AssetKind.DEVICE);
         AssetType t3 = new AssetType("c", AssetKind.PROBE);
         manager.register(t1);
@@ -77,7 +77,7 @@ class AssetTypeManagerTest {
     @DisplayName("size returns correct count")
     void size() {
         assertThat(manager.size()).isZero();
-        manager.register(new AssetType("a", AssetKind.SPACE));
+        manager.register(new AssetType("a", AssetKind.SERVICE));
         manager.register(new AssetType("b", AssetKind.DEVICE));
         assertThat(manager.size()).isEqualTo(2);
     }
@@ -87,9 +87,9 @@ class AssetTypeManagerTest {
     @Test
     @DisplayName("AssetType isCompound/isMonitor based on kind")
     void assetTypeFlags() {
-        AssetType spaceType = new AssetType("s", AssetKind.SPACE);
-        assertThat(spaceType.isCompound()).isTrue();
-        assertThat(spaceType.isMonitor()).isFalse();
+        AssetType deviceType = new AssetType("s", AssetKind.DEVICE);
+        assertThat(deviceType.isCompound()).isTrue();
+        assertThat(deviceType.isMonitor()).isFalse();
 
         AssetType probeType = new AssetType("p", AssetKind.PROBE);
         assertThat(probeType.isCompound()).isFalse();
@@ -122,13 +122,6 @@ class AssetTypeManagerTest {
     // ---- Specific type constructors ----
 
     @Test
-    @DisplayName("SpaceType sets kind to SPACE")
-    void spaceTypeKind() {
-        SpaceType st = new SpaceType("mySpace");
-        assertThat(st.getKind()).isEqualTo(AssetKind.SPACE);
-    }
-
-    @Test
     @DisplayName("DeviceType sets kind to DEVICE")
     void deviceTypeKind() {
         DeviceType dt = new DeviceType("myDevice");
@@ -156,15 +149,7 @@ class AssetTypeManagerTest {
         assertThat(st.getKind()).isEqualTo(AssetKind.SERVICE);
     }
 
-    // ---- Space and Device concrete asset tests ----
-
-    @Test
-    @DisplayName("Space kind is SPACE")
-    void spaceKind() {
-        Space space = new Space();
-        space.init(new SpaceType("st"), 1, "s1");
-        assertThat(space.getKind()).isEqualTo(AssetKind.SPACE);
-    }
+    // ---- Device concrete asset tests ----
 
     @Test
     @DisplayName("Device kind is DEVICE")

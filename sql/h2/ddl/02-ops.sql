@@ -12,7 +12,6 @@ CREATE TABLE IF NOT EXISTS t_work_order (
     alarm_message_id   INT             NULL,
     inspection_task_id BIGINT          NULL,
     device_id          INT             NOT NULL,
-    space_id           INT             NULL,
     priority           TINYINT         NOT NULL,
     status             VARCHAR(20)     NOT NULL DEFAULT 'CREATED',
     assignee_id        BIGINT          NULL,
@@ -29,7 +28,6 @@ CREATE TABLE IF NOT EXISTS t_work_order (
 
 CREATE INDEX IF NOT EXISTS i_wo_status ON t_work_order (status);
 CREATE INDEX IF NOT EXISTS i_wo_device ON t_work_order (device_id);
-CREATE INDEX IF NOT EXISTS i_wo_space ON t_work_order (space_id);
 CREATE INDEX IF NOT EXISTS i_wo_assignee ON t_work_order (assignee_id);
 CREATE INDEX IF NOT EXISTS i_wo_alarm ON t_work_order (alarm_message_id);
 CREATE INDEX IF NOT EXISTS i_wo_created ON t_work_order (created_at);

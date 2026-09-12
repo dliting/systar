@@ -2,7 +2,6 @@ package com.systar.monitor.control;
 
 import com.systar.monitor.asset.*;
 import com.systar.monitor.asset.type.ControlType;
-import com.systar.monitor.asset.type.SpaceType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,7 +33,6 @@ class TimeControlServiceTest {
     @BeforeEach
     void setUp() {
         store = new AssetStore();
-        store.createRoot(new SpaceType("root"), "root");
         service = new TimeControlService(store);
     }
 

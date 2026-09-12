@@ -25,7 +25,6 @@ class VirtualProbeTest {
     @BeforeEach
     void setUp() {
         store = new AssetStore();
-        store.createRoot(new com.systar.monitor.asset.type.SpaceType("root"), "root");
     }
 
     // ======================== detect() ========================

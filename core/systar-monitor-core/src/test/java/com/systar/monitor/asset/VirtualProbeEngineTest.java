@@ -28,7 +28,6 @@ class VirtualProbeEngineTest {
     @BeforeEach
     void setUp() {
         store = new AssetStore();
-        store.createRoot(new com.systar.monitor.asset.type.SpaceType("root"), "root");
         dispatcher = mock(ResultDispatcher.class);
         engine = new VirtualProbeEngine(store, dispatcher);
     }

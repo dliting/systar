@@ -1,67 +1,23 @@
 <template>
   <div class="app-container tree-sidebar-manage-wrap">
-    <tree-panel
-      title="资产树"
-      :tree-data="treeData"
-      :tree-props="{ children: 'children', label: 'caption' }"
-      search-placeholder="搜索资产名称"
-      storage-key="iot-ops-sidebar-width"
-      :default-expand-all="true"
-      @node-click="handleNodeClick"
-      @refresh="getTree"
-      ref="treeRef"
-    >
-      <template #node="{ data }">
-        <span class="tree-node">
-          <el-icon class="node-icon">
-            <FolderOpened v-if="data.kind === 'SPACE'" />
-            <Monitor v-else-if="data.kind === 'DEVICE'" />
-            <Odometer v-else-if="data.kind === 'PROBE'" />
-            <Setting v-else-if="data.kind === 'CONTROL'" />
-            <Service v-else-if="data.kind === 'SERVICE'" />
-            <Document v-else />
-          </el-icon>
-          <span class="node-label" :title="data.caption">{{ data.caption || data.name }}</span>
-          <el-tag
-            v-if="data.state"
-            :type="stateTagType(data.state)"
-            size="small"
-            class="node-state-tag"
-          >{{ data.stateCaption || data.state }}</el-tag>
-        </span>
-      </template>
-    </tree-panel>
+    <AssetTreePanel ref="assetTreePanelRef" @node-click="handleNodeClick" />
 
     <div class="tree-sidebar-content">
       <div class="content-inner">
         <el-empty v-if="!selectedNode" description="请在左侧选择资产节点" />
 
         <template v-else>
-          <Skeleton v-if="!detail.id" variant="card" animated />
+          <Skeleton v-if="isAssetSelection && !detail.id" variant="card" animated />
           <template v-else>
-          <div class="breadcrumb-bar">
+          <div v-if="breadcrumbs.length > 0" class="breadcrumb-bar">
             <span
               v-for="(seg, i) in breadcrumbs"
               :key="i"
               class="breadcrumb-seg"
-              :class="{ clickable: i < breadcrumbs.length - 1 }"
-              @click="i < breadcrumbs.length - 1 && navigateTo(seg.id)"
             >
               {{ seg.caption || seg.name }}
               <el-icon v-if="i < breadcrumbs.length - 1" class="breadcrumb-arrow"><ArrowRight /></el-icon>
             </span>
-            <el-dropdown v-if="siblingNodes.length > 0" trigger="click" :teleported="false" @command="navigateTo">
-              <span class="breadcrumb-seg clickable dropdown-trigger">▾</span>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item
-                    v-for="sib in siblingNodes"
-                    :key="sib.id"
-                    :command="sib.id"
-                  >{{ sib.caption || sib.name }}</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
           </div>
 
           <!-- Toolbar -->
@@ -71,8 +27,8 @@
               type="primary" size="small" icon="Plus"
               @click="openCreateDialog"
             >新增子节点</el-button>
-            <el-button size="small" icon="Edit" @click="openEditDialog">编辑</el-button>
-            <el-button size="small" type="danger" icon="Delete" @click="handleDelete">删除</el-button>
+            <el-button v-if="isAssetSelection" size="small" icon="Edit" @click="openEditDialog">编辑</el-button>
+            <el-button v-if="isAssetSelection" size="small" type="danger" icon="Delete" @click="handleDelete">删除</el-button>
             <el-divider direction="vertical" />
             <el-button v-if="canEnable" size="small" type="success" icon="VideoPlay" @click="handleOperate('enable')">启用</el-button>
             <el-button v-if="canDisable" size="small" type="warning" icon="VideoPause" @click="handleOperate('disable')">禁用</el-button>
@@ -83,7 +39,7 @@
           <!-- Card Dashboard -->
           <div class="card-dashboard">
             <!-- Basic Info Card -->
-            <el-card shadow="never" class="info-card">
+            <el-card v-if="isAssetSelection" shadow="never" class="info-card">
               <template #header>
                 <div class="card-header">
                   <span>{{ detail.caption || detail.name }}</span>
@@ -146,7 +102,7 @@
               </div>
             </el-card>
 
-            <!-- Children Card (Space/Device only) -->
+            <!-- Children Card (group / container nodes) -->
             <el-card v-if="isCompound" shadow="never" class="children-card">
               <template #header>
                 <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
@@ -314,7 +270,6 @@
         <div v-show="wizardStep === 1">
           <el-form-item label="类型" prop="kind">
             <el-select v-model="form.kind" placeholder="选择资产类型" style="width:100%" @change="onKindChange">
-              <el-option label="空间 (Space)" value="SPACE" />
               <el-option label="设备 (Device)" value="DEVICE" v-if="isCompound" />
               <el-option label="服务 (Service)" value="SERVICE" v-if="isCompound" />
               <el-option label="监测器 (Probe)" value="PROBE" v-if="isCompound" />
@@ -336,6 +291,21 @@
           <el-form-item label="标题" prop="caption">
             <el-input v-model="form.caption" placeholder="显示标题" />
           </el-form-item>
+          <el-form-item
+            v-if="isMonitorKind"
+            label="父设备"
+            prop="parentId"
+            :rules="[{ required: true, message: '请选择父设备', trigger: 'change' }]"
+          >
+            <el-select v-model="form.parentId" filterable placeholder="选择父设备" style="width:100%">
+              <el-option v-for="d in deviceList" :key="d.id" :label="d.id + ' — ' + (d.caption || d.name)" :value="d.id" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="isGroupMemberKind" label="所属分组">
+            <el-select v-model="form.groupIds" multiple clearable placeholder="选择所属分组（可多选）" style="width:100%">
+              <el-option v-for="g in groupOptions" :key="g.id" :label="g.label" :value="g.id" />
+            </el-select>
+          </el-form-item>
         </div>
 
         <!-- Step 3: Properties -->
@@ -343,13 +313,6 @@
           <el-divider content-position="left">属性</el-divider>
 
           <!-- Kind-specific fields -->
-          <template v-if="form.kind === 'SPACE'">
-            <el-form-item label="面积"><el-input-number v-model="form.area" :min="0" style="width:100%"/></el-form-item>
-            <el-form-item label="排序号"><el-input-number v-model="form.sequence" :min="0" style="width:100%"/></el-form-item>
-            <el-form-item label="客户端可见">
-              <el-switch v-model="form.showInClient" active-text="是" inactive-text="否"/>
-            </el-form-item>
-          </template>
           <template v-if="form.kind === 'DEVICE'">
             <el-form-item label="型号"><el-input v-model="form.model" placeholder="设备型号"/></el-form-item>
             <el-form-item label="序列号"><el-input v-model="form.serialNumber" placeholder="序列号"/></el-form-item>
@@ -482,7 +445,6 @@
             <el-descriptions-item v-if="form.model" label="型号">{{ form.model }}</el-descriptions-item>
             <el-descriptions-item v-if="form.serialNumber" label="序列号">{{ form.serialNumber }}</el-descriptions-item>
             <el-descriptions-item v-if="form.vendor" label="厂家">{{ form.vendor }}</el-descriptions-item>
-            <el-descriptions-item v-if="form.area" label="面积">{{ form.area }}</el-descriptions-item>
           </el-descriptions>
         </div>
       </el-form>
@@ -515,13 +477,6 @@
         <el-divider content-position="left">属性</el-divider>
 
         <!-- Kind-specific fields -->
-        <template v-if="detail.kind === 'SPACE'">
-          <el-form-item label="面积"><el-input-number v-model="form.area" :min="0" style="width:100%"/></el-form-item>
-          <el-form-item label="排序号"><el-input-number v-model="form.sequence" :min="0" style="width:100%"/></el-form-item>
-          <el-form-item label="客户端可见">
-            <el-switch v-model="form.showInClient" active-text="是" inactive-text="否"/>
-          </el-form-item>
-        </template>
         <template v-if="detail.kind === 'DEVICE'">
           <el-form-item label="型号"><el-input v-model="form.model" placeholder="设备型号"/></el-form-item>
           <el-form-item label="序列号"><el-input v-model="form.serialNumber" placeholder="序列号"/></el-form-item>
@@ -692,7 +647,7 @@
 import { ref, reactive, computed, nextTick, watch, onBeforeUnmount, onMounted } from 'vue'
 import Skeleton from '@/components/Skeleton/index.vue'
 import { useRouter, useRoute } from 'vue-router'
-import TreePanel from '@/components/TreePanel'
+import AssetTreePanel from '@/components/AssetTreePanel/index.vue'
 import ControlCommandInput from '@/components/control/ControlCommandInput.vue'
 import DurationInput from '@/components/DurationInput/index.vue'
 import InlineEdit from '@/components/InlineEdit/index.vue'
@@ -706,8 +661,9 @@ import { useOperationStatus } from '@/composables/useOperationStatus'
 import { useConfirmDanger } from '@/composables/useConfirmDanger'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import {
-  getAssetTree, getAsset, getAssetTypes, getTypeProperties,
+  getAsset, getAssetTypes, getTypeProperties,
   createAsset, updateAsset, deleteAsset, listAssets,
+  listGroupTrees, listGroups, replaceGroupAssets,
   detectAsset, executeControl,
   startAsset, stopAsset, disableAsset, enableAsset,
   batchStart, batchStop, batchEnable, batchDisable, batchDelete
@@ -719,8 +675,7 @@ import { ElMessage } from 'element-plus'
 const router = useRouter()
 const route = useRoute()
 
-const treeRef = ref(null)
-const assetTree = ref({})
+const assetTreePanelRef = ref(null)
 const selectedNode = ref(null)
 const detail = ref({})
 const selection = ref([])
@@ -731,18 +686,32 @@ const formRef = ref(null)
 const availableTypes = ref([])
 const allTypes = ref({})
 
-const form = ref({
-  kind: '', name: '', caption: '', typeName: '',
-  area: 0, sequence: 0, showInClient: true,
-  model: '', serialNumber: '', vendor: '',
-  unit: '', detectInterval: '', savingInterval: '', warnCondition: '',
-  minValue: null, maxValue: null, refreshDelay: null,
-  isVirtual: false, expression: '', dependsOnIds: []
-})
+// Creation rules of the asset forest: DEVICE/SERVICE hang at the top level,
+// PROBE/CONTROL hang off a device, DEVICE/SERVICE may join groups.
+const TOP_LEVEL_PARENT_ID          = 0
+const MONITOR_FORM_KINDS           = ['PROBE', 'CONTROL']
+const GROUP_MEMBER_KINDS           = ['DEVICE', 'SERVICE']
+const CONTAINER_ASSET_KINDS        = ['DEVICE']
+const GROUP_OPTION_LABEL_SEPARATOR = ' / '
+
+function blankForm() {
+  return {
+    kind: '', name: '', caption: '', typeName: '',
+    parentId: null, groupIds: [],
+    model: '', serialNumber: '', vendor: '',
+    unit: '', detectInterval: '', savingInterval: '', warnCondition: '',
+    minValue: null, maxValue: null, refreshDelay: null,
+    isVirtual: false, expression: '', dependsOnIds: []
+  }
+}
+
+const form = ref(blankForm())
 
 const typeProperties = ref([])   // properties from AssetType definition
 const attrValues = ref({})       // current values keyed by property name
-const probeList   = ref([])      // available probes for VirtualProbe dependsOn selector
+const probeList    = ref([])     // available probes for VirtualProbe dependsOn selector
+const deviceList   = ref([])     // parent candidates for PROBE/CONTROL creation
+const groupOptions = ref([])     // { id, treeId, label } choices for 所属分组
 
 // Wizard state for create dialog
 const wizardStep = ref(1)
@@ -796,13 +765,35 @@ const formRules = {
   typeName: [{ required: true, message: '请选择类型名', trigger: 'change' }]
 }
 
-const treeData = computed(() =>
-  (assetTree.value && assetTree.value.id !== undefined) ? [assetTree.value] : []
-)
-
-const childNodes = computed(() => selectedNode.value?.children || [])
+const childNodes = computed(() => {
+  if (detail.value?.children?.length) return detail.value.children
+  return (selectedNode.value?.children || [])
+    .filter(n => n.nodeKind !== 'GROUP')
+    .map(n => ({ ...n, kind: n.assetKind ?? n.kind }))
+})
 const childCount = computed(() => childNodes.value.length)
-const isCompound = computed(() => ['SPACE', 'DEVICE'].includes(selectedNode.value?.kind))
+
+// Containers whose children render inline: group nodes, synthetic roots
+// (id-less) and device assets. Monitors and services are leaves.
+const isCompound = computed(() => {
+  const node = selectedNode.value
+  if (!node) return false
+  if (node.nodeKind === 'GROUP' || node.id == null) return true
+  return CONTAINER_ASSET_KINDS.includes(node.assetKind)
+})
+
+// Only real asset nodes may drive detail fetches and row actions — group ids
+// belong to t_group and must never reach the asset APIs.
+const isAssetSelection = computed(() =>
+  selectedNode.value?.nodeKind === 'ASSET' && selectedNode.value?.id != null)
+
+const isMonitorKind     = computed(() => MONITOR_FORM_KINDS.includes(form.value.kind))
+const isGroupMemberKind = computed(() => GROUP_MEMBER_KINDS.includes(form.value.kind))
+
+const selectedDeviceId = computed(() =>
+  isAssetSelection.value && selectedNode.value?.assetKind === 'DEVICE'
+    ? selectedNode.value.id
+    : null)
 
 const showAlarmCard = computed(() =>
   ['DEVICE', 'PROBE', 'CONTROL'].includes(detail.value?.kind)
@@ -818,59 +809,22 @@ const displayPath = computed(() => {
 
 const breadcrumbs = computed(() => {
   const path = detail.value?.path || ''
-  // path format: "->root->building_A->machine_room" — strip leading -> then split
-  const clean = path.replace(/^->/, '')
-  const segs = clean.split('->').filter(s => s)
-  return segs.map(name => {
-    const found = findNodeByName(assetTree.value, name)
-    return { id: found?.id, name, caption: found?.caption || name }
-  })
+  // path format: "root->building_A->machine_room" — asset names joined by '->'
+  return path.split('->').filter(s => s).map(name => ({ name, caption: name }))
 })
-
-const siblingNodes = computed(() => {
-  if (!detail.value?.id) return []
-  const parentId = detail.value.parentId
-  if (!parentId) return []
-  const parent = findNodeById(assetTree.value, parentId)
-  return (parent?.children || []).filter(c => c.id !== detail.value.id)
-})
-
-function findNodeById(root, id) {
-  if (!root) return null
-  if (root.id === id) return root
-  if (root.children) {
-    for (const c of root.children) {
-      const r = findNodeById(c, id)
-      if (r) return r
-    }
-  }
-  return null
-}
-
-function findNodeByName(root, name) {
-  if (!root) return null
-  if (root.name === name) return root
-  if (root.children) {
-    for (const c of root.children) {
-      const r = findNodeByName(c, name)
-      if (r) return r
-    }
-  }
-  return null
-}
 
 const filteredChildren = computed(() => childNodes.value)
 
-const canAddChild = computed(() => ['SPACE', 'DEVICE'].includes(selectedNode.value?.kind))
-const canEnable = computed(() => detail.value && !detail.value.enabled)
-const canDisable = computed(() => detail.value?.enabled)
+const canAddChild = computed(() => isCompound.value)
+const canEnable   = computed(() => isAssetSelection.value && !!detail.value && !detail.value.enabled)
+const canDisable  = computed(() => isAssetSelection.value && !!detail.value?.enabled)
 const canStartStop = computed(() => ['SERVICE', 'PROBE', 'CONTROL'].includes(detail.value?.kind))
 
 const ATTR_LABELS = {
   unit: '单位', dataType: '数据类型', catalog: '分类',
   minValue: '最小值', maxValue: '最大值', warnCondition: '告警条件',
   transform: '转换', model: '型号', serialNumber: '序列号',
-  vendor: '厂家', area: '面积', sequence: '排序', refreshDelay: '刷新延迟(ms)',
+  vendor: '厂家', refreshDelay: '刷新延迟(ms)',
   detectInterval: '采集间隔', savingInterval: '存储间隔',
   isVirtual: '虚拟探头', expression: '表达式', dependsOnIds: '依赖探头'
 }
@@ -942,6 +896,56 @@ function loadProbeList() {
   }).catch(() => { probeList.value = [] })
 }
 
+function loadDeviceList() {
+  listAssets({ kind: 'DEVICE' }).then(res => {
+    deviceList.value = (res.data || []).map(d => ({
+      id: d.id, name: d.name, caption: d.caption || d.name
+    }))
+  }).catch(() => { deviceList.value = [] })
+}
+
+/** Group choices for 所属分组: every tree's flat group list, tree-prefixed. */
+async function loadGroupOptions() {
+  try {
+    const treesRes = await listGroupTrees()
+    const trees    = treesRes.data || []
+    const groupLists = await Promise.all(trees.map(tree => listGroups(tree.id)))
+    groupOptions.value = groupLists.flatMap((res, i) =>
+      (res.data || []).map(g => ({
+        id: g.id,
+        treeId: g.treeId,
+        label: `${trees[i].caption || trees[i].name}${GROUP_OPTION_LABEL_SEPARATOR}${g.caption || g.name}`
+      })))
+  } catch (e) {
+    groupOptions.value = []
+    showSystarError(e, '加载分组选项失败')
+  }
+}
+
+/** Attach the new asset to the chosen groups (read-modify-write membership). */
+async function attachNewAssetToGroups(assetId, groupIds) {
+  for (const groupId of groupIds) {
+    const option = groupOptions.value.find(g => g.id === groupId)
+    if (!option) continue
+    const res     = await listGroups(option.treeId)
+    const group   = (res.data || []).find(g => g.id === groupId)
+    const members = (group?.assetIds || []).map(Number)
+    if (!members.includes(assetId)) members.push(assetId)
+    await replaceGroupAssets(groupId, members)
+  }
+}
+
+function refreshTreePanel() {
+  assetTreePanelRef.value?.refresh()
+}
+
+/** Re-pull the current asset after batch operations; a group selection has no id. */
+function refreshDetailQuietly() {
+  if (!detail.value?.id) return
+  getAsset(detail.value.id).then(res => { detail.value = res.data })
+    .catch(e => showSystarError(e, '刷新资产详情失败'))
+}
+
 function stateCount(state) {
   return childNodes.value.filter(c => c.state === state).length
 }
@@ -977,8 +981,6 @@ const childRefresh = useAutoRefresh(
 function childRowClassName({ row }) {
   return childRefresh.highlightedIds.value.has(row.id) ? 'row-changed' : ''
 }
-
-let treeRefreshTimer = null
 
 // Mini chart trend state
 const miniTrendRef = ref(null)
@@ -1032,6 +1034,13 @@ function handleNodeClick(data) {
   selectedNode.value = data
   selection.value = []
   clearMiniChartData()
+  // Group nodes and id-less synthetic roots carry no asset id — their children
+  // come straight from the tree node, no detail fetch.
+  if (data.nodeKind === 'GROUP' || data.id == null) {
+    detail.value = {}
+    router.replace({ query: {} })
+    return
+  }
   router.replace({ query: { node: data.id } })
   getAsset(data.id).then(res => {
     detail.value = res.data
@@ -1240,29 +1249,27 @@ function onDetailPopout() {
 onMounted(() => {
   wsStore.connect()
   loadTypes()
-  treeRefreshTimer = setInterval(() => {
-    getAssetTree().then(res => { assetTree.value = res.data || {} }).catch(e => console.warn('Tree refresh failed:', e?.message || e))
-  }, 30000)
+  restoreDeepLinkedNode()
 })
+
+/** TC-OPS-02: restore the selection from ?node=<id> (refresh / shared link). */
+function restoreDeepLinkedNode() {
+  const nodeId = Number(route.query.node)
+  if (!route.query.node || Number.isNaN(nodeId)) return
+  assetTreePanelRef.value?.selectAssetById(nodeId)
+}
 
 onBeforeUnmount(() => {
   opStatus.clearAll()
   childRefresh.stop()
-  if (treeRefreshTimer) { clearInterval(treeRefreshTimer); treeRefreshTimer = null }
 })
 
 function handleChildRowClick(row) {
-  treeRef.value?.setCurrentKey(row.id)
-  handleNodeClick(row)
+  handleNodeClick({ ...row, nodeKind: 'ASSET', assetKind: row.assetKind ?? row.kind })
 }
 
 function handleSelectionChange(val) {
   selection.value = val
-}
-
-function navigateTo(id) {
-  treeRef.value?.setCurrentKey(id)
-  router.replace({ query: { node: id } })
 }
 
 // === CRUD ===
@@ -1270,18 +1277,19 @@ function navigateTo(id) {
 function openCreateDialog() {
   wizardStep.value = 1
   dialogMode.value = 'create'
-  form.value = { kind: '', name: '', caption: '', typeName: '',
-    area: 0, sequence: 0, showInClient: true,
-    model: '', serialNumber: '', vendor: '',
-    unit: '', detectInterval: '', savingInterval: '', warnCondition: '',
-    minValue: null, maxValue: null, refreshDelay: null,
-    isVirtual: false, expression: '', dependsOnIds: []
+  form.value = blankForm()
+  // Opening from a group node pre-selects that group as the new member's
+  // group (the raw id matches the option value built by loadGroupOptions).
+  if (selectedNode.value?.nodeKind === 'GROUP' && selectedNode.value.id != null) {
+    form.value.groupIds = [selectedNode.value.id]
   }
 
   typeProperties.value = []
   attrValues.value = {}
   availableTypes.value = []
   loadProbeList()
+  loadDeviceList()
+  loadGroupOptions()
   dialogVisible.value = true
 }
 
@@ -1294,7 +1302,6 @@ function openEditDialog() {
     name: detail.value.name || '',
     caption: detail.value.caption || '',
     typeName: '',
-    area: 0, sequence: 0, showInClient: true,
     model: '', serialNumber: '', vendor: '',
     unit: detail.value.unit || '',
     detectInterval: '', savingInterval: '', warnCondition: '',
@@ -1313,6 +1320,9 @@ function onKindChange(kind) {
   availableTypes.value = allTypes.value[kind] || []
   form.value.typeName = ''
   typeProperties.value = []
+  // Monitors hang off a device (default to the selected one when creating from
+  // it); everything else is created at the forest top level.
+  form.value.parentId = MONITOR_FORM_KINDS.includes(kind) ? selectedDeviceId.value : null
 }
 
 function onTypeNameChange(typeName) {
@@ -1338,7 +1348,7 @@ function loadTypes() {
 
 function loadTypeProperties() {
   const kind = form.value.kind || detail.value?.kind
-  if (!kind || kind === 'SPACE' || kind === 'DEVICE') {
+  if (!kind || kind === 'DEVICE') {
     typeProperties.value = []
     return
   }
@@ -1363,13 +1373,7 @@ function loadTypeProperties() {
 
 function resetForm() {
   wizardStep.value = 1
-  form.value = { kind: '', name: '', caption: '', typeName: '',
-    area: 0, sequence: 0, showInClient: true,
-    model: '', serialNumber: '', vendor: '',
-    unit: '', detectInterval: '', savingInterval: '', warnCondition: '',
-    minValue: null, maxValue: null, refreshDelay: null,
-    isVirtual: false, expression: '', dependsOnIds: []
-  }
+  form.value = blankForm()
 
   typeProperties.value = []
   attrValues.value = {}
@@ -1378,11 +1382,6 @@ function resetForm() {
 function buildProperties() {
   const p = {}
   const kind = form.value.kind || detail.value?.kind
-  if (kind === 'SPACE') {
-    if (form.value.area) p.area = form.value.area
-    if (form.value.sequence) p.sequence = form.value.sequence
-    p.showInClient = form.value.showInClient ? 1 : 0
-  }
   if (kind === 'DEVICE') {
     if (form.value.model) p.model = form.value.model
     if (form.value.serialNumber) p.serialNumber = form.value.serialNumber
@@ -1424,6 +1423,10 @@ function buildAttributes() {
   return Object.keys(attrs).length > 0 ? attrs : null
 }
 
+function resolveCreateParentId() {
+  return isMonitorKind.value ? form.value.parentId : TOP_LEVEL_PARENT_ID
+}
+
 async function submitForm() {
   if (!formRef.value) return
   try {
@@ -1437,15 +1440,24 @@ async function submitForm() {
   submitting.value = true
   try {
     if (dialogMode.value === 'create') {
-      await createAsset({
+      const res = await createAsset({
         kind: form.value.kind,
-        parentId: detail.value.id,
+        parentId: resolveCreateParentId(),
         name: form.value.name,
         caption: form.value.caption,
         typeName: form.value.typeName || null,
         properties: buildProperties(),
         attributes: buildAttributes()
       })
+      if (isGroupMemberKind.value && form.value.groupIds.length > 0) {
+        try {
+          await attachNewAssetToGroups(res.data, form.value.groupIds)
+        } catch (e) {
+          // The asset exists at this point — surface the group-write failure
+          // without making the user redo the whole creation.
+          showSystarError(e, '资产已创建，但写入分组失败')
+        }
+      }
       formMemory.saveDefaults(form.value, PERSIST_FIELDS)
       ElMessage.success('创建成功')
     } else {
@@ -1458,7 +1470,7 @@ async function submitForm() {
       ElMessage.success('保存成功')
     }
     dialogVisible.value = false
-    getTree()
+    refreshTreePanel()
   } catch (e) {
     showSystarError(e, '操作失败')
   } finally {
@@ -1490,7 +1502,7 @@ async function doDelete() {
   try {
     await deleteAsset(targetId)
     ElMessage.success('已删除')
-    getTree()
+    refreshTreePanel()
     selectedNode.value = null
     detail.value = {}
   } catch (e) {
@@ -1544,7 +1556,7 @@ async function batchOperate(action) {
     showSystarError(e, labelMap[action] + '失败')
   }
   selection.value = []
-  getAsset(detail.value.id).then(res => { detail.value = res.data })
+  refreshDetailQuietly()
 }
 
 async function doBatchDelete() {
@@ -1562,7 +1574,7 @@ async function doBatchDelete() {
     showSystarError(e, '批量删除失败')
   }
   selection.value = []
-  getAsset(detail.value.id).then(res => { detail.value = res.data }).catch(e => showSystarError(e, '刷新资产详情失败'))
+  refreshDetailQuietly()
 }
 
 async function onDangerConfirm() {
@@ -1592,38 +1604,8 @@ async function updateField(field, value) {
   }
 }
 
-// === Tree ===
-
-function getTree() {
-  getAssetTree().then(res => {
-    assetTree.value = res.data || {}
-    const root = assetTree.value
-    if (root && root.id !== undefined) {
-      const targetId = Number(route.query.node) || root.id
-      const targetNode = findNodeById(root, targetId)
-      nextTick(() => {
-        treeRef.value?.setCurrentKey(targetId)
-        handleNodeClick(targetNode || root)
-      })
-    }
-  }).catch(err => {
-    showSystarError(err, '加载资产树失败')
-  })
-}
-
-// Watch route changes (browser forward/back)
-watch(() => route.query.node, (newId) => {
-  if (!newId || !assetTree.value) return
-  const id = Number(newId)
-  if (isNaN(id) || selectedNode.value?.id === id) return
-  const target = findNodeById(assetTree.value, id)
-  if (target) {
-    treeRef.value?.setCurrentKey(id)
-    handleNodeClick(target)
-  }
-})
-
-getTree()
+// Tree ownership lives in AssetTreePanel (useAssetTree); this view only reacts
+// to node clicks and asks the panel to reload after content-side mutations.
 </script>
 
 <style scoped>
@@ -1633,10 +1615,7 @@ getTree()
   color: #666;
 }
 .breadcrumb-seg { display: inline-flex; align-items: center; }
-.breadcrumb-seg.clickable { cursor: pointer; color: #409eff; }
-.breadcrumb-seg.clickable:hover { text-decoration: underline; }
 .breadcrumb-arrow { font-size: 12px; margin: 0 4px; color: #999; }
-.breadcrumb-seg.dropdown-trigger { padding: 0 6px; }
 
 .toolbar-bar {
   padding: 8px 0;

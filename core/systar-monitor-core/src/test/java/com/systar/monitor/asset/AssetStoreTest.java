@@ -3,7 +3,6 @@ package com.systar.monitor.asset;
 import com.systar.monitor.asset.type.Device;
 import com.systar.monitor.asset.type.DeviceType;
 import com.systar.monitor.asset.type.ProbeType;
-import com.systar.monitor.asset.type.SpaceType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,36 +18,37 @@ import static org.assertj.core.api.Assertions.*;
 class AssetStoreTest {
 
     private AssetStore store;
-    private SpaceType rootType;
 
     @BeforeEach
     void setUp() {
         store = new AssetStore();
-        rootType = new SpaceType("rootType");
-        store.createRoot(rootType, "root");
     }
 
-    // ---- createRoot ----
+    // ---- neutral anchor ----
 
     @Test
-    @DisplayName("createRoot creates a root Space node")
-    void createRoot() {
+    @DisplayName("anchor exists, is compound and kind-neutral")
+    void anchorIsNeutral() {
         assertThat(store.getRoot()).isNotNull();
-        assertThat(store.getRoot().getName()).isEqualTo("root");
-        assertThat(store.getRoot().getId()).isEqualTo(-1);
+        assertThat(store.getRoot().isCompound()).isTrue();
+        assertThat(store.getRoot().getKind()).isNull();
+        assertThatThrownBy(() -> store.getRoot().accept(null))
+                .isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test
-    @DisplayName("createRoot adds the root to the asset index")
-    void createRootInIndex() {
-        assertThat(store.findAsset(-1)).isNotNull();
+    @DisplayName("anchor is NOT in the flat index — no id=-1 leak via getAssets/findAsset")
+    void anchorNotInIndex() {
+        assertThat(store.findAsset(store.getRoot().getId())).isNull();
+        assertThat(store.getAssets()).isEmpty();
+        assertThat(store.getAssetsByKind(AssetKind.DEVICE)).isEmpty();
     }
 
     // ---- addAsset ----
 
     @Test
-    @DisplayName("addAsset adds to root when parentId is INVALID_ID")
-    void addAssetToRoot() {
+    @DisplayName("addAsset attaches top-level asset (parentId=0) to the anchor")
+    void addAssetToAnchor() {
         Device dev = new Device();
         dev.init(new DeviceType("devType"), 10, "device1");
 
@@ -57,6 +57,7 @@ class AssetStoreTest {
         assertThat(store.findAsset(10)).isSameAs(dev);
         assertThat(dev.getParent()).isSameAs(store.getRoot());
         assertThat(dev.getContext()).isSameAs(store);
+        assertThat(store.getAssets()).hasSize(1); // anchor excluded
     }
 
     @Test
@@ -97,6 +98,17 @@ class AssetStoreTest {
     }
 
     @Test
+    @DisplayName("addAsset rejects the anchor itself (id=-1 reserved) and leaves the store uncorrupted")
+    void addAssetRejectsAnchor() {
+        assertThatThrownBy(() -> store.addAsset(store.getRoot()))
+                .isInstanceOf(AssetException.class)
+                .hasMessageContaining("reserved for the tree anchor");
+
+        assertThat(store.getAssets()).isEmpty();
+        assertThat(store.findAsset(-1)).isNull();
+    }
+
+    @Test
     @DisplayName("addAsset rejects non-existent parent")
     void addAssetRejectsMissingParent() {
         Probe probe = new Probe();
@@ -113,7 +125,6 @@ class AssetStoreTest {
         Probe parentProbe = new Probe();
         parentProbe.init(new ProbeType("pt"), 10, "parentProbe");
         parentProbe.setParentId(Asset.INVALID_ID);
-        // Manually add to store bypassing parent validation (simulating existing leaf asset)
         store.addAsset(parentProbe);
 
         Probe child = new Probe();
@@ -175,20 +186,20 @@ class AssetStoreTest {
     // ---- getAssets ----
 
     @Test
-    @DisplayName("getAssets returns all assets including root")
+    @DisplayName("getAssets returns real assets only (anchor excluded)")
     void getAssets() {
         Device dev = new Device();
         dev.init(new DeviceType("dt"), 10, "device1");
         store.addAsset(dev);
 
         Collection<Asset<?>> all = store.getAssets();
-        assertThat(all).hasSize(2); // root + device
+        assertThat(all).hasSize(1);
     }
 
     // ---- getFullPath ----
 
     @Test
-    @DisplayName("getFullPath builds path from root to asset")
+    @DisplayName("getFullPath builds path without the anchor and without leading separator")
     void getFullPath() {
         Device dev = new Device();
         dev.init(new DeviceType("dt"), 10, "floor1");
@@ -199,33 +210,33 @@ class AssetStoreTest {
         probe.setParentId(10);
         store.addAsset(probe);
 
-        String path = store.getFullPath(probe);
-        assertThat(path).isEqualTo("root->floor1->tempSensor");
+        assertThat(store.getFullPath(probe)).isEqualTo("floor1->tempSensor");
+        assertThat(store.getFullPath(dev)).isEqualTo("floor1");
     }
 
     @Test
-    @DisplayName("getFullPath returns empty for null")
-    void getFullPathNull() {
+    @DisplayName("getFullPath returns empty for null and for the anchor itself")
+    void getFullPathNullAndAnchor() {
         assertThat(store.getFullPath(null)).isEmpty();
-    }
-
-    @Test
-    @DisplayName("getFullPath for root returns just root name")
-    void getFullPathRoot() {
-        assertThat(store.getFullPath(store.getRoot())).isEqualTo("root");
+        assertThat(store.getFullPath(store.getRoot())).isEmpty();
     }
 
     // ---- clear ----
 
     @Test
-    @DisplayName("clear removes all assets and root reference")
+    @DisplayName("clear empties the index and re-creates a fresh anchor")
     void clear() {
         Device dev = new Device();
         dev.init(new DeviceType("dt"), 10, "device1");
         store.addAsset(dev);
 
         store.clear();
-        assertThat(store.getRoot()).isNull();
+        assertThat(store.getRoot()).isNotNull();
         assertThat(store.getAssets()).isEmpty();
+
+        Device dev2 = new Device();
+        dev2.init(new DeviceType("dt2"), 20, "device2");
+        store.addAsset(dev2);
+        assertThat(store.getAssets()).hasSize(1);
     }
 }

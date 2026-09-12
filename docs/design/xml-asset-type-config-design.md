@@ -17,15 +17,14 @@ core/systar-monitor-drivers/src/main/resources/com/systar/monitor/drivers/
   └── ...                             ← 其他协议（小写连字符命名 <proto>-{services,probes,controls}.xml）
 
 extensions/systar-server/src/main/resources/config/assets/
-  ├── generic-spaces.xml              ← Space 类型定义（非驱动关注点）
-  └── generic-devices.xml             ← Device 类型定义
+  └── generic-devices.xml             ← Device 类型定义（非驱动关注点）
 ```
 
 `XmlAssetTypeLoader` 扫描以下路径模式（`PathMatchingResourcePatternResolver` 语法）：
 
 1. **内置默认（不可关闭）**：
    - `classpath*:com/systar/monitor/drivers/**/*.xml` — 驱动模块内的全部类型 XML（驱动自注册）
-   - `classpath*:config/assets/generic-*.xml` — 服务端的通用 Space/Device 类型
+   - `classpath*:config/assets/generic-*.xml` — 服务端的通用 Device 类型
 2. **额外路径（可选）**：配置项 `systar.asset-type.scan-paths`，逗号分隔的资源定位模式列表，
    典型用法是 `file:` 外置目录（目录不存在时静默解析为空集，不报错）：
 
@@ -41,7 +40,6 @@ systar:
 
 | 资产类别 | 根元素 | 子元素名 | Name 示例 |
 |----------|--------|----------|-----------|
-| Space | `<Spaces>` | `<Space>` | `Building`, `Floor`, `Room` |
 | Device | `<Devices>` | `<Device>` | `GeneralDevice` |
 | Service | `<Services>` | `<Service>` | `ModbusService`, `SnmpService` |
 | Probe | `<ProbeList>` | `<Probe>` | `ModbusProbe`, `SnmpProbe` |
@@ -49,7 +47,7 @@ systar:
 
 **未知根元素直接抛 `AssetException`（fail-fast）**，错误信息含文件名与合法根元素清单——避免文件被静默跳过。
 
-加载顺序固定为 Space → Device → Service → Probe → Control：
+加载顺序固定为 Device → Service → Probe → Control：
 
 1. Probe/Control 的 `Source` 引用的 Service 类型先于它们注册
 2. 同一类别内，文件按路径排序加载（确定性），文件内保持文档顺序——`Super` 父类型与子类型写在同一个文件中、父先于子即可

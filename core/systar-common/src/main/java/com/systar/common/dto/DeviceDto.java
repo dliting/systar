@@ -5,13 +5,12 @@ import java.time.LocalDateTime;
 
 /**
  * Device data transfer object for cross-module communication.
- * Field names match {@code DeviceEntity} getters (minus "get") for JSON compatibility.
+ * Field names mirror the {@code t_device} columns for JSON compatibility.
  */
 public record DeviceDto(
         Integer id,
         String name,
         String caption,
-        Integer parentId,
         Short catalog,
         String vendor,
         LocalDateTime purchaseDate,

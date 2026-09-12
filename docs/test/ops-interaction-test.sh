@@ -43,7 +43,7 @@ RESP=$(curl -s -H "$AUTH" -H "Content-Type: application/json" \
 assert_contains "status=CREATED" '"status":"CREATED"' "$RESP"
 assert_contains "orderNo starts WO" '"orderNo":"WO-' "$RESP"
 assert_contains "dueTime present" '"dueTime"' "$RESP"
-assert_contains "spaceId resolved" '"spaceId":13' "$RESP"
+assert_contains "deviceId echoed" '"deviceId":1001' "$RESP"
 WO_ID=$(echo "$RESP" | sed 's/.*"id":\([0-9]*\).*/\1/')
 echo "  (work order id=$WO_ID)"
 

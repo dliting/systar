@@ -35,10 +35,7 @@ public class AssetRepository {
 
     // ======================== Row Records ========================
 
-    public record SpaceRow(int id, String name, String caption, int parentId,
-                            Integer area, int sequence, int showInClient, String typeName) {}
-
-    public record DeviceRow(int id, String name, String caption, int parentId,
+    public record DeviceRow(int id, String name, String caption,
                              Short catalog, String vendor,
                              LocalDateTime purchaseDate, LocalDate warrantyDate,
                              Float healthIndex, String model, String serialNumber,
@@ -48,7 +45,7 @@ public class AssetRepository {
                              LocalDate lastMaintenanceDate, String remark,
                              String typeName) {}
 
-    public record ServiceRow(int id, String name, String caption, int parentId,
+    public record ServiceRow(int id, String name, String caption,
                               Integer mode, String driverClass,
                               Integer maxConnections, String typeName) {}
 
@@ -69,11 +66,7 @@ public class AssetRepository {
 
     // ======================== UpdateFields Records ========================
 
-    public record SpaceUpdateFields(String name, String caption, Integer parentId,
-                                    Integer area, Integer sequence,
-                                    Integer showInClient, String typeName) {}
-
-    public record DeviceUpdateFields(String name, String caption, Integer parentId,
+    public record DeviceUpdateFields(String name, String caption,
                                      Short catalog, String vendor,
                                      LocalDateTime purchaseDate, LocalDate warrantyDate,
                                      Float healthIndex, String model, String serialNumber,
@@ -83,7 +76,7 @@ public class AssetRepository {
                                      LocalDate lastMaintenanceDate, String remark,
                                      String typeName) {}
 
-    public record ServiceUpdateFields(String name, String caption, Integer parentId,
+    public record ServiceUpdateFields(String name, String caption,
                                       Integer mode, String driverClass,
                                       Integer maxConnections, String typeName) {}
 
@@ -109,22 +102,6 @@ public class AssetRepository {
 
         TypeResolver(AssetStore store) {
             this.store = store;
-        }
-
-        SpaceType resolveSpaceType(String typeName, int id, String name) {
-            SpaceType type = store.getSpaceTypes().find(typeName);
-            if (type != null) {
-                if (type.isAbstractType()) {
-                    throw new AssetException("Space '%s' (id=%d) references abstract type '%s'.",
-                            name, id, typeName);
-                }
-                return type;
-            }
-            if (!isFallback(typeName)) {
-                throw new AssetException("Space '%s' (id=%d) references type '%s' which is not registered.",
-                        name, id, typeName);
-            }
-            return new SpaceType("space-" + id);
         }
 
         DeviceType resolveDeviceType(String typeName, int id, String name) {
@@ -233,15 +210,13 @@ public class AssetRepository {
 
     // ======================== SQL Fragments ========================
 
-    private static final String SELECT_SPACE =
-            "SELECT id, name, caption, parent, area, sequence, show_in_client, type_name FROM t_space";
     private static final String SELECT_DEVICE =
-            "SELECT id, name, caption, parent, catalog, vendor, purchase_date, warranty_date, "
+            "SELECT id, name, caption, catalog, vendor, purchase_date, warranty_date, "
                     + "health_index, model, serial_number, install_date, lifecycle_status, "
                     + "responsible_person, department, supplier_contact, maintenance_cycle, "
                     + "last_maintenance_date, remark, type_name FROM t_device";
     private static final String SELECT_SERVICE =
-            "SELECT id, name, caption, parent, mode, driver_class, max_connections, type_name FROM t_service";
+            "SELECT id, name, caption, mode, driver_class, max_connections, type_name FROM t_service";
     private static final String SELECT_PROBE =
             "SELECT id, name, caption, parent, source, unit, time_interval, saving_interval, "
                     + "warn_cond, transform, catalog, monitor_kind, min_value, max_value, type_name, "
@@ -252,18 +227,10 @@ public class AssetRepository {
 
     // ======================== Row Mappers (ResultSet → Record) ========================
 
-    private SpaceRow mapSpaceRow(java.sql.ResultSet rs) throws java.sql.SQLException {
-        return new SpaceRow(
-                rs.getInt("id"), rs.getString("name"), rs.getString("caption"),
-                rs.getInt("parent"), (Integer) rs.getObject("area"),
-                rs.getInt("sequence"), rs.getInt("show_in_client"),
-                rs.getString("type_name"));
-    }
-
     private DeviceRow mapDeviceRow(java.sql.ResultSet rs) throws java.sql.SQLException {
         return new DeviceRow(
                 rs.getInt("id"), rs.getString("name"), rs.getString("caption"),
-                rs.getInt("parent"), shortOrNull(rs, "catalog"),
+                shortOrNull(rs, "catalog"),
                 rs.getString("vendor"),
                 rs.getObject("purchase_date", LocalDateTime.class),
                 rs.getObject("warranty_date", LocalDate.class),
@@ -280,7 +247,7 @@ public class AssetRepository {
     private ServiceRow mapServiceRow(java.sql.ResultSet rs) throws java.sql.SQLException {
         return new ServiceRow(
                 rs.getInt("id"), rs.getString("name"), rs.getString("caption"),
-                rs.getInt("parent"), (Integer) rs.getObject("mode"),
+                (Integer) rs.getObject("mode"),
                 rs.getString("driver_class"), (Integer) rs.getObject("max_connections"),
                 rs.getString("type_name"));
     }
@@ -314,10 +281,6 @@ public class AssetRepository {
 
     // ======================== Batch Loading Methods ========================
 
-    public List<Space> findAllSpaces() {
-        return jdbc.query(SELECT_SPACE, (rs, i) -> toSpace(mapSpaceRow(rs)));
-    }
-
     public List<Device> findAllDevices() {
         return jdbc.query(SELECT_DEVICE, (rs, i) -> toDevice(mapDeviceRow(rs)));
     }
@@ -339,28 +302,6 @@ public class AssetRepository {
 
     // ======================== Assembly Methods ========================
 
-    private Space toSpace(SpaceRow row) {
-        SpaceType type = typeResolver.resolveSpaceType(row.typeName(), row.id(), row.name());
-        boolean isFallback = isFallbackTypeName(row.typeName());
-
-        if (isFallback) {
-            if (row.area() != null) type.setArea(row.area().doubleValue());
-            type.setSequence(row.sequence());
-        }
-
-        Space space = new Space();
-        space.init(type, row.id(), row.name());
-        setCommonProps(space, row.caption(), row.parentId());
-
-        if (!isFallback) {
-            if (row.area() != null) space.setMetadata("area", row.area().doubleValue());
-            space.setMetadata("sequence", row.sequence());
-        }
-
-        applyDefaults(space);
-        return space;
-    }
-
     private Device toDevice(DeviceRow row) {
         DeviceType type = typeResolver.resolveDeviceType(row.typeName(), row.id(), row.name());
         boolean isFallback = isFallbackTypeName(row.typeName());
@@ -372,7 +313,7 @@ public class AssetRepository {
 
         Device device = new Device();
         device.init(type, row.id(), row.name());
-        setCommonProps(device, row.caption(), row.parentId());
+        setCommonProps(device, row.caption());
 
         if (!isFallback) {
             if (row.catalog() != null) device.setMetadata("catalog", row.catalog());
@@ -401,7 +342,7 @@ public class AssetRepository {
         ServiceType type = typeResolver.resolveServiceType(row.typeName(), row.id(), row.name());
         MonitorService service = createServiceInstance(row, type);
         service.init(type, row.id(), row.name());
-        setCommonProps(service, row.caption(), row.parentId());
+        setCommonProps(service, row.caption());
         if (row.maxConnections() != null && service instanceof ActiveService active) {
             active.setMaxConnections(row.maxConnections());
             // Mirror the t_service column into metadata so the value survives
@@ -583,8 +524,12 @@ public class AssetRepository {
 
     // ======================== Helper Methods ========================
 
-    private void setCommonProps(Asset<?> asset, String caption, int parentId) {
+    private void setCommonProps(Asset<?> asset, String caption) {
         if (caption != null && !caption.isBlank()) asset.setCaption(caption);
+    }
+
+    private void setCommonProps(Asset<?> asset, String caption, int parentId) {
+        setCommonProps(asset, caption);
         asset.setParentId(parentId);
     }
 
@@ -660,22 +605,14 @@ public class AssetRepository {
 
     // ======================== CRUD: Insert ========================
 
-    public void insertSpace(SpaceRow row) {
-        jdbc.update(
-                "INSERT INTO t_space (id, name, caption, parent, area, sequence, show_in_client, type_name) "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                row.id(), row.name(), row.caption(), row.parentId(),
-                row.area(), row.sequence(), row.showInClient(), row.typeName());
-    }
-
     public void insertDevice(DeviceRow row) {
         jdbc.update(
-                "INSERT INTO t_device (id, name, caption, parent, catalog, vendor, purchase_date, warranty_date, "
+                "INSERT INTO t_device (id, name, caption, catalog, vendor, purchase_date, warranty_date, "
                         + "health_index, model, serial_number, install_date, lifecycle_status, "
                         + "responsible_person, department, supplier_contact, maintenance_cycle, "
                         + "last_maintenance_date, remark, type_name) "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                row.id(), row.name(), row.caption(), row.parentId(),
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                row.id(), row.name(), row.caption(),
                 row.catalog(), row.vendor(), row.purchaseDate(), row.warrantyDate(),
                 row.healthIndex(), row.model(), row.serialNumber(), row.installDate(),
                 row.lifecycleStatus(), row.responsiblePerson(), row.department(),
@@ -685,9 +622,9 @@ public class AssetRepository {
 
     public void insertService(ServiceRow row) {
         jdbc.update(
-                "INSERT INTO t_service (id, name, caption, parent, mode, driver_class, max_connections, type_name) "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                row.id(), row.name(), row.caption(), row.parentId(),
+                "INSERT INTO t_service (id, name, caption, mode, driver_class, max_connections, type_name) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                row.id(), row.name(), row.caption(),
                 row.mode(), row.driverClass(), row.maxConnections(), row.typeName());
     }
 
@@ -718,27 +655,16 @@ public class AssetRepository {
 
     // ======================== CRUD: Update ========================
 
-    public void updateSpace(int id, SpaceUpdateFields f) {
-        SpaceRow old = findSpaceRowById(id);
-        if (old == null) throw new AssetException("Space not found: " + id);
-        jdbc.update(
-                "UPDATE t_space SET name=?, caption=?, parent=?, area=?, sequence=?, show_in_client=?, type_name=? WHERE id=?",
-                coalesce(f.name(), old.name()), coalesce(f.caption(), old.caption()),
-                coalesce(f.parentId(), old.parentId()), coalesce(f.area(), old.area()),
-                coalesce(f.sequence(), old.sequence()), coalesce(f.showInClient(), old.showInClient()),
-                coalesce(f.typeName(), old.typeName()), id);
-    }
-
     public void updateDevice(int id, DeviceUpdateFields f) {
         DeviceRow old = findDeviceRowById(id);
         if (old == null) throw new AssetException("Device not found: " + id);
         jdbc.update(
-                "UPDATE t_device SET name=?, caption=?, parent=?, catalog=?, vendor=?, purchase_date=?, "
+                "UPDATE t_device SET name=?, caption=?, catalog=?, vendor=?, purchase_date=?, "
                         + "warranty_date=?, health_index=?, model=?, serial_number=?, install_date=?, "
                         + "lifecycle_status=?, responsible_person=?, department=?, supplier_contact=?, "
                         + "maintenance_cycle=?, last_maintenance_date=?, remark=?, type_name=? WHERE id=?",
                 coalesce(f.name(), old.name()), coalesce(f.caption(), old.caption()),
-                coalesce(f.parentId(), old.parentId()), coalesce(f.catalog(), old.catalog()),
+                coalesce(f.catalog(), old.catalog()),
                 coalesce(f.vendor(), old.vendor()), coalesce(f.purchaseDate(), old.purchaseDate()),
                 coalesce(f.warrantyDate(), old.warrantyDate()), coalesce(f.healthIndex(), old.healthIndex()),
                 coalesce(f.model(), old.model()), coalesce(f.serialNumber(), old.serialNumber()),
@@ -753,9 +679,9 @@ public class AssetRepository {
         ServiceRow old = findServiceRowById(id);
         if (old == null) throw new AssetException("Service not found: " + id);
         jdbc.update(
-                "UPDATE t_service SET name=?, caption=?, parent=?, mode=?, driver_class=?, max_connections=?, type_name=? WHERE id=?",
+                "UPDATE t_service SET name=?, caption=?, mode=?, driver_class=?, max_connections=?, type_name=? WHERE id=?",
                 coalesce(f.name(), old.name()), coalesce(f.caption(), old.caption()),
-                coalesce(f.parentId(), old.parentId()), coalesce(f.mode(), old.mode()),
+                coalesce(f.mode(), old.mode()),
                 coalesce(f.driverClass(), old.driverClass()), coalesce(f.maxConnections(), old.maxConnections()),
                 coalesce(f.typeName(), old.typeName()), id);
     }
@@ -825,43 +751,47 @@ public class AssetRepository {
 
     // ======================== CRUD: Delete ========================
 
-    public void deleteSpace(int id) {
-        jdbc.update("DELETE FROM t_asset_attribute WHERE asset_id=?", id);
-        jdbc.update("DELETE FROM t_asset WHERE space_id=?", id);
-        jdbc.update("DELETE FROM t_space WHERE id=?", id);
-    }
-
     public void deleteDevice(int id) {
+        deleteAssetGroupRels(AssetKind.DEVICE, id);
         jdbc.update("DELETE FROM t_asset_attribute WHERE asset_id=?", id);
         jdbc.update("DELETE FROM t_asset WHERE device_id=?", id);
         jdbc.update("DELETE FROM t_device WHERE id=?", id);
     }
 
     public void deleteService(int id) {
+        deleteAssetGroupRels(AssetKind.SERVICE, id);
         jdbc.update("DELETE FROM t_asset_attribute WHERE asset_id=?", id);
         jdbc.update("DELETE FROM t_asset WHERE service_id=?", id);
         jdbc.update("DELETE FROM t_service WHERE id=?", id);
     }
 
     public void deleteProbe(int id) {
+        deleteAssetGroupRels(AssetKind.PROBE, id);
         jdbc.update("DELETE FROM t_asset_attribute WHERE asset_id=?", id);
         jdbc.update("DELETE FROM t_asset WHERE probe_id=?", id);
         jdbc.update("DELETE FROM t_probe WHERE id=?", id);
     }
 
     public void deleteControl(int id) {
+        deleteAssetGroupRels(AssetKind.CONTROL, id);
         jdbc.update("DELETE FROM t_asset_attribute WHERE asset_id=?", id);
         jdbc.update("DELETE FROM t_asset WHERE control_id=?", id);
         jdbc.update("DELETE FROM t_control WHERE id=?", id);
     }
 
-    // ======================== CRUD: Find by ID ========================
-
-    public Space findSpaceById(int id) {
-        var rows = jdbc.query(SELECT_SPACE + " WHERE id=?",
-                (rs, i) -> toSpace(mapSpaceRow(rs)), id);
-        return rows.isEmpty() ? null : rows.get(0);
+    /**
+     * Removes the group memberships ({@code t_asset_group_rel}) of the t_asset
+     * view row for a per-kind id. Must run while the t_asset row still exists —
+     * the membership is resolved to the row id via subquery.
+     */
+    private void deleteAssetGroupRels(AssetKind kind, int perKindId) {
+        String kindCol = getKindIdColumn(kind);
+        jdbc.update("DELETE FROM t_asset_group_rel WHERE asset_id IN "
+                        + "(SELECT id FROM t_asset WHERE kind=? AND " + kindCol + "=?)",
+                kind.getCode(), (long) perKindId);
     }
+
+    // ======================== CRUD: Find by ID ========================
 
     public Device findDeviceById(int id) {
         var rows = jdbc.query(SELECT_DEVICE + " WHERE id=?",
@@ -971,12 +901,6 @@ public class AssetRepository {
 
     // ======================== Row finders (for update merge) ========================
 
-    private SpaceRow findSpaceRowById(int id) {
-        var rows = jdbc.query(SELECT_SPACE + " WHERE id=?",
-                (rs, i) -> mapSpaceRow(rs), id);
-        return rows.isEmpty() ? null : rows.get(0);
-    }
-
     private DeviceRow findDeviceRowById(int id) {
         var rows = jdbc.query(SELECT_DEVICE + " WHERE id=?",
                 (rs, i) -> mapDeviceRow(rs), id);
@@ -1004,7 +928,8 @@ public class AssetRepository {
     // ======================== t_asset Unified View ========================
 
     /**
-     * Inserts the unified-view row for a newly created asset.
+     * Inserts the unified-view row for a newly created asset and returns its
+     * AUTO_INCREMENT row id.
      * <p>
      * {@code parentRuntimeId} is the parent's per-kind runtime id (the domain
      * the create API and the asset tree use); {@code t_asset.parent_id} stores
@@ -1012,19 +937,54 @@ public class AssetRepository {
      * joins against (docs/design/ops-statistics-design.md §3) — so the parent
      * is translated here. Falls back to 0 (view root) with a warning when the
      * parent cannot be resolved, rather than corrupting the hierarchy.
+     * <p>
+     * The returned row id is the group-membership id ({@code t_asset_group_rel.asset_id})
+     * the create API responds with — distinct from the per-kind runtime id.
      */
-    public void insertAssetView(String name, String caption, AssetKind kind, int parentRuntimeId, int perKindId) {
+    public long insertAssetView(String name, String caption, AssetKind kind, int parentRuntimeId, int perKindId) {
         String kindCol      = getKindIdColumn(kind);
         int     parentRowId = parentAssetViewRowId(parentRuntimeId);
         jdbc.update(
                 "INSERT INTO t_asset (name, caption, kind, parent_id, enabled, " + kindCol + ") VALUES (?, ?, ?, ?, 1, ?)",
-                name, caption, kind.ordinal(), (long) parentRowId, (long) perKindId);
+                name, caption, kind.getCode(), (long) parentRowId, (long) perKindId);
+        return recapturedAssetViewRowId(kind, perKindId);
+    }
+
+    /**
+     * Recaptures the AUTO_INCREMENT id of the view row just written for
+     * (kind, perKindId), via the same reverse lookup {@link #parentAssetViewRowId(int)}
+     * uses. The newest row wins should legacy duplicates exist; a missing row
+     * right after a successful insert breaks the row-per-asset invariant and
+     * fails fast instead of handing out a bogus membership id.
+     */
+    private long recapturedAssetViewRowId(AssetKind kind, int perKindId) {
+        String kindCol  = getKindIdColumn(kind);
+        List<Long> rows = jdbc.query(
+                "SELECT id FROM t_asset WHERE kind=? AND " + kindCol + "=? ORDER BY id DESC",
+                (rs, i) -> rs.getLong("id"), kind.getCode(), perKindId);
+        if (rows.isEmpty()) {
+            throw new AssetException(String.format(
+                    "t_asset view row missing right after insert: kind=%s, per-kind id=%d",
+                    kind, perKindId));
+        }
+        if (rows.size() > 1) {
+            log.warn("{} carries {} t_asset view rows for per-kind id {}; using the newest row id {}.",
+                    kind, rows.size(), perKindId, rows.get(0));
+        }
+        return rows.get(0);
     }
 
     /**
      * Resolves the t_asset row id referenced by a parent runtime id, or
      * {@link Asset#INVALID_ID} when unresolvable (root parent, unknown asset,
      * or missing view row).
+     * <p>
+     * On duplicate view rows the OLDEST row id wins ({@code ORDER BY id}), so
+     * parent links keep pointing stably at the pre-existing row. This is a
+     * deliberate semantic difference from {@link #recapturedAssetViewRowId},
+     * which picks the NEWEST row ({@code ORDER BY id DESC}): a recapture
+     * targets the row just inserted, while a parent link must stay anchored
+     * to the row that has existed all along.
      */
     private int parentAssetViewRowId(int parentRuntimeId) {
         if (parentRuntimeId <= 0) {
@@ -1039,7 +999,7 @@ public class AssetRepository {
         String parentKindCol = getKindIdColumn(parent.getKind());
         List<Integer> rowIds = jdbc.query(
                 "SELECT id FROM t_asset WHERE kind=? AND " + parentKindCol + "=? ORDER BY id",
-                (rs, i) -> rs.getInt("id"), parent.getKind().ordinal(), parentRuntimeId);
+                (rs, i) -> rs.getInt("id"), parent.getKind().getCode(), parentRuntimeId);
         if (rowIds.isEmpty()) {
             log.warn("Parent {} (runtime id {}) has no t_asset view row; asset view row gets parent_id=0.",
                     parent.getKind(), parentRuntimeId);
@@ -1056,7 +1016,7 @@ public class AssetRepository {
         String kindCol = getKindIdColumn(kind);
         jdbc.update(
                 "UPDATE t_asset SET name=?, caption=? WHERE kind=? AND " + kindCol + "=?",
-                name, caption, kind.ordinal(), perKindId);
+                name, caption, kind.getCode(), perKindId);
     }
 
     /** Set enabled/disabled flag on the unified asset view. */
@@ -1064,12 +1024,11 @@ public class AssetRepository {
         String kindCol = getKindIdColumn(kind);
         jdbc.update(
                 "UPDATE t_asset SET enabled=? WHERE kind=? AND " + kindCol + "=?",
-                enabled ? 1 : 0, kind.ordinal(), perKindId);
+                enabled ? 1 : 0, kind.getCode(), perKindId);
     }
 
     private static String getKindIdColumn(AssetKind kind) {
         return switch (kind) {
-            case SPACE -> "space_id";
             case DEVICE -> "device_id";
             case SERVICE -> "service_id";
             case PROBE -> "probe_id";
@@ -1081,7 +1040,6 @@ public class AssetRepository {
 
     public int nextId(AssetKind kind) {
         String table = switch (kind) {
-            case SPACE -> "t_space";
             case DEVICE -> "t_device";
             case SERVICE -> "t_service";
             case PROBE -> "t_probe";

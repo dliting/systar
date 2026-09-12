@@ -26,7 +26,7 @@ import java.util.*;
  * <p>
  * Scanned locations are the built-in defaults — type XMLs shipped inside the
  * drivers module ({@value #DRIVERS_PATTERN}) and the server-side generic
- * Space/Device XMLs ({@value #GENERIC_PATTERN}) — plus any extra patterns from
+ * Device XMLs ({@value #GENERIC_PATTERN}) — plus any extra patterns from
  * the {@code systar.asset-type.scan-paths} property (comma-separated resource
  * location patterns, e.g. {@code file:./config/drivers/*.xml} for private
  * driver types kept outside the repository).
@@ -34,9 +34,9 @@ import java.util.*;
  * Key loading rules:
  * <ul>
  *   <li>Each file is classified by its root element:
- *       {@code Spaces/Devices/Services/ProbeList/ControlList}; an unknown root
+ *       {@code Devices/Services/ProbeList/ControlList}; an unknown root
  *       element fails fast with the file name and the legal roots</li>
- *   <li>Loading order: Space → Device → Service → Probe → Control; within a
+ *   <li>Loading order: Device → Service → Probe → Control; within a
  *       kind, files are processed in sorted location order and document order
  *       is preserved, so a {@code Super} parent declared earlier in the same
  *       file resolves</li>
@@ -57,12 +57,11 @@ public class XmlAssetTypeLoader implements com.systar.monitor.asset.type.AssetTy
     /** Built-in pattern: every XML under the drivers module's package tree. */
     static final String DRIVERS_PATTERN = "classpath*:com/systar/monitor/drivers/**/*.xml";
 
-    /** Built-in pattern: generic Space/Device type XMLs kept in the server module. */
+    /** Built-in pattern: generic Device type XMLs kept in the server module. */
     static final String GENERIC_PATTERN = "classpath*:config/assets/generic-*.xml";
 
     /** Root element name → asset kind. */
     private static final Map<String, AssetKind> ROOT_TO_KIND = Map.of(
-            "Spaces", AssetKind.SPACE,
             "Devices", AssetKind.DEVICE,
             "Services", AssetKind.SERVICE,
             "ProbeList", AssetKind.PROBE,
@@ -103,8 +102,6 @@ public class XmlAssetTypeLoader implements com.systar.monitor.asset.type.AssetTy
 
         int count = 0;
         try {
-            count += loadKindGroup(store, AssetKind.SPACE, "Space",
-                    store.getSpaceTypes(), resourcesByKind, seenByKind);
             count += loadKindGroup(store, AssetKind.DEVICE, "Device",
                     store.getDeviceTypes(), resourcesByKind, seenByKind);
             count += loadKindGroup(store, AssetKind.SERVICE, "Service",
@@ -246,7 +243,6 @@ public class XmlAssetTypeLoader implements com.systar.monitor.asset.type.AssetTy
         }
 
         AssetType type = switch (kind) {
-            case SPACE -> new SpaceType(name);
             case DEVICE -> new DeviceType(name);
             case SERVICE -> new ServiceType(name);
             case PROBE -> new ProbeType(name);
@@ -516,7 +512,6 @@ public class XmlAssetTypeLoader implements com.systar.monitor.asset.type.AssetTy
 
     private AssetType resolveType(AssetStore store, String name, AssetKind kind) {
         return switch (kind) {
-            case SPACE -> store.getSpaceTypes().find(name);
             case DEVICE -> store.getDeviceTypes().find(name);
             case SERVICE -> store.getServiceTypes().find(name);
             case PROBE -> store.getProbeTypes().find(name);

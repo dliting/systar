@@ -53,9 +53,6 @@ public class WorkOrderService {
         order.setStatus(WorkOrderStatus.CREATED.name());
         order.setCreatedAt(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
-        if (order.getSpaceId() == null) {
-            order.setSpaceId(deviceInfo.resolveSpaceId(order.getDeviceId()));
-        }
         if (order.getPriority() == null) {
             order.setPriority(DEFAULT_PRIORITY);
         }

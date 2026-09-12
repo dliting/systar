@@ -11,7 +11,6 @@ public record StatisticsQuery(
         LocalDate startDate,
         LocalDate endDate,
         Integer deviceId,
-        Integer spaceId,
         String granularity) {
 
     private static final long MAX_RANGE_DAYS = 365;

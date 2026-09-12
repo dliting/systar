@@ -1,36 +1,6 @@
 <template>
   <div class="app-container tree-sidebar-manage-wrap">
-    <tree-panel
-      title="资产树"
-      :tree-data="treeData"
-      :tree-props="{ children: 'children', label: 'caption' }"
-      search-placeholder="搜索资产名称"
-      storage-key="iot-schedule-sidebar-width"
-      :default-expand-all="true"
-      @node-click="handleTreeNodeClick"
-      @refresh="loadTree"
-      ref="treeRef"
-    >
-      <template #node="{ data }">
-        <span class="tree-node">
-          <el-icon class="node-icon">
-            <FolderOpened v-if="data.kind === 'SPACE'" />
-            <Monitor v-else-if="data.kind === 'DEVICE'" />
-            <Odometer v-else-if="data.kind === 'PROBE'" />
-            <Setting v-else-if="data.kind === 'CONTROL'" />
-            <Service v-else-if="data.kind === 'SERVICE'" />
-            <Document v-else />
-          </el-icon>
-          <span class="node-label" :title="data.caption || data.name">{{ data.caption || data.name }}</span>
-          <el-tag
-            v-if="data.state"
-            :type="stateTagType(data.state)"
-            size="small"
-            class="node-state-tag"
-          >{{ data.stateCaption || data.state }}</el-tag>
-        </span>
-      </template>
-    </tree-panel>
+    <AssetTreePanel @node-click="handleTreeNodeClick" />
 
     <div class="tree-sidebar-content">
       <div class="content-inner">
@@ -127,17 +97,18 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { listTasks, createTask, updateTask, deleteTask, enableTask, disableTask, getTaskLogs, previewCron } from '@/api/iot/scheduledTask'
 import { getAssetTree } from '@/api/iot/asset'
-import { stateTagType } from '@/utils/formatters'
 import { showSystarError } from '@/utils/errorHandler'
 import CronWizard from '@/components/CronWizard/index.vue'
-import TreePanel from '@/components/TreePanel'
-import { FolderOpened, Monitor, Odometer, Setting, Service, Document } from '@element-plus/icons-vue'
+import AssetTreePanel from '@/components/AssetTreePanel/index.vue'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 import EnhancedTable from '@/components/EnhancedTable/index.vue'
+
+// Only monitors are valid scheduling targets.
+const MONITOR_ASSET_KINDS = ['PROBE', 'CONTROL']
 
 // ======================== table config ========================
 
@@ -177,14 +148,9 @@ const previewNext   = ref(null)
 const logsVisible = ref(false)
 const logs        = ref([])
 
-// Tree state
-const treeRef      = ref(null)
-const assetTree    = ref({})
+// Tree state: only the id→caption map is needed here; the tree itself lives
+// inside AssetTreePanel (useAssetTree).
 const assetNameMap = ref({})
-
-const treeData = computed(() =>
-  (assetTree.value && assetTree.value.id !== undefined) ? [assetTree.value] : []
-)
 
 let debounceTimer = null
 watch(() => form.value.cronExpression, (val) => {
@@ -205,7 +171,11 @@ watch(() => form.value.cronExpression, (val) => {
 
 function buildNameMap(node, map) {
   if (!node) return
-  map[node.id] = node.caption || node.name
+  // Real assets only — synthetic roots carry no id and group ids belong to
+  // t_group, which must never collide with an asset id in the map.
+  if (node.nodeKind === 'ASSET' && node.id != null) {
+    map[node.id] = node.caption || node.name
+  }
   if (node.children) {
     for (const child of node.children) {
       buildNameMap(child, map)
@@ -213,14 +183,14 @@ function buildNameMap(node, map) {
   }
 }
 
-async function loadTree() {
+async function loadNameMap() {
   try {
     const res = await getAssetTree()
-    const root = res.data
-    if (!root) return
-    assetTree.value = root
+    const forest = res.data || []
     const map = {}
-    buildNameMap(root, map)
+    for (const root of forest) {
+      buildNameMap(root, map)
+    }
     assetNameMap.value = map
   } catch (e) {
     showSystarError(e, '加载资产树失败')
@@ -229,8 +199,8 @@ async function loadTree() {
 
 function handleTreeNodeClick(data) {
   if (!dialogVisible.value) return
-  const isMonitor = data.kind === 'PROBE' || data.kind === 'CONTROL'
-  if (!isMonitor) return
+  if (data.nodeKind !== 'ASSET' || data.id == null) return
+  if (!MONITOR_ASSET_KINDS.includes(data.assetKind)) return
   if (form.value.controlId != null && form.value.controlId > 0) {
     ElMessage.info('目标已填写，如需更换请先清空')
     return
@@ -321,25 +291,11 @@ function handleLogs(row) {
 
 // ======================== init ========================
 
-loadTree()
+loadNameMap()
 loadTasks()
 </script>
 
 <style scoped>
-.tree-node {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.tree-node .node-icon {
-  font-size: 14px;
-}
-.tree-node .node-label {
-  font-size: 13px;
-}
-.node-state-tag {
-  margin-left: 4px;
-}
 .tree-sidebar-manage-wrap :deep(.tree-sidebar) {
   position: relative;
   z-index: 2100;

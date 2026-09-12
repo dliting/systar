@@ -10,7 +10,6 @@ CREATE TABLE IF NOT EXISTS t_work_order (
     alarm_message_id   INT             NULL                            COMMENT '关联告警消息ID',
     inspection_task_id BIGINT          NULL                            COMMENT '关联巡检任务ID',
     device_id          INT             NOT NULL                        COMMENT '关联设备ID',
-    space_id           INT             NULL                            COMMENT '设备所属空间ID',
     priority           TINYINT         NOT NULL                        COMMENT '优先级: 1低/2中/3高/4紧急',
     status             VARCHAR(20)     NOT NULL DEFAULT 'CREATED'      COMMENT 'CREATED/ASSIGNED/PROCESSING/CLOSED/CANCELLED',
     assignee_id        BIGINT          NULL                            COMMENT '处理人ID',
@@ -27,7 +26,6 @@ CREATE TABLE IF NOT EXISTS t_work_order (
 
 CREATE INDEX i_wo_status ON t_work_order (status);
 CREATE INDEX i_wo_device ON t_work_order (device_id);
-CREATE INDEX i_wo_space ON t_work_order (space_id);
 CREATE INDEX i_wo_assignee ON t_work_order (assignee_id);
 CREATE INDEX i_wo_alarm ON t_work_order (alarm_message_id);
 CREATE INDEX i_wo_created ON t_work_order (created_at);

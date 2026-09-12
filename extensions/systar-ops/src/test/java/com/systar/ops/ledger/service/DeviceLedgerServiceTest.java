@@ -46,19 +46,19 @@ class DeviceLedgerServiceTest {
     private MaintenanceRecordMapper maintenanceRecordMapper;
 
     @Test
-    void getDeviceLedger_filtersBySpaceCatalogAndLifecycle() {
-        insertDevice(1101, 10, (short) 201, "IN_SERVICE", LocalDate.of(2026, 7, 1), null);
-        insertDevice(1102, 10, (short) 202, "IN_SERVICE", LocalDate.of(2026, 7, 1), null);
-        insertDevice(1103, 11, (short) 201, "RETIRED", LocalDate.of(2026, 7, 1), null);
+    void getDeviceLedger_filtersByCatalogAndLifecycle() {
+        insertDevice(1101, (short) 201, "IN_SERVICE", LocalDate.of(2026, 7, 1), null);
+        insertDevice(1102, (short) 202, "IN_SERVICE", LocalDate.of(2026, 7, 1), null);
+        insertDevice(1103, (short) 201, "RETIRED", LocalDate.of(2026, 7, 1), null);
 
-        PagedResult<DeviceDto> page = service.getDeviceLedger(1, 10, 10, (short) 201, "IN_SERVICE");
+        PagedResult<DeviceDto> page = service.getDeviceLedger(1, 10, (short) 201, "IN_SERVICE");
 
         assertThat(page.records()).extracting(DeviceDto::id).containsExactly(1101);
     }
 
     @Test
     void getDeviceDetail_returnsDeviceAttributesAndRecentMaintenanceRecords() {
-        insertDevice(1201, 10, (short) 201, "IN_SERVICE", LocalDate.of(2026, 7, 1), null);
+        insertDevice(1201, (short) 201, "IN_SERVICE", LocalDate.of(2026, 7, 1), null);
         service.batchSetAttributes(1201, Map.of("ip", "192.168.1.10"));
         insertMaintenanceRecord(1201, LocalDateTime.of(2026, 5, 1, 9, 0));
 
@@ -71,7 +71,7 @@ class DeviceLedgerServiceTest {
 
     @Test
     void batchSetAttributes_upsertsExistingAttribute() {
-        insertDevice(1301, 10, (short) 201, "IN_SERVICE", LocalDate.of(2026, 7, 1), null);
+        insertDevice(1301, (short) 201, "IN_SERVICE", LocalDate.of(2026, 7, 1), null);
 
         service.batchSetAttributes(1301, Map.of("ip", "192.168.1.10"));
         service.batchSetAttributes(1301, Map.of("ip", "192.168.1.11"));
@@ -83,7 +83,7 @@ class DeviceLedgerServiceTest {
 
     @Test
     void deleteAttribute_removesDeviceAttributeByKey() {
-        insertDevice(1401, 10, (short) 201, "IN_SERVICE", LocalDate.of(2026, 7, 1), null);
+        insertDevice(1401, (short) 201, "IN_SERVICE", LocalDate.of(2026, 7, 1), null);
         service.batchSetAttributes(1401, Map.of("ip", "192.168.1.10", "port", "502"));
 
         service.deleteAttribute(1401, "ip");
@@ -94,20 +94,20 @@ class DeviceLedgerServiceTest {
 
     @Test
     void getWarrantyExpiringDevices_returnsDevicesWithinRange() {
-        insertDevice(1501, 10, (short) 201, "IN_SERVICE", LocalDate.now().plusDays(5), null);
-        insertDevice(1502, 10, (short) 201, "IN_SERVICE", LocalDate.now().plusDays(40), null);
+        insertDevice(1501, (short) 201, "IN_SERVICE", LocalDate.now().plusDays(5), null);
+        insertDevice(1502, (short) 201, "IN_SERVICE", LocalDate.now().plusDays(40), null);
 
         List<DeviceDto> devices = service.getWarrantyExpiringDevices(LocalDate.now().plusDays(30));
 
         assertThat(devices).extracting(DeviceDto::id).contains(1501).doesNotContain(1502);
     }
 
-    private void insertDevice(Integer id, Integer parentId, Short catalog, String lifecycleStatus,
+    private void insertDevice(Integer id, Short catalog, String lifecycleStatus,
                               LocalDate warrantyDate, Integer maintenanceCycle) {
         jdbc.update(
-                "INSERT INTO t_device (id, name, parent, catalog, lifecycle_status, warranty_date, maintenance_cycle) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                id, "device_" + id, parentId, catalog, lifecycleStatus, warrantyDate, maintenanceCycle);
+                "INSERT INTO t_device (id, name, catalog, lifecycle_status, warranty_date, maintenance_cycle) "
+                + "VALUES (?, ?, ?, ?, ?, ?)",
+                id, "device_" + id, catalog, lifecycleStatus, warrantyDate, maintenanceCycle);
     }
 
     private void insertMaintenanceRecord(Integer deviceId, LocalDateTime performedAt) {

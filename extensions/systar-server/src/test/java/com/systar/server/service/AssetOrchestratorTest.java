@@ -55,55 +55,60 @@ class AssetOrchestratorTest {
     class CreateAsset {
 
         @Test
-        @DisplayName("creates space and publishes CREATED event")
-        void createSpace() {
-            when(repo.nextId(AssetKind.SPACE)).thenReturn(10);
-            Space created = new Space();
-            created.init(new SpaceType("building"), 10, "b1");
-            when(repo.findSpaceById(10)).thenReturn(created);
-
-            var req = new AssetCreateRequest("SPACE", 0, "b1", "Building",
-                    null, Map.of("sequence", 1, "showInClient", 1), Map.of());
-            int id = orchestrator.createAsset(req);
-
-            assertThat(id).isEqualTo(10);
-            verify(repo).insertSpace(any(AssetRepository.SpaceRow.class));
-            verify(repo).insertAssetView(eq("b1"), eq("Building"), eq(AssetKind.SPACE), eq(0), eq(10));
-
-            AssetChangedEvent event = captureEvent();
-            assertThat(event.action()).isEqualTo(Action.CREATED);
-            assertThat(event.assetId()).isEqualTo(10);
-        }
-
-        @Test
-        @DisplayName("creates space without NPE when int properties are null")
-        void createSpaceNullIntProps() {
-            when(repo.nextId(AssetKind.SPACE)).thenReturn(11);
-            Space created = new Space();
-            created.init(new SpaceType("building"), 11, "b2");
-            when(repo.findSpaceById(11)).thenReturn(created);
-
-            var req = new AssetCreateRequest("SPACE", 0, "b2", "Building 2",
-                    null, Map.of(), Map.of());
-            assertThatCode(() -> orchestrator.createAsset(req)).doesNotThrowAnyException();
-            verify(repo).insertSpace(any(AssetRepository.SpaceRow.class));
-        }
-
-        @Test
         @DisplayName("creates device and publishes CREATED event")
         void createDevice() {
             when(repo.nextId(AssetKind.DEVICE)).thenReturn(20);
             Device created = new Device();
             created.init(new DeviceType("meter"), 20, "d1");
             when(repo.findDeviceById(20)).thenReturn(created);
+            // The view row gets an AUTO_INCREMENT id unrelated to the runtime id.
+            when(repo.insertAssetView(eq("d1"), eq("Meter"), eq(AssetKind.DEVICE), eq(0), eq(20)))
+                    .thenReturn(122L);
 
             var req = new AssetCreateRequest("DEVICE", 0, "d1", "Meter",
                     null, Map.of(), Map.of());
-            int id = orchestrator.createAsset(req);
+            AssetOrchestrator.CreateResult result = orchestrator.createAsset(req);
 
-            assertThat(id).isEqualTo(20);
-            verify(repo).insertDevice(any(AssetRepository.DeviceRow.class));
+            assertThat(result.runtimeId()).isEqualTo(20);
+            assertThat(result.assetRowId()).isEqualTo(122L);
+            ArgumentCaptor<AssetRepository.DeviceRow> row =
+                    ArgumentCaptor.forClass(AssetRepository.DeviceRow.class);
+            verify(repo).insertDevice(row.capture());
             verify(repo).insertAssetView(eq("d1"), eq("Meter"), eq(AssetKind.DEVICE), eq(0), eq(20));
+        }
+
+        @Test
+        @DisplayName("rejects a device create request that carries a parent")
+        void createDeviceRejectsParent() {
+            var req = new AssetCreateRequest("DEVICE", 5, "d1", "Meter",
+                    null, Map.of(), Map.of());
+            assertThatThrownBy(() -> orchestrator.createAsset(req))
+                    .isInstanceOf(AssetException.class)
+                    .hasMessageContaining("top-level")
+                    .hasMessageContaining("parentId must be 0");
+        }
+
+        @Test
+        @DisplayName("rejects a device create request with a negative parent id (not silently coerced)")
+        void createDeviceRejectsNegativeParent() {
+            var req = new AssetCreateRequest("DEVICE", -5, "d1", "Meter",
+                    null, Map.of(), Map.of());
+            assertThatThrownBy(() -> orchestrator.createAsset(req))
+                    .isInstanceOf(AssetException.class)
+                    .hasMessageContaining("top-level");
+        }
+
+        @Test
+        @DisplayName("rejects a service create request that carries a parent")
+        void createServiceRejectsParent() {
+            store.getServiceTypes().register(new ServiceType("ModbusTcpMaster"));
+
+            var req = new AssetCreateRequest("SERVICE", 5, "svc1", "Modbus",
+                    "ModbusTcpMaster", Map.of("mode", "ACTIVE"), Map.of());
+            assertThatThrownBy(() -> orchestrator.createAsset(req))
+                    .isInstanceOf(AssetException.class)
+                    .hasMessageContaining("top-level")
+                    .hasMessageContaining("parentId must be 0");
         }
 
         @Test
@@ -116,9 +121,9 @@ class AssetOrchestratorTest {
 
             var req = new AssetCreateRequest("PROBE", 0, "p1", "Voltage",
                     null, Map.of("unit", "V"), Map.of());
-            int id = orchestrator.createAsset(req);
+            AssetOrchestrator.CreateResult result = orchestrator.createAsset(req);
 
-            assertThat(id).isEqualTo(30);
+            assertThat(result.runtimeId()).isEqualTo(30);
             verify(repo).insertProbe(any(AssetRepository.ProbeRow.class));
         }
 
@@ -132,9 +137,9 @@ class AssetOrchestratorTest {
 
             var req = new AssetCreateRequest("CONTROL", 0, "c1", "Switch",
                     null, Map.of(), Map.of());
-            int id = orchestrator.createAsset(req);
+            AssetOrchestrator.CreateResult result = orchestrator.createAsset(req);
 
-            assertThat(id).isEqualTo(40);
+            assertThat(result.runtimeId()).isEqualTo(40);
             verify(repo).insertControl(any(AssetRepository.ControlRow.class));
         }
 
@@ -154,10 +159,12 @@ class AssetOrchestratorTest {
 
             var req = new AssetCreateRequest("SERVICE", 0, "svc1", "Modbus",
                     "ModbusTcpMaster", Map.of("mode", "ACTIVE"), Map.of());
-            int id = orchestrator.createAsset(req);
+            AssetOrchestrator.CreateResult result = orchestrator.createAsset(req);
 
-            assertThat(id).isEqualTo(50);
-            verify(repo).insertService(any(AssetRepository.ServiceRow.class));
+            assertThat(result.runtimeId()).isEqualTo(50);
+            ArgumentCaptor<AssetRepository.ServiceRow> row =
+                    ArgumentCaptor.forClass(AssetRepository.ServiceRow.class);
+            verify(repo).insertService(row.capture());
         }
 
         @Test
@@ -360,9 +367,9 @@ class AssetOrchestratorTest {
         @Test
         @DisplayName("throws when VirtualProbe dependsOn references non-probe asset")
         void virtualProbeDependsOnNonProbe() {
-            Space space = new Space();
-            space.init(new SpaceType("room"), 50, "room1");
-            store.addAsset(space);
+            Device device = new Device();
+            device.init(new DeviceType("room"), 50, "dev1");
+            store.addAsset(device);
 
             when(repo.nextId(AssetKind.PROBE)).thenReturn(60);
             var req = new AssetCreateRequest("PROBE", 0, "vp1", "Virtual",
@@ -380,19 +387,19 @@ class AssetOrchestratorTest {
     class UpdateAsset {
 
         @Test
-        @DisplayName("updates space and publishes UPDATED event")
-        void updateSpace() {
-            Space space = new Space();
-            space.init(new SpaceType("building"), 1, "b1");
-            space.setCaption("Old Caption");
-            when(repo.findSpaceById(1)).thenReturn(space);
+        @DisplayName("updates device and publishes UPDATED event")
+        void updateDevice() {
+            Device device = new Device();
+            device.init(new DeviceType("meter"), 1, "d1");
+            device.setCaption("Old Caption");
+            when(repo.findDeviceById(1)).thenReturn(device);
 
-            var req = new AssetUpdateRequest("b1-new", "New Caption", null,
-                    Map.of("area", 100), null);
-            orchestrator.updateAsset(1, AssetKind.SPACE, req);
+            var req = new AssetUpdateRequest("d1-new", "New Caption", null,
+                    Map.of("vendor", "ACME"), null);
+            orchestrator.updateAsset(1, AssetKind.DEVICE, req);
 
-            verify(repo).updateSpace(eq(1), any(AssetRepository.SpaceUpdateFields.class));
-            verify(repo).updateAssetView(eq(1), eq(AssetKind.SPACE), eq("b1"), eq("Old Caption"));
+            verify(repo).updateDevice(eq(1), any(AssetRepository.DeviceUpdateFields.class));
+            verify(repo).updateAssetView(eq(1), eq(AssetKind.DEVICE), eq("d1"), eq("Old Caption"));
 
             AssetChangedEvent event = captureEvent();
             assertThat(event.action()).isEqualTo(Action.UPDATED);
@@ -406,19 +413,19 @@ class AssetOrchestratorTest {
     class DeleteAsset {
 
         @Test
-        @DisplayName("deletes space with no constraints, calls repo and publishes event")
-        void deleteSpaceNoConstraints() {
-            Space space = new Space();
-            space.init(new SpaceType("building"), 1, "space1");
-            store.addAsset(space);
+        @DisplayName("deletes device with no constraints, calls repo and publishes event")
+        void deleteDeviceNoConstraints() {
+            Device device = new Device();
+            device.init(new DeviceType("meter"), 1, "device1");
+            store.addAsset(device);
 
             when(repo.countAlarmRulesForMonitor(1)).thenReturn(0L);
             when(repo.countLinkageCausesForMonitor(1)).thenReturn(0L);
             when(repo.countLinkageEffectsForMonitor(1)).thenReturn(0L);
 
-            orchestrator.deleteAsset(1, AssetKind.SPACE);
+            orchestrator.deleteAsset(1, AssetKind.DEVICE);
 
-            verify(repo).deleteSpace(1);
+            verify(repo).deleteDevice(1);
             AssetChangedEvent event = captureEvent();
             assertThat(event.action()).isEqualTo(Action.DELETED);
             assertThat(event.assetId()).isEqualTo(1);
@@ -478,10 +485,10 @@ class AssetOrchestratorTest {
         @Test
         @DisplayName("throws when asset has children")
         void childrenConstraint() {
-            Space parent = new Space();
-            parent.init(new SpaceType("floor"), 1, "floor1");
-            Space child = new Space();
-            child.init(new SpaceType("room"), 2, "room1");
+            Device parent = new Device();
+            parent.init(new DeviceType("floor"), 1, "floor1");
+            Device child = new Device();
+            child.init(new DeviceType("room"), 2, "room1");
             store.addAsset(parent);
             parent.addChild(child);
 
@@ -489,7 +496,7 @@ class AssetOrchestratorTest {
             when(repo.countLinkageCausesForMonitor(1)).thenReturn(0L);
             when(repo.countLinkageEffectsForMonitor(1)).thenReturn(0L);
 
-            assertThatThrownBy(() -> orchestrator.deleteAsset(1, AssetKind.SPACE))
+            assertThatThrownBy(() -> orchestrator.deleteAsset(1, AssetKind.DEVICE))
                     .isInstanceOf(AssetException.class)
                     .hasMessageContaining("children");
         }
@@ -531,11 +538,11 @@ class AssetOrchestratorTest {
         @Test
         @DisplayName("start throws for non-monitor asset")
         void startNonMonitor() {
-            Space space = new Space();
-            space.init(new SpaceType("room"), 1, "room1");
-            store.addAsset(space);
+            Device device = new Device();
+            device.init(new DeviceType("room"), 1, "dev1");
+            store.addAsset(device);
 
-            assertThatThrownBy(() -> orchestrator.startAsset(1, AssetKind.SPACE))
+            assertThatThrownBy(() -> orchestrator.startAsset(1, AssetKind.DEVICE))
                     .isInstanceOf(AssetException.class)
                     .hasMessageContaining("not a monitor");
         }
@@ -593,9 +600,9 @@ class AssetOrchestratorTest {
         @Test
         @DisplayName("batchStart reports failure for non-existent and non-monitor")
         void batchStartMixed() {
-            Space space = new Space();
-            space.init(new SpaceType("room"), 3, "room1");
-            store.addAsset(space);
+            Device device = new Device();
+            device.init(new DeviceType("room"), 3, "dev1");
+            store.addAsset(device);
 
             BatchResult result = orchestrator.batchStart(List.of(1, 99, 3));
             assertThat(result.getSuccess()).containsExactly(1);

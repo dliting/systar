@@ -28,8 +28,8 @@ Systar 是一个通用 IoT 工业监控运维框架，适用于智慧园区、�
 
 ## 核心特性
 
-- **资产层级建模** — 空间（Space）→ 设备（Device）→ 服务（Service）→
-  监测点（Probe）/ 控制点（Control）的树形结构
+- **资产层级建模** — 设备（Device）与服务（Service）为顶层资产，
+  监测点（Probe）/ 控制点（Control）挂载于设备之下
 - **多协议数据采集** — 14 种协议驱动：Modbus TCP、OPC UA、BACnet/IP、SNMP、Siemens S7、
   IEC 60870-5-104、MQTT、WebSocket、原始 TCP/IP、UPS（SNMP）、天气（HTTP API）、
   环境传感器（被动 TCP）、内置模拟器、手动输入——支持主动轮询与被动接收两种模式
@@ -162,7 +162,9 @@ cd frontend && npm test   # 前端单元测试
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/monitor/tree` | 获取完整资产树 |
+| GET | `/api/monitor/asset-tree` | 资产森林（`tree=kind` 按类型树或分组树 id） |
+| GET/POST/PUT/DELETE | `/api/monitor/group-trees` | 分组树 CRUD |
+| GET/POST/PUT/DELETE | `/api/monitor/groups` | 分组 CRUD；`PUT /groups/{id}/assets` 替换成员 |
 | GET/POST/PUT/DELETE | `/api/monitor/assets` | 资产 CRUD |
 | PUT | `/api/monitor/assets/{id}/start\|stop\|enable\|disable` | 运行时启停控制 |
 | GET | `/api/monitor/probe-values` | 获取监测点实时值 |
@@ -218,8 +220,10 @@ systar/
 | 概要设计 | [docs/design/architecture.md](docs/design/architecture.md) |
 | 资产 CRUD 设计 | [docs/design/asset-crud-design.md](docs/design/asset-crud-design.md) |
 | 统计管道设计 | [docs/design/stats-pipeline-design.md](docs/design/stats-pipeline-design.md) |
+| 运维统计设计 | [docs/design/ops-statistics-design.md](docs/design/ops-statistics-design.md) |
 | 虚拟监测点设计 | [docs/design/virtual-probe-design.md](docs/design/virtual-probe-design.md) |
 | XML 资产类型配置 | [docs/design/xml-asset-type-config-design.md](docs/design/xml-asset-type-config-design.md) |
+| 协议驱动二次开发指南 | [docs/driver-development-guide.md](docs/driver-development-guide.md) |
 | Nginx 部署模板 | [docs/deployment/nginx-systar.conf](docs/deployment/nginx-systar.conf) |
 | 前端交互测试清单 | [docs/test/](docs/test/) |
 

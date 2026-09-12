@@ -56,6 +56,6 @@ class AlarmSeedStatsTest {
     private StatisticsQuery lastSevenDays() {
         LocalDate end   = LocalDate.now();
         LocalDate start = end.minusDays(SEVEN_DAYS);
-        return new StatisticsQuery(start, end, null, null, "DAY");
+        return new StatisticsQuery(start, end, null, "DAY");
     }
 }

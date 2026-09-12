@@ -8,7 +8,6 @@ import com.systar.monitor.asset.Probe;
 import com.systar.monitor.asset.type.Device;
 import com.systar.monitor.asset.type.DeviceType;
 import com.systar.monitor.asset.type.ProbeType;
-import com.systar.monitor.asset.type.SpaceType;
 import com.systar.ops.test.OpsTestApplication;
 import com.systar.ops.workorder.entity.WorkOrderEntity;
 import com.systar.ops.workorder.mapper.WorkOrderMapper;
@@ -52,7 +51,6 @@ class AlarmToWorkOrderListenerTest {
     @BeforeEach
     void setUp() {
         assetStore.clear();
-        assetStore.createRoot(new SpaceType("root"), "root");
     }
 
     @Test
@@ -125,7 +123,7 @@ class AlarmToWorkOrderListenerTest {
 
     private void insertDeviceRow(int id) {
         jdbc.update(
-                "INSERT INTO t_device (id, name, parent, lifecycle_status, warranty_date) VALUES (?, ?, ?, ?, ?)",
-                id, "device_" + id, 10, "IN_SERVICE", LocalDate.now().plusYears(1));
+                "INSERT INTO t_device (id, name, lifecycle_status, warranty_date) VALUES (?, ?, ?, ?)",
+                id, "device_" + id, "IN_SERVICE", LocalDate.now().plusYears(1));
     }
 }

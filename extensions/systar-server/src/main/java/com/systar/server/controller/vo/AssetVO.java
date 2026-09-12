@@ -3,7 +3,7 @@ package com.systar.server.controller.vo;
 import java.util.Map;
 
 /**
- * VO for general asset information (Space, Device, MonitorService).
+ * VO for general asset information (Device, MonitorService).
  * Monitor-specific fields are in {@link MonitorAssetVO}.
  */
 public class AssetVO {
@@ -11,7 +11,7 @@ public class AssetVO {
     private int     id;
     private String  name;
     private String  caption;
-    private String  kind;       // SPACE, DEVICE, SERVICE, PROBE, CONTROL
+    private String  kind;       // DEVICE, SERVICE, PROBE, CONTROL
     private String  state;      // NORMAL, WARNING, ERROR
     private String  stateCaption; // Human-readable Chinese state label
     private int     parentId;

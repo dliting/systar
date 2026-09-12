@@ -3,6 +3,8 @@ package com.systar.ops.statistics.service;
 import com.systar.monitor.asset.AssetKind;
 import com.systar.ops.statistics.mapper.StatisticsMapper;
 import com.systar.ops.statistics.model.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -19,6 +21,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class StatisticsService {
+
+    private static final Logger log = LoggerFactory.getLogger(StatisticsService.class);
 
     private final StatisticsMapper statisticsMapper;
     private final JdbcTemplate jdbc;
@@ -698,11 +702,15 @@ public class StatisticsService {
 
     private Map<String, Object> mapAssetRow(ResultSet rs) throws SQLException {
         Map<String, Object> map = new HashMap<>();
-        map.put("id", rs.getLong("id"));
-        int kindOrdinal = rs.getInt("kind");
-        AssetKind[] values = AssetKind.values();
-        map.put("kind", kindOrdinal >= 0 && kindOrdinal < values.length
-                ? values[kindOrdinal] : null);
+        long id = rs.getLong("id");
+        map.put("id", id);
+        int kindCode = rs.getInt("kind");
+        AssetKind kind = AssetKind.fromCode(kindCode);
+        if (kind == null) {
+            log.warn("Unknown asset kind code {} on t_asset row {}; row is skipped "
+                    + "in device resolution but alarms are still counted", kindCode, id);
+        }
+        map.put("kind", kind);
         map.put("deviceId", longOrNull(rs, "device_id"));
         map.put("parentId", longOrNull(rs, "parent_id"));
         return map;

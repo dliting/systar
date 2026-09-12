@@ -16,7 +16,7 @@ public class DeviceInfoProviderImpl implements DeviceInfoProvider {
     private final JdbcTemplate jdbc;
 
     private static final String SELECT_DEVICE =
-        "SELECT id, name, caption, parent, catalog, vendor, purchase_date, " +
+        "SELECT id, name, caption, catalog, vendor, purchase_date, " +
         "warranty_date, health_index, model, serial_number, install_date, " +
         "lifecycle_status, responsible_person, department, supplier_contact, " +
         "maintenance_cycle, last_maintenance_date, remark " +
@@ -35,11 +35,10 @@ public class DeviceInfoProviderImpl implements DeviceInfoProvider {
     }
 
     @Override
-    public PagedResult<DeviceDto> listDevices(Integer spaceId, Short catalog,
+    public PagedResult<DeviceDto> listDevices(Short catalog,
             String lifecycleStatus, int page, int size) {
         var where = new StringBuilder(" WHERE 1=1");
         var params = new ArrayList<>();
-        if (spaceId != null) { where.append(" AND parent = ?"); params.add(spaceId); }
         if (catalog != null) { where.append(" AND catalog = ?"); params.add(catalog); }
         if (lifecycleStatus != null) { where.append(" AND lifecycle_status = ?"); params.add(lifecycleStatus); }
 
@@ -63,31 +62,9 @@ public class DeviceInfoProviderImpl implements DeviceInfoProvider {
             (rs, i) -> mapDevice(rs), LocalDate.now(), before);
     }
 
-    @Override
-    public Integer resolveSpaceId(Integer deviceId) {
-        if (deviceId == null) return null;
-        Integer currentId = deviceId;
-        while (currentId != null && currentId > 0) {
-            var spaces = jdbc.query(
-                "SELECT id FROM t_space WHERE id = ?",
-                (rs, i) -> rs.getInt("id"), currentId);
-            if (!spaces.isEmpty()) return spaces.get(0);
-
-            var parents = jdbc.query(
-                "SELECT parent FROM t_device WHERE id = ?",
-                (rs, i) -> {
-                    Object v = rs.getObject("parent");
-                    return v != null ? ((Number) v).intValue() : null;
-                }, currentId);
-            currentId = parents.isEmpty() ? null : parents.get(0);
-        }
-        return null;
-    }
-
     private DeviceDto mapDevice(java.sql.ResultSet rs) throws java.sql.SQLException {
         return new DeviceDto(
             rs.getInt("id"), rs.getString("name"), rs.getString("caption"),
-            (Integer) rs.getObject("parent"),
             safeShort(rs.getObject("catalog")), rs.getString("vendor"),
             rs.getTimestamp("purchase_date") != null
                 ? rs.getTimestamp("purchase_date").toLocalDateTime() : null,

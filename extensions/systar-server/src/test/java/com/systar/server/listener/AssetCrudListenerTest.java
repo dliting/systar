@@ -31,7 +31,6 @@ class AssetCrudListenerTest {
         monitorServer = mock(MonitorServer.class);
         ResultDispatcher dispatcher = mock(ResultDispatcher.class);
         assetStore = new AssetStore();
-        assetStore.createRoot(new SpaceType("root"), "root");
         virtualProbeEngine = new VirtualProbeEngine(assetStore, dispatcher);
         listener = new AssetCrudListener(monitorServer, virtualProbeEngine, assetStore);
     }
@@ -76,7 +75,7 @@ class AssetCrudListenerTest {
         @DisplayName("handles null asset gracefully")
         void nullAsset() {
             assertThatNoException().isThrownBy(() ->
-                    listener.onAssetChanged(new AssetChangedEvent(Action.CREATED, 10, AssetKind.SPACE, null)));
+                    listener.onAssetChanged(new AssetChangedEvent(Action.CREATED, 10, AssetKind.DEVICE, null)));
             verifyNoInteractions(monitorServer);
         }
     }
@@ -205,13 +204,13 @@ class AssetCrudListenerTest {
         @Test
         @DisplayName("stops child monitors but preserves child enabled state")
         void disablesWithCascade() {
-            // Set up in-memory store with space → device → probe
-            Space space = new Space();
-            space.init(new SpaceType("st"), 1, "floor1");
-            assetStore.addAsset(space);
+            // Set up in-memory store with device → sub-device → probe
+            Device parent = new Device();
+            parent.init(new DeviceType("dt"), 1, "floor1");
+            assetStore.addAsset(parent);
 
             Device device = new Device();
-            device.init(new DeviceType("dt"), 2, "dev1");
+            device.init(new DeviceType("dt2"), 2, "dev1");
             device.setParentId(1);
             assetStore.addAsset(device);
 
@@ -221,12 +220,12 @@ class AssetCrudListenerTest {
             assetStore.addAsset(probe);
 
             // Use doReturn/when to avoid Mockito wildcard capture issues
-            doReturn(space).when(monitorServer).findAsset(1);
+            doReturn(parent).when(monitorServer).findAsset(1);
 
-            listener.onAssetChanged(new AssetChangedEvent(Action.DISABLED, 1, AssetKind.SPACE, null));
+            listener.onAssetChanged(new AssetChangedEvent(Action.DISABLED, 1, AssetKind.DEVICE, null));
 
-            // Space itself is disabled
-            assertThat(space.isEnabled()).isFalse();
+            // Parent device itself is disabled
+            assertThat(parent.isEnabled()).isFalse();
 
             // Children keep their enabled state (parent disable is runtime-only)
             assertThat(device.isEnabled()).isTrue();
@@ -267,9 +266,9 @@ class AssetCrudListenerTest {
         @Test
         @DisplayName("smart cascade skips disabled children")
         void smartCascadeSkipsDisabled() {
-            Space space = new Space();
-            space.init(new SpaceType("st"), 1, "floor1");
-            assetStore.addAsset(space);
+            Device parent = new Device();
+            parent.init(new DeviceType("dt"), 1, "floor1");
+            assetStore.addAsset(parent);
 
             Probe probe1 = new Probe();
             probe1.init(new ProbeType("pt"), 10, "enabled-probe");
@@ -283,9 +282,9 @@ class AssetCrudListenerTest {
             probe2.setParentId(1);
             assetStore.addAsset(probe2);
 
-            doReturn(space).when(monitorServer).findAsset(1);
+            doReturn(parent).when(monitorServer).findAsset(1);
 
-            listener.onAssetChanged(new AssetChangedEvent(Action.ENABLED, 1, AssetKind.SPACE, null));
+            listener.onAssetChanged(new AssetChangedEvent(Action.ENABLED, 1, AssetKind.DEVICE, null));
 
             // Only enabled probe should be started
             verify(monitorServer).startMonitor(10);

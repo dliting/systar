@@ -36,7 +36,7 @@ class SystarAuthenticationFilterTest {
     @Test
     void shouldRejectRequestWithoutToken() throws Exception {
         var filter = new SystarAuthenticationFilter(SECRET, List.of("/actuator/health"));
-        var request = new MockHttpServletRequest("GET", "/api/monitor/tree");
+        var request = new MockHttpServletRequest("GET", "/api/monitor/asset-tree");
         var response = new MockHttpServletResponse();
         filter.doFilterInternal(request, response, new MockFilterChain());
         assertEquals(401, response.getStatus());
@@ -53,7 +53,7 @@ class SystarAuthenticationFilterTest {
                 .compact();
 
         var filter = new SystarAuthenticationFilter(SECRET, List.of("/actuator/health"));
-        var request = new MockHttpServletRequest("GET", "/api/monitor/tree");
+        var request = new MockHttpServletRequest("GET", "/api/monitor/asset-tree");
         request.addHeader("Authorization", "Bearer " + jwt);
         var response = new MockHttpServletResponse();
         filter.doFilterInternal(request, response, new MockFilterChain());
@@ -74,7 +74,7 @@ class SystarAuthenticationFilterTest {
                 .compact();
 
         var filter = new SystarAuthenticationFilter(SECRET, List.of());
-        var request = new MockHttpServletRequest("GET", "/api/monitor/tree");
+        var request = new MockHttpServletRequest("GET", "/api/monitor/asset-tree");
         request.addHeader("Authorization", "Bearer " + jwt);
         var response = new MockHttpServletResponse();
         filter.doFilterInternal(request, response, new MockFilterChain());
@@ -93,7 +93,7 @@ class SystarAuthenticationFilterTest {
                 .compact();
 
         var filter = new SystarAuthenticationFilter(SECRET, List.of());
-        var request = new MockHttpServletRequest("GET", "/api/monitor/tree");
+        var request = new MockHttpServletRequest("GET", "/api/monitor/asset-tree");
         request.addHeader("Authorization", "Bearer " + jwt);
         var response = new MockHttpServletResponse();
         filter.doFilterInternal(request, response, new MockFilterChain());
@@ -106,7 +106,7 @@ class SystarAuthenticationFilterTest {
     @Test
     void shouldRejectMalformedJwt() throws Exception {
         var filter = new SystarAuthenticationFilter(SECRET, List.of());
-        var request = new MockHttpServletRequest("GET", "/api/monitor/tree");
+        var request = new MockHttpServletRequest("GET", "/api/monitor/asset-tree");
         request.addHeader("Authorization", "Bearer not.a.valid.jwt");
         var response = new MockHttpServletResponse();
         filter.doFilterInternal(request, response, new MockFilterChain());
@@ -124,7 +124,7 @@ class SystarAuthenticationFilterTest {
                 .compact();
 
         var filter = new SystarAuthenticationFilter(SECRET, List.of());
-        var request = new MockHttpServletRequest("GET", "/api/monitor/tree");
+        var request = new MockHttpServletRequest("GET", "/api/monitor/asset-tree");
         request.addHeader("Authorization", "Bearer " + jwt);
         var response = new MockHttpServletResponse();
         filter.doFilterInternal(request, response, new MockFilterChain());
@@ -135,7 +135,7 @@ class SystarAuthenticationFilterTest {
     @Test
     void shouldHandleBlankBearerToken() throws Exception {
         var filter = new SystarAuthenticationFilter(SECRET, List.of());
-        var request = new MockHttpServletRequest("GET", "/api/monitor/tree");
+        var request = new MockHttpServletRequest("GET", "/api/monitor/asset-tree");
         request.addHeader("Authorization", "Bearer ");
         var response = new MockHttpServletResponse();
         filter.doFilterInternal(request, response, new MockFilterChain());
@@ -152,7 +152,7 @@ class SystarAuthenticationFilterTest {
                 .compact();
 
         var filter = new SystarAuthenticationFilter(SECRET, List.of());
-        var request = new MockHttpServletRequest("GET", "/api/monitor/tree");
+        var request = new MockHttpServletRequest("GET", "/api/monitor/asset-tree");
         request.addHeader("Authorization", "Bearer " + jwt);
         var response = new MockHttpServletResponse();
         filter.doFilterInternal(request, response, new MockFilterChain());
@@ -170,7 +170,7 @@ class SystarAuthenticationFilterTest {
                 .compact();
 
         var filter = new SystarAuthenticationFilter(SECRET, List.of());
-        var request = new MockHttpServletRequest("GET", "/api/monitor/tree");
+        var request = new MockHttpServletRequest("GET", "/api/monitor/asset-tree");
         request.addHeader("Authorization", "Bearer " + jwt);
         var response = new MockHttpServletResponse();
         filter.doFilterInternal(request, response, new MockFilterChain());
@@ -188,7 +188,7 @@ class SystarAuthenticationFilterTest {
                 .compact();
 
         var filter = new SystarAuthenticationFilter(SECRET, List.of());
-        var request = new MockHttpServletRequest("GET", "/api/monitor/tree");
+        var request = new MockHttpServletRequest("GET", "/api/monitor/asset-tree");
         request.addHeader("Authorization", "Bearer " + jwt);
         var response = new MockHttpServletResponse();
         filter.doFilterInternal(request, response, new MockFilterChain());

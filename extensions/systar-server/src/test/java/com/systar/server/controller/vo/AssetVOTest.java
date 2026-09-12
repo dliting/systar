@@ -23,7 +23,7 @@ class AssetVOTest {
         AssetVO vo = new AssetVO();
         vo.setId(1);
         vo.setName("1F Server Room");
-        vo.setKind("SPACE");
+        vo.setKind("DEVICE");
         vo.setState("NORMAL");
         vo.setEnabled(true);
 
@@ -112,39 +112,5 @@ class AssetVOTest {
         assertThat(deserialized.getValue()).isEqualTo(65.0);
         assertThat(deserialized.getUnit()).isEqualTo("%RH");
         assertThat(deserialized.getDetecting()).isTrue();
-    }
-
-    @Test
-    @DisplayName("AssetNodeVO has no Monitor-specific fields")
-    void assetNodeVOHasNoMonitorFields() throws Exception {
-        AssetNodeVO node = new AssetNodeVO();
-        node.setId(10);
-        node.setName("Floor 1");
-        node.setKind("SPACE");
-
-        Map<String, Object> map = toJsonMap(node);
-
-        assertThat(map).containsKey("id");
-        assertThat(map).containsKey("name");
-        assertThat(map).containsKey("kind");
-        assertThat(map).doesNotContainKey("dataType");
-        assertThat(map).doesNotContainKey("viewType");
-    }
-
-    @Test
-    @DisplayName("MonitorAssetNodeVO includes dataType and viewType in flat JSON")
-    void monitorAssetNodeVOFlatSerialization() throws Exception {
-        MonitorAssetNodeVO node = new MonitorAssetNodeVO();
-        node.setId(11);
-        node.setName("Temperature");
-        node.setKind("PROBE");
-        node.setDataType("ANALOG");
-        node.setViewType("GAUGE");
-
-        Map<String, Object> map = toJsonMap(node);
-
-        assertThat(map.get("id")).isEqualTo(11);
-        assertThat(map.get("dataType")).isEqualTo("ANALOG");
-        assertThat(map.get("viewType")).isEqualTo("GAUGE");
     }
 }

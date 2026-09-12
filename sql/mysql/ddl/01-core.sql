@@ -8,30 +8,12 @@
 -- ============================================================================
 
 -- ============================================================================
--- 站点/空间
--- ============================================================================
-CREATE TABLE IF NOT EXISTS t_space (
-    id              INT             NOT NULL                        COMMENT '空间id',
-    name            VARCHAR(63)     NOT NULL                        COMMENT '名称(工程技术用)',
-    caption         VARCHAR(255)    NULL                            COMMENT '显示名称',
-    parent          INT             NOT NULL                        COMMENT '父资产id',
-    area            INT             NULL                            COMMENT '空间面积(平方米)',
-    sequence         INT             NOT NULL DEFAULT 0              COMMENT '排序序号',
-    show_in_client  TINYINT         NOT NULL DEFAULT 1              COMMENT '是否返回给客户端 1=显示 2=不显示',
-    type_name       VARCHAR(100)    NULL                            COMMENT '资产类型名称(关联t_asset_type_config.type_name)',
-    PRIMARY KEY (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='空间区域表';
-
-CREATE INDEX i_space_name ON t_space (name);
-
--- ============================================================================
 -- 监控服务
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS t_service (
     id              INT             NOT NULL                        COMMENT '服务id',
     name            VARCHAR(63)     NOT NULL                        COMMENT '服务名称(工程技术用)',
     caption         VARCHAR(255)    NULL                            COMMENT '显示名称',
-    parent          INT             NOT NULL                        COMMENT '父资产id',
     mode            TINYINT         NULL                            COMMENT '监控模式 0=ACTIVE 1=PASSIVE',
     driver_class    VARCHAR(255)    NULL                            COMMENT '驱动类全限定名',
     max_connections INT             NULL                            COMMENT '最大连接池大小',
@@ -46,7 +28,6 @@ CREATE TABLE IF NOT EXISTS t_device (
     id                    INT             NOT NULL                        COMMENT '设备id',
     name                  VARCHAR(63)     NOT NULL                        COMMENT '设备名称(工程技术用)',
     caption               VARCHAR(255)    NULL                            COMMENT '显示名称',
-    parent                INT             NOT NULL                        COMMENT '父资产id',
     catalog               SMALLINT        NULL                            COMMENT '分类代码',
     vendor                VARCHAR(255)    NULL                            COMMENT '生产厂家',
     purchase_date         DATETIME        NULL                            COMMENT '采购日期',
@@ -126,13 +107,12 @@ CREATE TABLE IF NOT EXISTS t_asset (
     id              BIGINT          NOT NULL AUTO_INCREMENT         COMMENT '资产id',
     name            VARCHAR(63)     NOT NULL                        COMMENT '名称(工程技术用)',
     caption         VARCHAR(255)    NULL                            COMMENT '显示名称',
-    kind            TINYINT         NOT NULL                        COMMENT '资产类型 0=SPACE 1=DEVICE 2=SERVICE 3=PROBE 4=CONTROL',
+    kind            TINYINT         NOT NULL                        COMMENT '资产类型 1=DEVICE 2=SERVICE 3=PROBE 4=CONTROL',
     type_id         BIGINT          NULL                            COMMENT '资产类型定义id',
     parent_id       BIGINT          NULL                            COMMENT '父资产行id(t_asset.id,0为根节点)',
     state           TINYINT         NULL                            COMMENT '资产状态 0=NORMAL 1=WARNING 2=ERROR 3=OFFLINE',
     enabled         INT             NULL DEFAULT 1                  COMMENT '是否启用 1=启用 0=禁用',
     sort            INT             NULL DEFAULT 0                  COMMENT '同级排序',
-    space_id        BIGINT          NULL                            COMMENT '关联t_space.id(仅kind=SPACE时有效)',
     device_id       BIGINT          NULL                            COMMENT '关联t_device.id(仅kind=DEVICE时有效)',
     service_id      BIGINT          NULL                            COMMENT '关联t_service.id(仅kind=SERVICE时有效)',
     probe_id        BIGINT          NULL                            COMMENT '关联t_probe.id(仅kind=PROBE时有效)',
@@ -470,5 +450,36 @@ CREATE TABLE IF NOT EXISTS t_asset_attribute (
 CREATE INDEX i_attr_asset ON t_asset_attribute (asset_id);
 CREATE INDEX i_attr_key ON t_asset_attribute (attr_key);
 CREATE UNIQUE INDEX i_attr_asset_key ON t_asset_attribute (asset_id, attr_key);
+
+-- ============================================================================
+-- 分组树（AssetGroupTree）：用户自管理的多棵组织视角树；"按类型"默认树为虚拟计算，不占行
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS t_group_tree (
+    id       BIGINT       NOT NULL AUTO_INCREMENT,
+    name     VARCHAR(100) NOT NULL UNIQUE,
+    caption  VARCHAR(200) NOT NULL,
+    sequence INT          NOT NULL DEFAULT 0,
+    PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS t_group (
+    id       BIGINT       NOT NULL AUTO_INCREMENT,
+    tree_id  BIGINT       NOT NULL,
+    name     VARCHAR(100) NOT NULL,
+    caption  VARCHAR(200) NOT NULL,
+    parent   BIGINT       NOT NULL DEFAULT 0,
+    level    INT          NOT NULL DEFAULT 1,
+    sequence INT          NOT NULL DEFAULT 0,
+    PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS t_asset_group_rel (
+    asset_id BIGINT       NOT NULL,
+    group_id BIGINT       NOT NULL,
+    PRIMARY KEY (asset_id, group_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE UNIQUE INDEX i_group_tree_name ON t_group (tree_id, name);
+CREATE INDEX i_rel_group ON t_asset_group_rel (group_id);
 
 -- ============================================================

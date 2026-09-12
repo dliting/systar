@@ -1,10 +1,45 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
-import { defineComponent, nextTick } from 'vue'
+import { defineComponent, nextTick, ref } from 'vue'
+
+// jsdom's localStorage is non-functional in this setup (getItem is not a
+// function); useFormDefaults.saveDefaults propagates that failure, so give
+// the whole file a working in-memory implementation.
+vi.stubGlobal('localStorage', (() => {
+  const store = new Map()
+  return {
+    getItem: k => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => { store.set(k, String(v)) },
+    removeItem: k => { store.delete(k) },
+    clear: () => { store.clear() }
+  }
+})())
+
+// Forest fixture shared by the asset API mock and the useAssetTree mock.
+const FOREST = [
+  { key: 'KIND:SERVICE', nodeKind: 'ASSET', assetKind: 'SERVICE', id: null, name: '服务', caption: '服务', children: [] },
+  { key: 'KIND:DEVICE', nodeKind: 'ASSET', assetKind: 'DEVICE', id: null, name: '设备', caption: '设备', children: [
+    { key: 'ASSET:10', nodeKind: 'ASSET', assetKind: 'DEVICE', id: 10, name: 'ups_001', caption: 'UPS', state: 'NORMAL', enabled: true, children: [] }
+  ] }
+]
 
 vi.mock('@/api/iot/asset', () => ({
-  getAssetTree: vi.fn().mockResolvedValue({ data: { id: 1, name: 'root', kind: 'SPACE', children: [] } }),
+  getAssetTree: vi.fn().mockResolvedValue({ data: [
+    { key: 'KIND:SERVICE', nodeKind: 'ASSET', assetKind: 'SERVICE', id: null, children: [] },
+    { key: 'KIND:DEVICE', nodeKind: 'ASSET', assetKind: 'DEVICE', id: null, children: [
+      { key: 'ASSET:10', nodeKind: 'ASSET', assetKind: 'DEVICE', id: 10, name: 'ups_001', caption: 'UPS', state: 'NORMAL', enabled: true, children: [] }
+    ] }
+  ] }),
+  listGroupTrees: vi.fn().mockResolvedValue({ data: [] }),
+  listGroups: vi.fn().mockResolvedValue({ data: [] }),
+  createGroup: vi.fn().mockResolvedValue({}),
+  updateGroup: vi.fn().mockResolvedValue({}),
+  deleteGroup: vi.fn().mockResolvedValue({}),
+  replaceGroupAssets: vi.fn().mockResolvedValue({}),
+  createGroupTree: vi.fn().mockResolvedValue({}),
+  updateGroupTree: vi.fn().mockResolvedValue({}),
+  deleteGroupTree: vi.fn().mockResolvedValue({}),
   getAsset: vi.fn().mockResolvedValue({ data: {} }),
   getAssetTypes: vi.fn().mockResolvedValue({ data: [] }),
   getTypeProperties: vi.fn().mockResolvedValue({ data: [] }),
@@ -47,6 +82,13 @@ vi.mock('@/utils/errorHandler', () => ({
   showSystarError: vi.fn()
 }))
 
+// Mirror the real module export face (KIND_TREE + useAssetTree) so consumers
+// importing either name do not blow up on the mock (T9 convention).
+vi.mock('@/composables/useAssetTree', () => ({
+  KIND_TREE: 'kind',
+  useAssetTree: vi.fn()
+}))
+
 vi.mock('@/composables/useAutoRefresh', () => ({
   useAutoRefresh: vi.fn(() => ({
     enabled: { value: true },
@@ -56,18 +98,14 @@ vi.mock('@/composables/useAutoRefresh', () => ({
   }))
 }))
 
+const routeMock = vi.hoisted(() => ({ path: '/operations', query: {} }))
+
 vi.mock('vue-router', () => ({
   useRouter: vi.fn(() => ({ push: vi.fn(), replace: vi.fn() })),
-  useRoute: vi.fn(() => ({ path: '/operations', query: {} }))
+  useRoute: vi.fn(() => routeMock)
 }))
 
 // Stub components that have ref methods called by the parent
-const StubTreePanel = defineComponent({
-  name: 'TreePanel',
-  props: ['title', 'treeData', 'treeProps', 'searchPlaceholder', 'storageKey', 'defaultExpandAll'],
-  methods: { setCurrentKey: vi.fn() },
-  template: '<div class="stub-tree-panel" />'
-})
 const StubDurationInput = defineComponent({
   name: 'DurationInput',
   template: '<div />'
@@ -99,13 +137,23 @@ const StubSkeleton = defineComponent({
 import Operations from '../index.vue'
 import ConfirmDialog from '@/components/ConfirmDialog/index.vue'
 import { createAsset } from '@/api/iot/asset'
+import { useAssetTree } from '@/composables/useAssetTree'
 
 async function mountAndFlush() {
+  useAssetTree.mockReturnValue({
+    trees: ref([]),
+    currentTree: ref('kind'),
+    currentTreeCaption: ref('按类型'),
+    forest: ref(FOREST),
+    loading: ref(false),
+    init: vi.fn().mockResolvedValue(),
+    refresh: vi.fn().mockResolvedValue(),
+    switchTree: vi.fn().mockResolvedValue()
+  })
   const wrapper = mount(Operations, {
     global: {
       plugins: [ElementPlus],
       components: {
-        TreePanel: StubTreePanel,
         DurationInput: StubDurationInput,
         ControlCommandInput: StubControlCommandInput,
         TrendChart: StubTrendChart,
@@ -132,16 +180,80 @@ describe('Operations', () => {
     wrapper.unmount()
   })
 
-  it('calls getAssetTree on mount', async () => {
+  it('initializes the asset tree panel on mount', async () => {
     const wrapper = await mountAndFlush()
-    const { getAssetTree } = await import('@/api/iot/asset')
-    expect(getAssetTree).toHaveBeenCalled()
+    expect(useAssetTree).toHaveBeenCalled()
+    expect(useAssetTree().init).toHaveBeenCalled()
     wrapper.unmount()
   })
 
   it('renders tree sidebar with content layout', async () => {
     const wrapper = await mountAndFlush()
     expect(wrapper.find('.tree-sidebar-content').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('does not fetch asset detail for group or id-less synthetic nodes', async () => {
+    const wrapper = await mountAndFlush()
+    const vm = wrapper.vm
+    const { getAsset } = await import('@/api/iot/asset')
+
+    vm.handleNodeClick({ key: 'GROUP:1', nodeKind: 'GROUP', id: 1, caption: '一楼', children: [
+      { key: 'ASSET:10', nodeKind: 'ASSET', assetKind: 'DEVICE', id: 10, name: 'ups_001', caption: 'UPS' }
+    ] })
+    expect(getAsset).not.toHaveBeenCalled()
+    expect(vm.isCompound).toBe(true)
+    expect(vm.canAddChild).toBe(true)
+    expect(vm.childCount).toBe(1)
+
+    vm.handleNodeClick({ key: 'KIND:DEVICE', nodeKind: 'ASSET', assetKind: 'DEVICE', id: null, caption: '设备', children: [] })
+    expect(getAsset).not.toHaveBeenCalled()
+    expect(vm.detail).toEqual({})
+    wrapper.unmount()
+  })
+
+  it('treats device assets as containers but monitors as leaves', async () => {
+    const wrapper = await mountAndFlush()
+    const vm = wrapper.vm
+
+    vm.handleNodeClick({ key: 'ASSET:10', nodeKind: 'ASSET', assetKind: 'DEVICE', id: 10, children: [] })
+    expect(vm.isCompound).toBe(true)
+    expect(vm.canAddChild).toBe(true)
+
+    vm.handleNodeClick({ key: 'ASSET:11', nodeKind: 'ASSET', assetKind: 'PROBE', id: 11, children: [] })
+    expect(vm.isCompound).toBe(false)
+    expect(vm.canAddChild).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('clears detail-driven state so enable/disable cannot act on a group selection', async () => {
+    const wrapper = await mountAndFlush()
+    const vm = wrapper.vm
+
+    vm.detail = { id: 11, kind: 'PROBE', enabled: true }
+    vm.handleNodeClick({ key: 'GROUP:1', nodeKind: 'GROUP', id: 1, caption: '一楼', children: [] })
+    expect(vm.canDisable).toBe(false)
+    expect(vm.canEnable).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('restores the deep-linked asset selection on mount', async () => {
+    routeMock.query = { node: '10' }
+    const wrapper = await mountAndFlush()
+    const vm = wrapper.vm
+    const { getAsset } = await import('@/api/iot/asset')
+    expect(getAsset).toHaveBeenCalledWith(10)
+    expect(vm.selectedNode?.key).toBe('ASSET:10')
+    routeMock.query = {}
+    wrapper.unmount()
+  })
+
+  it('ignores a non-numeric deep-link parameter', async () => {
+    routeMock.query = { node: 'abc' }
+    const wrapper = await mountAndFlush()
+    const { getAsset } = await import('@/api/iot/asset')
+    expect(getAsset).not.toHaveBeenCalled()
+    routeMock.query = {}
     wrapper.unmount()
   })
 })
@@ -370,6 +482,135 @@ describe('Create wizard', () => {
   })
 })
 
+describe('Forest create flow', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  // No formRef here: the opened dialog's el-form overwrites a pre-assigned
+  // mock on the next flush, so tests assign the mock AFTER flushPromises.
+  function openDeviceForm(vm) {
+    vm.openCreateDialog()
+    vm.form.kind = 'DEVICE'
+    vm.form.typeName = 'SimDevice'
+    vm.form.name = 'dev_1'
+    vm.form.caption = 'Dev 1'
+  }
+
+  it('prefills groupIds when opening create from a group node', async () => {
+    const wrapper = await mountAndFlush()
+    const vm = wrapper.vm
+    vm.handleNodeClick({ key: 'GROUP:1', nodeKind: 'GROUP', id: 1, caption: '一楼', children: [] })
+    vm.openCreateDialog()
+    expect(vm.form.groupIds).toEqual([1])
+    wrapper.unmount()
+  })
+
+  it('does not prefill groupIds when opening create from an asset node', async () => {
+    const wrapper = await mountAndFlush()
+    const vm = wrapper.vm
+    vm.handleNodeClick({ key: 'ASSET:10', nodeKind: 'ASSET', assetKind: 'DEVICE', id: 10, children: [] })
+    vm.openCreateDialog()
+    expect(vm.form.groupIds).toEqual([])
+    wrapper.unmount()
+  })
+
+  it('creates devices top-level (parentId 0) and attaches them to the selected groups', async () => {
+    const { listGroupTrees, listGroups, replaceGroupAssets } = await import('@/api/iot/asset')
+    listGroupTrees.mockResolvedValueOnce({ data: [{ id: 1, name: 'region', caption: '按区域' }] })
+    listGroups.mockResolvedValueOnce({ data: [{ id: 2, treeId: 1, assetIds: ['7'] }] })  // options load
+    listGroups.mockResolvedValueOnce({ data: [{ id: 2, treeId: 1, assetIds: ['7'] }] })  // merge read
+
+    const wrapper = await mountAndFlush()
+    const vm = wrapper.vm
+    openDeviceForm(vm)
+    vm.form.groupIds = [2]
+    await flushPromises()
+    vm.formRef = { validate: vi.fn().mockResolvedValue(true) }
+    await vm.submitForm()
+
+    const { showSystarError } = await import('@/utils/errorHandler')
+    expect(showSystarError).not.toHaveBeenCalled()
+    expect(createAsset).toHaveBeenCalledWith(expect.objectContaining({ kind: 'DEVICE', parentId: 0 }))
+    expect(listGroups).toHaveBeenCalledWith(1)
+    expect(replaceGroupAssets).toHaveBeenCalledWith(2, [7, 1])
+    expect(useAssetTree().refresh).toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('passes the create response (t_asset row id) into the group membership write', async () => {
+    // Id spaces are deliberately misaligned: the create API responds with the
+    // t_asset row id (22), not the runtime id (1003), and group assetIds are
+    // row ids too — the merged write must carry [23, 22].
+    const { listGroupTrees, listGroups, replaceGroupAssets } = await import('@/api/iot/asset')
+    listGroupTrees.mockResolvedValueOnce({ data: [{ id: 1, name: 'region', caption: '按区域' }] })
+    listGroups.mockResolvedValueOnce({ data: [{ id: 2, treeId: 1, assetIds: ['23'] }] })  // options load
+    listGroups.mockResolvedValueOnce({ data: [{ id: 2, treeId: 1, assetIds: ['23'] }] })  // merge read
+    createAsset.mockResolvedValueOnce({ data: 22 })
+
+    const wrapper = await mountAndFlush()
+    const vm = wrapper.vm
+    openDeviceForm(vm)
+    vm.form.groupIds = [2]
+    await flushPromises()
+    vm.formRef = { validate: vi.fn().mockResolvedValue(true) }
+    await vm.submitForm()
+
+    expect(createAsset).toHaveBeenCalledWith(expect.objectContaining({ kind: 'DEVICE', parentId: 0 }))
+    expect(replaceGroupAssets).toHaveBeenCalledWith(2, [23, 22])
+    wrapper.unmount()
+  })
+
+  it('creates monitors under the chosen parent device instead of a group path', async () => {
+    const wrapper = await mountAndFlush()
+    const vm = wrapper.vm
+    vm.openCreateDialog()
+    vm.form.kind = 'PROBE'
+    vm.form.typeName = 'TemperatureProbe'
+    vm.form.name = 'p1'
+    vm.form.caption = 'P1'
+    vm.form.parentId = 10
+    vm.formRef = { validate: vi.fn().mockResolvedValue(true) }
+    await vm.submitForm()
+
+    expect(createAsset).toHaveBeenCalledWith(expect.objectContaining({ kind: 'PROBE', parentId: 10 }))
+    wrapper.unmount()
+  })
+
+  it('still creates the asset when the group write fails after creation', async () => {
+    const { listGroupTrees, listGroups, replaceGroupAssets } = await import('@/api/iot/asset')
+    const { showSystarError } = await import('@/utils/errorHandler')
+    listGroupTrees.mockResolvedValueOnce({ data: [{ id: 1, name: 'region', caption: '按区域' }] })
+    listGroups.mockResolvedValueOnce({ data: [{ id: 2, treeId: 1, assetIds: [] }] })
+    replaceGroupAssets.mockRejectedValueOnce(new Error('rel write boom'))
+
+    const wrapper = await mountAndFlush()
+    const vm = wrapper.vm
+    openDeviceForm(vm)
+    vm.form.groupIds = [2]
+    await flushPromises()
+    vm.formRef = { validate: vi.fn().mockResolvedValue(true) }
+    await vm.submitForm()
+
+    expect(createAsset).toHaveBeenCalled()
+    expect(showSystarError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'rel write boom' }), '资产已创建，但写入分组失败')
+    expect(vm.confirmDanger.dialogVisible).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('refreshes the tree panel after deleting an asset', async () => {
+    const wrapper = await mountAndFlush()
+    const vm = wrapper.vm
+    vm.detail = { id: 42, name: 'test', caption: 'Test' }
+    vm.pendingDeleteId = 42
+    await vm.doDelete()
+
+    const { deleteAsset } = await import('@/api/iot/asset')
+    expect(deleteAsset).toHaveBeenCalledWith(42)
+    expect(useAssetTree().refresh).toHaveBeenCalled()
+    wrapper.unmount()
+  })
+})
+
 describe('Expression validator', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
@@ -552,8 +793,8 @@ describe('useAutoRefresh integration', () => {
     const { useAutoRefresh } = await import('@/composables/useAutoRefresh')
     const instance = useAutoRefresh.mock.results[0].value
 
-    vm.detail = { id: 1, kind: 'SPACE', children: [{ id: 10, state: 'NORMAL' }] }
-    vm.handleNodeClick({ id: 2, kind: 'PROBE' })
+    vm.detail = { id: 10, assetKind: 'DEVICE', children: [{ id: 30, state: 'NORMAL' }] }
+    vm.handleNodeClick({ key: 'ASSET:2', nodeKind: 'ASSET', assetKind: 'PROBE', id: 2 })
     await flushPromises()
     expect(instance.stop).toHaveBeenCalled()
     wrapper.unmount()

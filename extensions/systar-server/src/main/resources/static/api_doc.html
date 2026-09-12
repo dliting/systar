@@ -18,6 +18,8 @@
   --accent2: #ff6b35;
   --method-post: #2ecc71;
   --method-get: #3498db;
+  --method-put: #e67e22;
+  --method-delete: #e74c3c;
   --method-ws: #9b59b6;
   --text-primary: #c5d1de;
   --text-muted: #5c7080;
@@ -140,6 +142,8 @@ body {
 }
 .m-post { background: var(--method-post); }
 .m-get { background: var(--method-get); }
+.m-put { background: var(--method-put); }
+.m-delete { background: var(--method-delete); }
 .m-ws { background: var(--method-ws); }
 
 .nav-path {
@@ -375,7 +379,11 @@ pre .resp::before { content: '→ '; color: var(--text-muted); }
       <div class="nav-group-items">
         <a class="nav-item" href="#sec-tree">
           <span class="nav-method m-get">GET</span>
-          <span class="nav-path">资产树</span>
+          <span class="nav-path">资产森林</span>
+        </a>
+        <a class="nav-item" href="#sec-group-manage">
+          <span class="nav-method m-put">PUT</span>
+          <span class="nav-path">分组树管理</span>
         </a>
         <a class="nav-item" href="#sec-assets">
           <span class="nav-method m-get">GET</span>
@@ -488,7 +496,16 @@ pre .resp::before { content: '→ '; color: var(--text-muted); }
       <span class="label">Interface Overview</span>
       <table class="overview-table">
         <tr><th>方法</th><th>路径</th><th>说明</th></tr>
-        <tr><td><span class="nav-method m-get" style="font-size:9px;">GET</span></td><td><code>/api/monitor/tree</code></td><td>获取资产树（递归树形结构）</td></tr>
+        <tr><td><span class="nav-method m-get" style="font-size:9px;">GET</span></td><td><code>/api/monitor/asset-tree</code></td><td>获取资产森林（按类型虚拟树或自定义分组树）</td></tr>
+        <tr><td><span class="nav-method m-get" style="font-size:9px;">GET</span></td><td><code>/api/monitor/group-trees</code></td><td>获取分组树列表</td></tr>
+        <tr><td><span class="nav-method m-post" style="font-size:9px;">POST</span></td><td><code>/api/monitor/group-trees</code></td><td>新增分组树</td></tr>
+        <tr><td><span class="nav-method m-put" style="font-size:9px;">PUT</span></td><td><code>/api/monitor/group-trees/{id}</code></td><td>更新分组树</td></tr>
+        <tr><td><span class="nav-method m-delete" style="font-size:9px;">DELETE</span></td><td><code>/api/monitor/group-trees/{id}</code></td><td>删除分组树（须先删空全部分组）</td></tr>
+        <tr><td><span class="nav-method m-get" style="font-size:9px;">GET</span></td><td><code>/api/monitor/groups</code></td><td>获取树内分组列表（含成员资产 id）</td></tr>
+        <tr><td><span class="nav-method m-post" style="font-size:9px;">POST</span></td><td><code>/api/monitor/groups</code></td><td>新增分组</td></tr>
+        <tr><td><span class="nav-method m-put" style="font-size:9px;">PUT</span></td><td><code>/api/monitor/groups/{id}</code></td><td>更新分组（改名 / 移动）</td></tr>
+        <tr><td><span class="nav-method m-delete" style="font-size:9px;">DELETE</span></td><td><code>/api/monitor/groups/{id}</code></td><td>删除分组（须无子分组、无成员）</td></tr>
+        <tr><td><span class="nav-method m-put" style="font-size:9px;">PUT</span></td><td><code>/api/monitor/groups/{id}/assets</code></td><td>整体替换分组成员（仅 DEVICE/SERVICE）</td></tr>
         <tr><td><span class="nav-method m-get" style="font-size:9px;">GET</span></td><td><code>/api/monitor/assets</code></td><td>获取资产列表，支持 kind 过滤</td></tr>
         <tr><td><span class="nav-method m-get" style="font-size:9px;">GET</span></td><td><code>/api/monitor/assets/{id}</code></td><td>获取单个资产详情</td></tr>
         <tr><td><span class="nav-method m-get" style="font-size:9px;">GET</span></td><td><code>/api/monitor/probe-values</code></td><td>批量获取实时监测值</td></tr>
@@ -509,25 +526,32 @@ pre .resp::before { content: '→ '; color: var(--text-muted); }
     <!-- 1. 资产查询                                              -->
     <!-- ═══════════════════════════════════════════════════════ -->
     <div class="api-section" id="sec-tree">
-      <h2>1. 资产树查询</h2>
+      <h2>1. 资产森林查询</h2>
       <div class="endpoint-line">
         <span class="nav-method m-get">GET</span>
-        <span class="endpoint-path">/api/monitor/tree</span>
+        <span class="endpoint-path">/api/monitor/asset-tree</span>
       </div>
-      <p class="desc">返回完整的资产树形结构，从根空间节点递归展开所有子节点。树节点按 SPACE &rarr; DEVICE &rarr; SERVICE / PROBE / CONTROL 的层级组织。</p>
+      <p class="desc">返回资产森林（顶层节点列表）。<code>tree=kind</code>（缺省）为虚拟"按类型"树：服务 / 设备两个合成根，监测器与控制器挂在所属设备下；<code>tree=&lt;分组树id&gt;</code> 返回对应的自定义分组树，未挂分组的设备 / 服务进入"未分组"节点。成员写入（拖拽挂载 / 卸载、<code>PUT /groups/{id}/assets</code>）一律使用 <code>t_asset</code> 行 id 空间（即 <code>assetRowId</code>）；<code>POST /assets</code> 创建资产的响应 <code>data</code> 亦为该行 id（分组成员 id），而非运行时 id。</p>
 
-      <span class="label">Request Parameters</span>
-      <p class="desc">无参数。</p>
+      <span class="label">Query Parameters</span>
+      <table>
+        <tr><th>字段</th><th>类型</th><th>必填</th><th>缺省</th><th>说明</th></tr>
+        <tr><td><code>tree</code></td><td>string</td><td>否</td><td><code>kind</code></td><td>树选择器：<code>kind</code>（按类型）或分组树 id</td></tr>
+      </table>
 
-      <span class="label">Response — AssetNodeVO</span>
+      <span class="label">Response — TreeNodeVO</span>
       <table>
         <tr><th>字段</th><th>类型</th><th>说明</th></tr>
-        <tr><td><code>id</code></td><td>int</td><td>资产 ID</td></tr>
-        <tr><td><code>name</code></td><td>string</td><td>资产名称</td></tr>
+        <tr><td><code>key</code></td><td>string</td><td>复合节点键：<code>GROUP:&lt;id&gt;</code> | <code>ASSET:&lt;id&gt;</code> | <code>KIND:&lt;KIND&gt;</code> | <code>UNGROUPED</code>（分组 id 与资产 id 相互独立，UI 的 node-key 必须用该键）</td></tr>
+        <tr><td><code>nodeKind</code></td><td>string</td><td><code>ASSET</code>（资产节点）| <code>GROUP</code>（分组 / 合成根节点）</td></tr>
+        <tr><td><code>assetKind</code></td><td>string | null</td><td>资产类型：<code>DEVICE</code> | <code>SERVICE</code> | <code>PROBE</code> | <code>CONTROL</code>；分组节点为 <code>null</code></td></tr>
+        <tr><td><code>id</code></td><td>long | null</td><td>资产运行时 id（<code>/assets</code> CRUD API 的寻址 id）或分组 id；合成节点（类型根、未分组）为 <code>null</code>。两个 id 空间相互独立</td></tr>
+        <tr><td><code>assetRowId</code></td><td>long | null</td><td>资产在 <code>t_asset</code> 统一视图的行 id（分组成员 id，挂载 / 卸载写入必须用它）；分组与合成节点为 <code>null</code>，资产无视图行时也为 <code>null</code></td></tr>
+        <tr><td><code>name</code></td><td>string</td><td>名称（分组为英文标识）</td></tr>
         <tr><td><code>caption</code></td><td>string</td><td>显示标题</td></tr>
-        <tr><td><code>kind</code></td><td>string</td><td>资产类型枚举：<code>SPACE</code> | <code>DEVICE</code> | <code>SERVICE</code> | <code>PROBE</code> | <code>CONTROL</code></td></tr>
-        <tr><td><code>state</code></td><td>string</td><td>状态枚举：<code>NORMAL</code> | <code>WARNING</code> | <code>ERROR</code> | <code>OFFLINE</code></td></tr>
-        <tr><td><code>children</code></td><td>list[AssetNodeVO] | null</td><td>子节点列表，叶节点为 <code>null</code></td></tr>
+        <tr><td><code>state</code></td><td>string | null</td><td>状态枚举（仅资产节点）：<code>NORMAL</code> | <code>WARNING</code> | <code>ERROR</code> | <code>OFFLINE</code></td></tr>
+        <tr><td><code>enabled</code></td><td>bool | null</td><td>是否启用（仅资产节点）</td></tr>
+        <tr><td><code>children</code></td><td>list[TreeNodeVO]</td><td>子节点列表；叶节点为空列表</td></tr>
       </table>
 
       <span class="label">curl Examples</span>
@@ -537,46 +561,156 @@ pre .resp::before { content: '→ '; color: var(--text-muted); }
         <button class="tab-btn" onclick="switchTab(event, 'tree')">PowerShell</button>
       </div>
       <div class="tab-panel active" data-group="tree">
-        <pre>curl {BASE}/api/monitor/tree</pre>
+        <pre>curl "{BASE}/api/monitor/asset-tree?tree=kind"</pre>
       </div>
       <div class="tab-panel" data-group="tree">
-        <pre>curl {BASE}/api/monitor/tree</pre>
+        <pre>curl "{BASE}/api/monitor/asset-tree?tree=kind"</pre>
       </div>
       <div class="tab-panel" data-group="tree">
-        <pre>Invoke-RestMethod -Uri "{BASE}/api/monitor/tree"</pre>
+        <pre>Invoke-RestMethod -Uri "{BASE}/api/monitor/asset-tree?tree=kind"</pre>
       </div>
 
       <p class="resp-title">Response:</p>
       <pre>{
   "code": 0,
   "message": "success",
-  "data": {
-    "id": -1,
-    "name": "root",
-    "caption": "root",
-    "kind": "SPACE",
-    "state": "NORMAL",
-    "children": [
-      {
-        "id": 1,
-        "name": "floor1",
-        "caption": "1号厂房",
-        "kind": "SPACE",
-        "state": "NORMAL",
-        "children": [
-          {
-            "id": 10,
-            "name": "temp_sensor",
-            "caption": "温度传感器",
-            "kind": "PROBE",
-            "state": "NORMAL",
-            "children": null
-          }
-        ]
-      }
-    ]
-  }
+  "data": [
+    {
+      "key": "KIND:SERVICE",
+      "nodeKind": "ASSET",
+      "assetKind": "SERVICE",
+      "id": null,
+      "assetRowId": null,
+      "name": "服务",
+      "caption": "服务",
+      "state": null,
+      "enabled": null,
+      "children": []
+    },
+    {
+      "key": "KIND:DEVICE",
+      "nodeKind": "ASSET",
+      "assetKind": "DEVICE",
+      "id": null,
+      "assetRowId": null,
+      "name": "设备",
+      "caption": "设备",
+      "state": null,
+      "enabled": null,
+      "children": [
+        {
+          "key": "ASSET:1001",
+          "nodeKind": "ASSET",
+          "assetKind": "DEVICE",
+          "id": 1001,
+          "assetRowId": 20,
+          "name": "th_sensor_001",
+          "caption": "温湿度传感器001",
+          "state": "NORMAL",
+          "enabled": true,
+          "children": [
+            {
+              "key": "ASSET:2001",
+              "nodeKind": "ASSET",
+              "assetKind": "PROBE",
+              "id": 2001,
+              "assetRowId": 30,
+              "name": "temp_101",
+              "caption": "101温度",
+              "state": "NORMAL",
+              "enabled": true,
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
 }</pre>
+
+      <!-- ── 1.1 分组树与分组管理 ─────────────────────────── -->
+      <div id="sec-group-manage">
+        <h3>分组树与分组管理</h3>
+        <p class="desc">用户自管理分组树及树内分组的 CRUD；"按类型"树为虚拟计算不占行。分组仅是组织视角的附加层（monitor-core 不感知），成员资产仅限 <code>DEVICE</code> / <code>SERVICE</code>。权限复用 <code>iot:asset:list / add / edit / delete</code>，校验失败统一返回 400 与原因。</p>
+
+        <span class="label">Endpoints</span>
+        <table>
+          <tr><th>方法</th><th>路径</th><th>权限</th><th>说明</th></tr>
+          <tr><td>GET</td><td><code>/api/monitor/group-trees</code></td><td><code>iot:asset:list</code></td><td>分组树列表（按 sequence 排序）</td></tr>
+          <tr><td>POST</td><td><code>/api/monitor/group-trees</code></td><td><code>iot:asset:add</code></td><td>新增分组树（name 全局唯一）</td></tr>
+          <tr><td>PUT</td><td><code>/api/monitor/group-trees/{id}</code></td><td><code>iot:asset:edit</code></td><td>更新分组树（name/caption/sequence）</td></tr>
+          <tr><td>DELETE</td><td><code>/api/monitor/group-trees/{id}</code></td><td><code>iot:asset:delete</code></td><td>删除分组树（须先删空全部分组）</td></tr>
+          <tr><td>GET</td><td><code>/api/monitor/groups?treeId={treeId}</code></td><td><code>iot:asset:list</code></td><td>树内分组列表（含成员资产行 id）</td></tr>
+          <tr><td>POST</td><td><code>/api/monitor/groups</code></td><td><code>iot:asset:add</code></td><td>新增分组（parent 缺省 0 = 顶层，level 自动维护）</td></tr>
+          <tr><td>PUT</td><td><code>/api/monitor/groups/{id}</code></td><td><code>iot:asset:edit</code></td><td>更新分组：改名（name）和/或移动（parent + treeId）</td></tr>
+          <tr><td>DELETE</td><td><code>/api/monitor/groups/{id}</code></td><td><code>iot:asset:delete</code></td><td>删除分组（须无子分组、无成员资产）</td></tr>
+          <tr><td>PUT</td><td><code>/api/monitor/groups/{id}/assets</code></td><td><code>iot:asset:edit</code></td><td>整体替换分组成员</td></tr>
+        </table>
+
+        <span class="label">GroupTreeVO（GET /group-trees 响应项）</span>
+        <table>
+          <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+          <tr><td><code>id</code></td><td>long</td><td>分组树 id（用作 <code>/asset-tree?tree=</code> 选择器）</td></tr>
+          <tr><td><code>name</code></td><td>string</td><td>树标识（英文，全局唯一）</td></tr>
+          <tr><td><code>caption</code></td><td>string</td><td>显示名</td></tr>
+          <tr><td><code>sequence</code></td><td>int</td><td>排序号</td></tr>
+        </table>
+
+        <span class="label">GroupVO（GET /groups 响应项）</span>
+        <table>
+          <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+          <tr><td><code>id</code></td><td>long</td><td>分组 id</td></tr>
+          <tr><td><code>treeId</code></td><td>long</td><td>所属分组树 id</td></tr>
+          <tr><td><code>name</code></td><td>string</td><td>分组标识（树内唯一）</td></tr>
+          <tr><td><code>caption</code></td><td>string</td><td>显示名</td></tr>
+          <tr><td><code>parent</code></td><td>long</td><td>父分组 id；<code>0</code> = 顶层</td></tr>
+          <tr><td><code>level</code></td><td>int</td><td>层级（顶层 = 1，移动时自动重算子树）</td></tr>
+          <tr><td><code>sequence</code></td><td>int</td><td>排序号</td></tr>
+          <tr><td><code>assetIds</code></td><td>list[long]</td><td>直接成员资产的 <code>t_asset</code> 行 id</td></tr>
+        </table>
+
+        <span class="label">请求体</span>
+        <table>
+          <tr><th>端点</th><th>字段</th><th>必填</th><th>说明</th></tr>
+          <tr><td rowspan="3"><code>POST /group-trees</code><br><code>PUT /group-trees/{id}</code></td><td><code>name</code></td><td>是</td><td>树标识，去空白后全局唯一</td></tr>
+          <tr><td><code>caption</code></td><td>否</td><td>显示名；缺省取 name</td></tr>
+          <tr><td><code>sequence</code></td><td>否</td><td>排序号；<code>POST</code> 缺省 0，<code>PUT</code>（更新）缺省 = 保留现值</td></tr>
+          <tr><td rowspan="5"><code>POST /groups</code></td><td><code>treeId</code></td><td>是</td><td>目标分组树 id（缺失按 0 处理，报"树不存在"）</td></tr>
+          <tr><td><code>name</code></td><td>是</td><td>分组标识，树内唯一</td></tr>
+          <tr><td><code>caption</code></td><td>否</td><td>显示名；缺省取 name</td></tr>
+          <tr><td><code>parent</code></td><td>否</td><td>父分组 id，缺省 0 = 顶层；须属同一棵树</td></tr>
+          <tr><td><code>sequence</code></td><td>否</td><td>排序号，缺省 0</td></tr>
+          <tr><td rowspan="5"><code>PUT /groups/{id}</code></td><td><code>parent</code></td><td>移动时</td><td>新父分组 id（0 = 移到顶层）；与 <code>treeId</code> 成对出现；不可移入自身子树</td></tr>
+          <tr><td><code>treeId</code></td><td>移动时</td><td>分组所在树 id（移动模式校验用）</td></tr>
+          <tr><td><code>name</code></td><td>改名时</td><td>新分组标识，树内唯一</td></tr>
+          <tr><td><code>caption</code></td><td>否</td><td>新显示名；缺省取 name</td></tr>
+          <tr><td><code>sequence</code></td><td>否</td><td>排序号，缺省 = 保留现值；name 与 parent+treeId 均未提供时报"Nothing to update"</td></tr>
+          <tr><td><code>PUT /groups/{id}/assets</code></td><td><code>assetIds</code></td><td>否</td><td>成员资产 <code>t_asset</code> 行 id 全量列表（统一视图行 id，非运行时资产 id）；<code>null</code>/缺省 = 清空成员。id 重复、不存在或为 PROBE/CONTROL 种类时整批拒绝（400）</td></tr>
+        </table>
+
+        <span class="label">curl Examples</span>
+        <div class="tab-bar">
+          <button class="tab-btn active" onclick="switchTab(event, 'group')">Linux / macOS</button>
+          <button class="tab-btn" onclick="switchTab(event, 'group')">Windows CMD</button>
+          <button class="tab-btn" onclick="switchTab(event, 'group')">PowerShell</button>
+        </div>
+        <div class="tab-panel active" data-group="group">
+          <pre>curl "{BASE}/api/monitor/group-trees"
+curl -X POST "{BASE}/api/monitor/group-trees" -H "Content-Type: application/json" \
+     -d '{"name": "floor", "caption": "楼层", "sequence": 1}'
+curl "{BASE}/api/monitor/groups?treeId=1"</pre>
+        </div>
+        <div class="tab-panel" data-group="group">
+          <pre>curl "{BASE}/api/monitor/group-trees"
+curl -X POST "{BASE}/api/monitor/group-trees" -H "Content-Type: application/json" -d "{\"name\": \"floor\", \"caption\": \"楼层\", \"sequence\": 1}"
+curl "{BASE}/api/monitor/groups?treeId=1"</pre>
+        </div>
+        <div class="tab-panel" data-group="group">
+          <pre>Invoke-RestMethod -Uri "{BASE}/api/monitor/group-trees"
+Invoke-RestMethod -Uri "{BASE}/api/monitor/group-trees" -Method Post -ContentType "application/json" -Body '{"name": "floor", "caption": "楼层", "sequence": 1}'
+Invoke-RestMethod -Uri "{BASE}/api/monitor/groups?treeId=1"</pre>
+        </div>
+      </div>
     </div>
 
     <!-- 1.2 资产列表 -->
@@ -591,7 +725,7 @@ pre .resp::before { content: '→ '; color: var(--text-muted); }
       <span class="label">Query Parameters</span>
       <table>
         <tr><th>字段</th><th>类型</th><th>必填</th><th>缺省</th><th>说明</th></tr>
-        <tr><td><code>kind</code></td><td>string</td><td>否</td><td>无</td><td>资产类型过滤：<code>SPACE</code> | <code>DEVICE</code> | <code>SERVICE</code> | <code>PROBE</code> | <code>CONTROL</code></td></tr>
+        <tr><td><code>kind</code></td><td>string</td><td>否</td><td>无</td><td>资产类型过滤：<code>DEVICE</code> | <code>SERVICE</code> | <code>PROBE</code> | <code>CONTROL</code></td></tr>
       </table>
 
       <span class="label">Response — AssetVO</span>
@@ -643,14 +777,14 @@ Invoke-RestMethod -Uri "{BASE}/api/monitor/assets?kind=PROBE"</pre>
   "message": "success",
   "data": [
     {
-      "id": 10,
-      "name": "temp_sensor",
-      "caption": "温度传感器",
+      "id": 2001,
+      "name": "temp_101",
+      "caption": "101温度",
       "kind": "PROBE",
       "state": "NORMAL",
-      "parentId": 5,
+      "parentId": 1001,
       "enabled": true,
-      "path": "root->floor1->deviceA->temp_sensor",
+      "path": "th_sensor_001->temp_101",
       "value": 23.5,
       "lastDetectTime": 1715295600000
     }
@@ -680,13 +814,13 @@ Invoke-RestMethod -Uri "{BASE}/api/monitor/assets?kind=PROBE"</pre>
         <button class="tab-btn" onclick="switchTab(event, 'asset-id')">PowerShell</button>
       </div>
       <div class="tab-panel active" data-group="asset-id">
-        <pre>curl {BASE}/api/monitor/assets/10</pre>
+        <pre>curl {BASE}/api/monitor/assets/2001</pre>
       </div>
       <div class="tab-panel" data-group="asset-id">
-        <pre>curl {BASE}/api/monitor/assets/10</pre>
+        <pre>curl {BASE}/api/monitor/assets/2001</pre>
       </div>
       <div class="tab-panel" data-group="asset-id">
-        <pre>Invoke-RestMethod -Uri "{BASE}/api/monitor/assets/10"</pre>
+        <pre>Invoke-RestMethod -Uri "{BASE}/api/monitor/assets/2001"</pre>
       </div>
 
       <p class="resp-title">Response (成功):</p>
@@ -694,14 +828,14 @@ Invoke-RestMethod -Uri "{BASE}/api/monitor/assets?kind=PROBE"</pre>
   "code": 0,
   "message": "success",
   "data": {
-    "id": 10,
-    "name": "temp_sensor",
-    "caption": "温度传感器",
+    "id": 2001,
+    "name": "temp_101",
+    "caption": "101温度",
     "kind": "PROBE",
     "state": "NORMAL",
-    "parentId": 5,
+    "parentId": 1001,
     "enabled": true,
-    "path": "root->floor1->deviceA->temp_sensor",
+    "path": "th_sensor_001->temp_101",
     "value": 23.5,
     "lastDetectTime": 1715295600000
   }

@@ -211,8 +211,8 @@ class InspectionTaskServiceTest {
 
     private void insertDevice(Integer id, String lifecycleStatus) {
         jdbc.update(
-                "INSERT INTO t_device (id, name, parent, lifecycle_status) VALUES (?, ?, ?, ?)",
-                id, "device_" + id, 10, lifecycleStatus);
+                "INSERT INTO t_device (id, name, lifecycle_status) VALUES (?, ?, ?)",
+                id, "device_" + id, lifecycleStatus);
     }
 
     private void insertPlanDevice(Long planId, Integer deviceId) {

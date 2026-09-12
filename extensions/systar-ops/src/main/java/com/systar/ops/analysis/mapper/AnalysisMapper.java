@@ -49,10 +49,7 @@ public interface AnalysisMapper {
                                     @Param("start") LocalDateTime start,
                                     @Param("end") LocalDateTime end);
 
-    // Accepts both probe→device (standard model, service via source column)
-    // and probe→service→device layouts.
-    @Select("SELECT p.id FROM t_probe p " +
-            "LEFT JOIN t_service s ON p.parent = s.id " +
-            "WHERE p.parent = #{deviceId} OR s.parent = #{deviceId}")
+    // Probe→device (standard model, service via source column).
+    @Select("SELECT p.id FROM t_probe p WHERE p.parent = #{deviceId}")
     List<Integer> findProbeIdsForDevice(@Param("deviceId") int deviceId);
 }

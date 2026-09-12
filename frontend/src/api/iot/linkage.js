@@ -24,6 +24,4 @@ export function toggleLinkageRule(id) {
   return systarApi({ url: '/api/monitor/linkage-rules/' + id + '/toggle', method: 'put' })
 }
 
-export function getAssetTree() {
-  return systarApi({ url: '/api/monitor/tree', method: 'get' })
-}
+export { getAssetTree } from './asset'

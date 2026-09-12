@@ -5,7 +5,6 @@ import com.systar.monitor.asset.AssetVisitor;
 import com.systar.monitor.asset.type.DataType;
 import com.systar.monitor.asset.type.Device;
 import com.systar.monitor.asset.type.ProbeType;
-import com.systar.monitor.asset.type.Space;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -355,7 +354,6 @@ class ModbusProbeTest {
     @DisplayName("ModbusProbe accepts visitor with correct visit method")
     void probeAcceptsVisitor() {
         AssetVisitor<String> visitor = new AssetVisitor<>() {
-            @Override public String visit(Space space) { return "space"; }
             @Override public String visit(Device device) { return "device"; }
             @Override public String visit(com.systar.monitor.asset.Probe probe) { return "probe"; }
             @Override public String visit(com.systar.monitor.asset.VirtualProbe vp) { return "virtualProbe"; }

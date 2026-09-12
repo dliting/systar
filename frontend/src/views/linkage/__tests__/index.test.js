@@ -8,7 +8,12 @@ vi.mock('@/api/iot/linkage', () => ({
   updateLinkageRule: vi.fn().mockResolvedValue({}),
   deleteLinkageRule: vi.fn().mockResolvedValue({}),
   toggleLinkageRule: vi.fn().mockResolvedValue({}),
-  getAssetTree: vi.fn().mockResolvedValue({ data: { id: 1, name: 'root', kind: 'SPACE', children: [] } })
+  getAssetTree: vi.fn().mockResolvedValue({ data: [
+    { key: 'KIND:SERVICE', nodeKind: 'ASSET', assetKind: 'SERVICE', id: null, children: [] },
+    { key: 'KIND:DEVICE', nodeKind: 'ASSET', assetKind: 'DEVICE', id: null, children: [
+      { key: 'ASSET:10', nodeKind: 'ASSET', assetKind: 'DEVICE', id: 10, name: 'ups_001', caption: 'UPS', state: 'NORMAL', enabled: true, children: [] }
+    ] }
+  ] })
 }))
 
 vi.mock('@/utils/errorHandler', () => ({
@@ -58,5 +63,36 @@ describe('Linkage', () => {
 
   it('renders without errors', () => {
     expect(() => mountLinkage()).not.toThrow()
+  })
+
+  it('builds monitor and control trees from the forest', async () => {
+    const { getAssetTree } = await import('@/api/iot/linkage')
+    // Group id 20 deliberately collides with probe id 20: the group must show
+    // up only in the control tree (via its control child), never in the probe tree.
+    getAssetTree.mockResolvedValueOnce({ data: [
+      { key: 'KIND:SERVICE', nodeKind: 'ASSET', assetKind: 'SERVICE', id: null, caption: '服务', children: [] },
+      { key: 'KIND:DEVICE', nodeKind: 'ASSET', assetKind: 'DEVICE', id: null, caption: '设备', children: [
+        { key: 'ASSET:10', nodeKind: 'ASSET', assetKind: 'DEVICE', id: 10, name: 'ups_001', caption: 'UPS', children: [
+          { key: 'ASSET:20', nodeKind: 'ASSET', assetKind: 'PROBE', id: 20, name: 'temp_in', caption: '进温', children: [] }
+        ] }
+      ] },
+      { key: 'GROUP:20', nodeKind: 'GROUP', id: 20, name: 'g20', caption: '一楼', children: [
+        { key: 'ASSET:30', nodeKind: 'ASSET', assetKind: 'CONTROL', id: 30, name: 'switch_1', caption: '开关', children: [] }
+      ] }
+    ] })
+    const wrapper = mountLinkage()
+    await flushPromises()
+    const vm = wrapper.vm
+
+    expect(vm.assetNameMap[20]).toBe('进温')
+    expect(vm.assetNameMap[30]).toBe('开关')
+
+    expect(vm.monitorTreeData).toHaveLength(1)
+    expect(vm.monitorTreeData[0].caption).toBe('设备')
+    expect(vm.monitorTreeData[0].children[0].children[0].id).toBe(20)
+
+    expect(vm.controlTreeData).toHaveLength(1)
+    expect(vm.controlTreeData[0].id).toBe(20)
+    expect(vm.controlTreeData[0].children[0].id).toBe(30)
   })
 })

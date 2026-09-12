@@ -8,32 +8,20 @@ DELETE FROM t_sample_float WHERE monitor IN (2001, 2002, 2004);
 DELETE FROM t_probe WHERE id BETWEEN 2001 AND 2999;
 DELETE FROM t_device WHERE id BETWEEN 1001 AND 1999;
 DELETE FROM t_service WHERE id BETWEEN 100 AND 199;
-DELETE FROM t_space WHERE id BETWEEN 1 AND 99;
-
--- ============================================================================
--- 空间 (Spaces)
--- ============================================================================
-INSERT INTO t_space (id, name, caption, parent, area, sequence, show_in_client, type_name) VALUES
-(1,  'smart_park',   '智慧园区',   0,   50000, 0, 1, 'GenericSpace'),
-(2,  'building_A',   'A栋办公楼',  1,   8000,  0, 1, 'GenericSpace'),
-(3,  'floor_1A',     'A栋1层',     2,   2000,  0, 1, 'GenericSpace'),
-(4,  'room_101',     '101会议室',   3,   120,   0, 1, 'GenericSpace'),
-(5,  'room_102',     '102办公室',   3,   80,    0, 1, 'GenericSpace'),
-(6,  'floor_2A',     'A栋2层',     2,   2000,  0, 1, 'GenericSpace');
 
 -- ============================================================================
 -- 服务 (Services)
 -- ============================================================================
-INSERT INTO t_service (id, name, caption, parent, mode, driver_class, max_connections, type_name) VALUES
-(100, 'sim_svc',   '模拟数据服务', 1, 0, 'com.systar.monitor.drivers.simulate.SimulateDriver', 10, 'SimulateService');
+INSERT INTO t_service (id, name, caption, mode, driver_class, max_connections, type_name) VALUES
+(100, 'sim_svc',   '模拟数据服务', 0, 'com.systar.monitor.drivers.simulate.SimulateDriver', 10, 'SimulateService');
 
 -- ============================================================================
 -- 设备 (Devices)
 -- ============================================================================
-INSERT INTO t_device (id, name, caption, parent, catalog, vendor, model, serial_number, lifecycle_status, health_index, type_name) VALUES
-(1001, 'th_sensor_001', '温湿度传感器-001', 4, 1, 'SIEMENS', 'QFA3160', 'SN-TH-001', 'IN_SERVICE', 95.0, 'GenericDevice'),
-(1002, 'ac_ctrl_001',   '中央空调-001',     4, 2, 'DAIKIN',  'VRV-X',   'SN-AC-001', 'IN_SERVICE', 88.0, 'GenericDevice'),
-(1003, 'th_sensor_002', '温湿度传感器-002', 5, 1, 'SIEMENS', 'QFA3160', 'SN-TH-002', 'IN_SERVICE', 92.0, 'GenericDevice');
+INSERT INTO t_device (id, name, caption, catalog, vendor, model, serial_number, lifecycle_status, health_index, type_name) VALUES
+(1001, 'th_sensor_001', '温湿度传感器-001', 1, 'SIEMENS', 'QFA3160', 'SN-TH-001', 'IN_SERVICE', 95.0, 'GenericDevice'),
+(1002, 'ac_ctrl_001',   '中央空调-001',     2, 'DAIKIN',  'VRV-X',   'SN-AC-001', 'IN_SERVICE', 88.0, 'GenericDevice'),
+(1003, 'th_sensor_002', '温湿度传感器-002', 1, 'SIEMENS', 'QFA3160', 'SN-TH-002', 'IN_SERVICE', 92.0, 'GenericDevice');
 
 -- ============================================================================
 -- 监测器 (Probes)
@@ -192,3 +180,26 @@ INSERT INTO t_sample_float (monitor, `value`, moment) VALUES
 (2004, 27.5, DATE_ADD(NOW(), INTERVAL -20 MINUTE)),
 (2004, 26.8, DATE_ADD(NOW(), INTERVAL -10 MINUTE)),
 (2004, 26.2, NOW());
+
+-- ============================================================================
+-- 演示分组树（按区域）：机房 / 会议室·办公区 / 公共区域
+-- rel 挂 01-init.sql 的设备 t_asset 行 id：
+--   机房=(22 elec_meter_001, 23 ups_001, 26 gateway_001)
+--   会议室·办公区=(20 th_sensor_001, 21 th_sensor_002, 24 ac_001)
+--   公共区域=(25 light_ctrl_001)
+-- ============================================================================
+DELETE FROM t_asset_group_rel WHERE group_id IN (SELECT id FROM t_group WHERE tree_id = 1);
+DELETE FROM t_group WHERE tree_id = 1;
+DELETE FROM t_group_tree WHERE id = 1;
+
+INSERT INTO t_group_tree (id, name, caption, sequence) VALUES (1, 'region', '按区域', 1);
+
+INSERT INTO t_group (id, tree_id, name, caption, parent, level, sequence) VALUES
+    (1, 1, 'machine_room',   '机房',          0, 1, 1),
+    (2, 1, 'meeting_office', '会议室·办公区', 0, 1, 2),
+    (3, 1, 'public_area',    '公共区域',      0, 1, 3);
+
+INSERT INTO t_asset_group_rel (asset_id, group_id) VALUES
+    (22, 1), (23, 1), (26, 1),
+    (20, 2), (21, 2), (24, 2),
+    (25, 3);

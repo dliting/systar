@@ -11,7 +11,7 @@ import java.util.Map;
  * Metadata definition for a category of assets.
  * <p>
  * Each asset type describes the structure and behavior of a family of assets,
- * including what kind they are (SPACE, DEVICE, PROBE, etc.) and what properties
+ * including what kind they are (DEVICE, SERVICE, PROBE, etc.) and what properties
  * they carry.
  * <p>
  * Properties are stored in a {@link LinkedHashMap} keyed by property name,

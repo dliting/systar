@@ -9,7 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Thread-safe registry for {@link AssetType} instances, keyed by name.
  * <p>
- * Each asset kind (Space, Device, Probe, etc.) typically gets its own
+ * Each asset kind (Device, Service, Probe, etc.) typically gets its own
  * {@code AssetTypeManager} instance so that types can be looked up quickly
  * at runtime.
  * <p>

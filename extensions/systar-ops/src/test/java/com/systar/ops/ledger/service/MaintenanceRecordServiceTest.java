@@ -59,8 +59,8 @@ class MaintenanceRecordServiceTest {
 
     private void insertDevice(Integer id, Integer maintenanceCycle) {
         jdbc.update(
-                "INSERT INTO t_device (id, name, parent, lifecycle_status, maintenance_cycle) VALUES (?, ?, ?, ?, ?)",
-                id, "device_" + id, 10, "IN_SERVICE", maintenanceCycle);
+                "INSERT INTO t_device (id, name, lifecycle_status, maintenance_cycle) VALUES (?, ?, ?, ?)",
+                id, "device_" + id, "IN_SERVICE", maintenanceCycle);
     }
 
     private LocalDate getDeviceLastMaintenanceDate(Integer deviceId) {

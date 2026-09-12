@@ -108,7 +108,7 @@ v1.1.0 开发中。IoT 核心系统框架完整，14 个协议驱动全部实现
 
 3. **systar-ops 和 systar-system 保持 Service→Mapper 模式**：这两个扩展模块是独立的垂直切片（巡检/台账/工单、用户/角色/菜单），内部使用 MyBatis-Plus 的标准 CRUD 模式是正确且高效的。
 
-4. **复杂查询可用 JdbcTemplate**：AssetRepository 处理多表联查（资产树加载涉及 space + device + service + probe + control 五表），使用 JdbcTemplate 的手写 SQL 比 MyBatis-Plus 的 QueryWrapper 更清晰可控。
+4. **复杂查询可用 JdbcTemplate**：AssetRepository 处理多表联查（资产树加载涉及 device + service + probe + control + t_asset 统一视图），使用 JdbcTemplate 的手写 SQL 比 MyBatis-Plus 的 QueryWrapper 更清晰可控。
 
 ### 2B.3 Schema 管理规则
 
@@ -181,14 +181,16 @@ sql/
 ### 4.1 表分组
 
 **资产配置表：**
-- `t_space` — 空间（支持无限层级嵌套）
-- `t_device` — 设备（挂载在空间下）
-- `t_service` — 服务/协议驱动连接
-- `t_probe` — 监测点（只读数据采集）
-- `t_control` — 控制点（可执行命令）
-- `t_asset` — 统一资产视图（联表，kind 区分类型，含 space_id/device_id/service_id/probe_id/control_id）
+- `t_device` — 设备（顶层资产）
+- `t_service` — 服务/协议驱动连接（顶层资产）
+- `t_probe` — 监测器（挂载在设备下，只读数据采集）
+- `t_control` — 控制器（挂载在设备下，可执行命令）
+- `t_asset` — 统一资产视图（联表，kind 区分类型，parent_id 存父资产行 id，含 device_id/service_id/probe_id/control_id）
 - `t_asset_attribute` — 通用 KV 扩展属性表（替代旧的 t_device_attribute）
 - `t_asset_type_config` — 驱动 XML 类型定义的数据库投影
+- `t_group_tree` — 用户自管理分组树（多棵组织视角树；"按类型"为虚拟树不占行）
+- `t_group` — 分组（树内以 parent/level 维护层级）
+- `t_asset_group_rel` — 资产-分组关联（m2m，成员仅限 DEVICE/SERVICE 资产）。`asset_id` 存 `t_asset` 行 id（非运行时 id）；两个 id 空间经 `t_asset` 的 `device_id/service_id/probe_id/control_id` 外键列互查桥接（`GroupRepository.findAssetRef`）。对外契约上，行 id 以 `TreeNodeVO.assetRowId` 下发（渲染端反向映射 `GroupRepository.findRowIdsByRuntimeId`），且 `POST /assets` 创建响应的 `data` 即该行 id——成员读写两端（树挂载/卸载、分组成员替换、创建后即挂组）均只使用行 id 空间
 
 **采样数据表（按数据类型分表）：**
 - `t_sample_float` — 浮点型采样值
@@ -245,15 +247,17 @@ sql/
 ### 4.2 核心关系
 
 ```
-t_space (parent→self)
-  └── t_device (parent→t_space)
-        └── t_service (parent→t_device)
-              ├── t_probe (source→t_service)
-              └── t_control (source→t_service)
+t_service (顶层，协议连接)
+t_device  (顶层)
+  └── t_probe / t_control (parent→t_device, source→t_service)
 
 t_probe/t_control
   ├── t_sample_float/int/boolean/exception (monitor→probe/control)
   └── t_alarm_rule (assetId→probe/control)
+
+t_group_tree
+  └── t_group (parent→self, level 维护层级)
+        └── t_asset_group_rel (asset_id↔group_id m2m，成员仅限 device/service)
 
 t_linkage_rule (causeType: MONITOR/ALARM)
   ├── t_linkage_rule_cause (ruleId→t_linkage_rule, assetId→probe/control)
@@ -282,7 +286,12 @@ H2 脚本需去除 `ENGINE=InnoDB`、`COLLATE`、`COMMENT`，用 `MERGE INTO` �
 
 | 分组 | 端点 | 方法 | 说明 |
 |------|------|------|------|
-| 资产树 | `/tree` | GET | 完整资产树 |
+| 资产树 | `/asset-tree` | GET | 统一资产树森林（`tree=kind` 按类型 / `tree=<分组树id>` 自定义） |
+| 分组树 | `/group-trees` | GET/POST | 分组树列表/新增 |
+| 分组树 | `/group-trees/{id}` | PUT/DELETE | 分组树更新/删除（删除前须删空分组） |
+| 分组 | `/groups` | GET/POST | 树内分组列表/新增 |
+| 分组 | `/groups/{id}` | PUT/DELETE | 分组改名/移动（parent+treeId）/删除 |
+| 分组 | `/groups/{id}/assets` | PUT | 整体替换分组成员（仅 DEVICE/SERVICE 资产） |
 | 资产 | `/assets` | GET/POST | 资产列表/新增 |
 | 资产 | `/assets/{id}` | GET/PUT/DELETE | 资产详情/更新/删除 |
 | 资产 | `/assets/{id}/start\|stop\|enable\|disable` | PUT | 运行时启停控制 |
@@ -366,7 +375,7 @@ H2 脚本需去除 `ENGINE=InnoDB`、`COLLATE`、`COMMENT`，用 `MERGE INTO` �
 2. 加载代码字典（t_code_dict/t_code_catalog → CodeDictManager）
 3. 加载资产类型定义（AssetTypeLoader → AssetTypeManager → t_asset_type_config）
 4. 加载资产树（数据库 → DatabaseAssetLoader → AssetStore）
-   顺序：Space → Device → Service → Probe → Control
+   顺序：Device → Service → Probe → Control
    加载后执行 bindProperties() 将 metadata 绑定到驱动 setter
 5. 加载告警规则（t_alarm_rule → AlarmHandler）
 6. 加载联动规则（t_linkage_rule_cause/effect → LinkageHandler）

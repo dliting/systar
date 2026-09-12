@@ -326,8 +326,8 @@
 1. 页面加载后观察左侧面板
 
 **预期结果**：
-- [ ] 资产树显示完整层级（Space > Device > Probe/Control）
-- [ ] 各节点显示对应图标（Space=文件夹、Device=设备、Probe=仪表、Control=齿轮）
+- [ ] 资产树显示完整层级（设备/服务为顶层，Probe/Control 挂于设备）
+- [ ] 各节点显示对应图标（Device=设备、Service=服务、Probe=仪表、Control=齿轮）
 - [ ] 树支持展开/折叠
 - [ ] 树顶部有搜索框和刷新按钮
 

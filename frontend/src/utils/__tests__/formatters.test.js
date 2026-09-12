@@ -18,11 +18,14 @@ describe('formatters', () => {
 
   describe('kindLabel', () => {
     it('returns Chinese label for known kinds', () => {
-      expect(kindLabel('SPACE')).toBe('空间')
       expect(kindLabel('DEVICE')).toBe('设备')
       expect(kindLabel('PROBE')).toBe('监测器')
       expect(kindLabel('CONTROL')).toBe('控制器')
       expect(kindLabel('SERVICE')).toBe('服务')
+    })
+
+    it('labels GROUP nodes', () => {
+      expect(kindLabel('GROUP')).toBe('分组')
     })
 
     it('returns raw kind for unknown', () => {
@@ -35,6 +38,10 @@ describe('formatters', () => {
       expect(kindTagType('PROBE')).toBe('success')
       expect(kindTagType('CONTROL')).toBe('warning')
       expect(kindTagType('DEVICE')).toBe('primary')
+    })
+
+    it('tags GROUP nodes as info', () => {
+      expect(kindTagType('GROUP')).toBe('info')
     })
 
     it('defaults to info', () => {

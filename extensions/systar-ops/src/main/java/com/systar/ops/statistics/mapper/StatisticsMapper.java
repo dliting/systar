@@ -137,11 +137,8 @@ public interface StatisticsMapper {
     // ==================== Device Runtime Statistics ====================
 
     // t_probe.parent references the device directly in the standard model
-    // (services attach via the source column); the probe→service→device chain
-    // is kept for layouts that hang probes off a service.
-    @Select("SELECT p.id FROM t_probe p " +
-            "LEFT JOIN t_service s ON p.parent = s.id " +
-            "WHERE p.parent = #{deviceId} OR s.parent = #{deviceId}")
+    // (services attach via the source column).
+    @Select("SELECT p.id FROM t_probe p WHERE p.parent = #{deviceId}")
     List<Integer> findProbeIdsByDevice(@Param("deviceId") int deviceId);
 
     @Select("<script>" +

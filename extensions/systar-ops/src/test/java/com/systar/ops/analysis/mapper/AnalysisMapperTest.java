@@ -73,8 +73,8 @@ class AnalysisMapperTest {
         // the t_asset id — health scoring must bridge via t_asset.probe_id.
         // Regression guard: alarm counts per device were always zero.
         jdbcTemplate.update(
-                "INSERT INTO t_device (id, name, caption, parent, lifecycle_status) "
-                        + "VALUES (?, 'analysis_dev', '分析回归设备', 0, 'IN_SERVICE')", DEVICE_ID);
+                "INSERT INTO t_device (id, name, caption, lifecycle_status) "
+                        + "VALUES (?, 'analysis_dev', '分析回归设备', 'IN_SERVICE')", DEVICE_ID);
         jdbcTemplate.update(
                 "INSERT INTO t_asset (id, name, kind, device_id) VALUES (?, 'analysis_dev_asset', 1, ?)",
                 DEVICE_ASSET_ID, DEVICE_ID);

@@ -95,11 +95,10 @@ class XmlAssetTypeLoaderTest {
     }
 
     @Test
-    @DisplayName("Loads Space and Device types")
-    void loadsSpaceAndDeviceTypes() {
+    @DisplayName("Loads Device types")
+    void loadsDeviceTypes() {
         loader.load(store);
 
-        assertThat(store.getSpaceTypes().getAll()).hasSize(1);
         assertThat(store.getDeviceTypes().getAll()).hasSize(1);
     }
 
@@ -253,17 +252,16 @@ class XmlAssetTypeLoaderTest {
     }
 
     @Test
-    @DisplayName("Total type count: 1+1+15+28+7 = 52 (with SNMP Interface probes)")
+    @DisplayName("Total type count: 1+15+28+7 = 51 (with SNMP Interface probes)")
     void totalTypeCount() {
         loader.load(store);
 
-        int total = store.getSpaceTypes().getAll().size()
-                + store.getDeviceTypes().getAll().size()
+        int total = store.getDeviceTypes().getAll().size()
                 + store.getServiceTypes().getAll().size()
                 + store.getProbeTypes().getAll().size()
                 + store.getControlTypes().getAll().size();
 
-        assertThat(total).isEqualTo(52);
+        assertThat(total).isEqualTo(51);
     }
 
     // ======================== Min/Max/MaxLength parsing ========================

@@ -8,30 +8,12 @@
 -- ============================================================================
 
 -- ============================================================================
--- 站点/空间
--- ============================================================================
-CREATE TABLE IF NOT EXISTS t_space (
-    id              INT             NOT NULL                       ,
-    name            VARCHAR(63)     NOT NULL                       ,
-    caption         VARCHAR(255)    NULL                           ,
-    parent          INT             NOT NULL                       ,
-    area            INT             NULL                           ,
-    sequence         INT             NOT NULL DEFAULT 0             ,
-    show_in_client  TINYINT         NOT NULL DEFAULT 1             ,
-    type_name       VARCHAR(100)    NULL                           ,
-    PRIMARY KEY (id)
-);
-
-CREATE INDEX IF NOT EXISTS i_space_name ON t_space (name);
-
--- ============================================================================
 -- 监控服务
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS t_service (
     id              INT             NOT NULL                       ,
     name            VARCHAR(63)     NOT NULL                       ,
     caption         VARCHAR(255)    NULL                           ,
-    parent          INT             NOT NULL                       ,
     mode            TINYINT         NULL                           ,
     driver_class    VARCHAR(255)    NULL                           ,
     max_connections INT             NULL                           ,
@@ -46,7 +28,6 @@ CREATE TABLE IF NOT EXISTS t_device (
     id                    INT             NOT NULL                       ,
     name                  VARCHAR(63)     NOT NULL                       ,
     caption               VARCHAR(255)    NULL                           ,
-    parent                INT             NOT NULL                       ,
     catalog               SMALLINT        NULL                           ,
     vendor                VARCHAR(255)    NULL                           ,
     purchase_date         DATETIME        NULL                           ,
@@ -132,7 +113,6 @@ CREATE TABLE IF NOT EXISTS t_asset (
     state           TINYINT         NULL                           ,
     enabled         INT             NULL DEFAULT 1                 ,
     sort            INT             NULL DEFAULT 0                 ,
-    space_id        BIGINT          NULL                           ,
     device_id       BIGINT          NULL                           ,
     service_id      BIGINT          NULL                           ,
     probe_id        BIGINT          NULL                           ,
@@ -472,3 +452,34 @@ CREATE TABLE IF NOT EXISTS t_asset_attribute (
 CREATE INDEX IF NOT EXISTS i_attr_asset ON t_asset_attribute (asset_id);
 CREATE INDEX IF NOT EXISTS i_attr_key ON t_asset_attribute (attr_key);
 CREATE UNIQUE INDEX IF NOT EXISTS i_attr_asset_key ON t_asset_attribute (asset_id, attr_key);
+
+-- ============================================================================
+-- 分组树（AssetGroupTree）：用户自管理的多棵组织视角树；"按类型"默认树为虚拟计算，不占行
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS t_group_tree (
+    id       BIGINT       NOT NULL AUTO_INCREMENT        ,
+    name     VARCHAR(100) NOT NULL UNIQUE                 ,
+    caption  VARCHAR(200) NOT NULL                        ,
+    sequence INT          NOT NULL DEFAULT 0              ,
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS t_group (
+    id       BIGINT       NOT NULL AUTO_INCREMENT        ,
+    tree_id  BIGINT       NOT NULL                       ,
+    name     VARCHAR(100) NOT NULL                       ,
+    caption  VARCHAR(200) NOT NULL                       ,
+    parent   BIGINT       NOT NULL DEFAULT 0             ,
+    level    INT          NOT NULL DEFAULT 1             ,
+    sequence INT          NOT NULL DEFAULT 0             ,
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS t_asset_group_rel (
+    asset_id BIGINT       NOT NULL                       ,
+    group_id BIGINT       NOT NULL                       ,
+    PRIMARY KEY (asset_id, group_id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS i_group_tree_name ON t_group (tree_id, name);
+CREATE INDEX IF NOT EXISTS i_rel_group ON t_asset_group_rel (group_id);

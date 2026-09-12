@@ -1,8 +1,10 @@
 package com.systar.server.service;
 
 import com.systar.monitor.asset.Asset;
+import com.systar.monitor.asset.AssetKind;
 import com.systar.monitor.server.MonitorServer;
 import com.systar.server.dto.AssetCreateRequest;
+import com.systar.server.repository.GroupRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -49,6 +51,9 @@ class AssetViewParentIdTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private GroupRepository groupRepo;
+
     /** Ids created this test — the DB rolls back, but the singleton store does not. */
     private final List<Integer> createdIds = new ArrayList<>();
 
@@ -62,7 +67,7 @@ class AssetViewParentIdTest {
 
     private int create(String kind, int parentId, String name, Map<String, Object> properties) {
         int id = orchestrator.createAsset(new AssetCreateRequest(
-                kind, parentId, name, name, null, properties, Map.of()));
+                kind, parentId, name, name, null, properties, Map.of())).runtimeId();
         createdIds.add(id);
         return id;
     }
@@ -70,21 +75,33 @@ class AssetViewParentIdTest {
     @Test
     @DisplayName("root asset keeps parent_id=0")
     void rootAsset() {
-        int spaceId = create("SPACE", ROOT_PARENT_ID, "view_space", Map.of());
+        int deviceId = create("DEVICE", ROOT_PARENT_ID, "view_dev_root", Map.of());
 
-        assertThat(viewParentId("kind=0 AND space_id=?", spaceId))
+        assertThat(viewParentId("kind=1 AND device_id=?", deviceId))
                 .isEqualTo((long) Asset.INVALID_ID);
     }
 
     @Test
-    @DisplayName("device view row hangs under the parent space's asset row")
-    void deviceUnderSpace() {
-        int spaceId  = create("SPACE", ROOT_PARENT_ID, "view_space", Map.of());
-        Long spaceRowId = assetViewRowId("kind=0 AND space_id=?", spaceId);
+    @DisplayName("create response's assetRowId bridges back to the runtime asset in the store")
+    void createResponseRowIdBridgesToRuntime() {
+        var result = orchestrator.createAsset(new AssetCreateRequest(
+                "DEVICE", ROOT_PARENT_ID, "bridge_dev", "bridge_dev", null, Map.of(), Map.of()));
+        createdIds.add(result.runtimeId());
 
-        int deviceId = create("DEVICE", spaceId, "view_dev", Map.of());
+        assertThat(monitorServer.findAsset(result.runtimeId())).isNotNull();
+        assertThat(groupRepo.findAssetRef(result.assetRowId()))
+                .contains(new GroupRepository.AssetRef(AssetKind.DEVICE, result.runtimeId()));
+    }
 
-        assertThat(viewParentId("kind=1 AND device_id=?", deviceId)).isEqualTo(spaceRowId);
+    @Test
+    @DisplayName("probe view row hangs under an API-created device's asset row")
+    void probeUnderCreatedDevice() {
+        int deviceId = create("DEVICE", ROOT_PARENT_ID, "view_dev", Map.of());
+        Long deviceRowId = assetViewRowId("kind=1 AND device_id=?", deviceId);
+
+        int probeId = create("PROBE", deviceId, "view_probe", Map.of("unit", "V"));
+
+        assertThat(viewParentId("kind=3 AND probe_id=?", probeId)).isEqualTo(deviceRowId);
     }
 
     @Test
@@ -107,6 +124,30 @@ class AssetViewParentIdTest {
 
         assertThat(viewParentId("kind=3 AND probe_id=?", probeId))
                 .isEqualTo((long) Asset.INVALID_ID);
+    }
+
+    @Test
+    @DisplayName("deleting an asset removes its group memberships")
+    void deleteAssetRemovesGroupRels() {
+        groupRepo.insertTree("rel_cascade_test", "级联清理", 1);
+        GroupRepository.GroupTreeRow tree = groupRepo.findTreeByName("rel_cascade_test").orElseThrow();
+        groupRepo.insertGroup(tree.id(), "g", "组", GroupRepository.TOP_LEVEL_PARENT, 1, 1);
+        GroupRepository.GroupRow group = groupRepo.findGroupByName(tree.id(), "g").orElseThrow();
+
+        int deviceId    = create("DEVICE", ROOT_PARENT_ID, "rel_dev", Map.of());
+        long assetRowId = assetViewRowId("kind=1 AND device_id=?", deviceId);
+        groupRepo.insertRel(assetRowId, group.id());
+        assertThat(countGroupRels(assetRowId)).isEqualTo(1L);
+
+        orchestrator.deleteAsset(deviceId, AssetKind.DEVICE);
+
+        assertThat(countGroupRels(assetRowId)).isZero();
+    }
+
+    private long countGroupRels(long assetRowId) {
+        Long count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM t_asset_group_rel WHERE asset_id=?", Long.class, assetRowId);
+        return count != null ? count : 0L;
     }
 
     private Long assetViewRowId(String condition, int perKindId) {

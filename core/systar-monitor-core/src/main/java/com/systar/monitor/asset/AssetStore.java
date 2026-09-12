@@ -12,18 +12,15 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * In-memory asset repository that maintains a flat index by id and a tree
- * hierarchy rooted at a single {@link Space} node.
+ * hierarchy mounted on a single neutral {@link CompoundAsset} anchor.
  *
  * <h3>Root structure</h3>
- * The constructor creates a <em>virtual root</em> Space (id=-1, empty name)
- * that serves as a transparent tree anchor. Real assets from the database
+ * The constructor creates a <em>neutral tree anchor</em> (id=-1, empty name)
+ * that is not part of the asset kind domain. Real assets from the database
  * carry {@code parent_id = 0} ({@link Asset#INVALID_ID}), which causes
- * {@link #addAsset(Asset)} to attach them under this virtual root.
- * <p>
- * This two-level design (virtual root → real root space) keeps the in-memory
- * model clean while matching the database convention where {@code parent_id = 0}
- * means "top-level". API consumers such as {@code AssetController.getAssetTree()}
- * skip the virtual root when real children exist, so end users never see it.
+ * {@link #addAsset(Asset)} to attach them under this anchor. The anchor is
+ * never placed in the flat index, so it cannot leak into
+ * {@link #getAssets()} or dashboards.
  * <p>
  * Also holds {@link AssetTypeManager} instances for each asset kind, populated
  * by {@link AssetTypeLoader} implementations during startup.
@@ -37,17 +34,16 @@ public class AssetStore extends AssetContext {
     /** Separator used by {@link #getFullPath(Asset)}. */
     public static final String PATH_SEPARATOR = "->";
 
-    /** Root id constant for the virtual root space. */
+    /** Root id constant for the neutral tree anchor. */
     private static final int ROOT_ID = -1;
 
     /** Flat index: asset id -> asset. */
     private final ConcurrentHashMap<Integer, Asset<?>> assets = new ConcurrentHashMap<>();
 
-    /** The single root space node. */
-    private volatile Space root;
+    /** The single neutral tree anchor (never stored in {@link #assets}). */
+    private volatile CompoundAsset<AssetType> root;
 
     /** Type registries, populated by AssetTypeLoaders during startup. */
-    private final AssetTypeManager<SpaceType> spaceTypes = new AssetTypeManager<>();
     private final AssetTypeManager<DeviceType> deviceTypes = new AssetTypeManager<>();
     private final AssetTypeManager<ServiceType> serviceTypes = new AssetTypeManager<>();
     private final AssetTypeManager<ProbeType> probeTypes = new AssetTypeManager<>();
@@ -56,38 +52,34 @@ public class AssetStore extends AssetContext {
     // ======================== lifecycle ========================
 
     public AssetStore() {
-        // Self-initialize a virtual root as tree anchor.
-        // Real root spaces (parent_id=0 in DB) attach under this node.
-        // The virtual root is transparent — API consumers should skip it
-        // when there are real children.
-        Space space = new Space();
-        space.setId(ROOT_ID);
-        space.setName("");
-        space.setCaption("");
-        space.setContext(this);
-        root = space;
-        assets.put(space.getId(), space);
+        root = newAnchor(this);
     }
 
-    /** The id assigned to the auto-created virtual root anchor. */
-    public static final int VIRTUAL_ROOT_ID = ROOT_ID;
-
     /**
-     * Creates and registers the root space node.
-     * Must be called before any other asset is added.
-     *
-     * @param rootType the space type to assign to the root node
-     * @param rootName the name of the root node
+     * Neutral tree anchor: a compound mount point that is not part of the asset
+     * kind domain. Top-level assets (parent_id = 0) attach here. It is never
+     * placed in the flat index, so it cannot leak into getAssets()/dashboards.
      */
-    public void createRoot(SpaceType rootType, String rootName) {
-        Space space = new Space();
-        space.setId(ROOT_ID);
-        space.setName(rootName);
-        space.setCaption(rootName);
-        space.setType(rootType);
-        space.setContext(this);
-        root = space;
-        assets.put(space.getId(), space);
+    private static final class TreeAnchor extends CompoundAsset<AssetType> {
+
+        @Override
+        public AssetKind getKind() {
+            return null;
+        }
+
+        @Override
+        public <R> R accept(AssetVisitor<R> visitor) {
+            throw new UnsupportedOperationException("Tree anchor is not part of the asset kind domain.");
+        }
+    }
+
+    private static TreeAnchor newAnchor(AssetContext context) {
+        TreeAnchor anchor = new TreeAnchor();
+        anchor.setId(ROOT_ID);
+        anchor.setName("");
+        anchor.setCaption("");
+        anchor.setContext(context);
+        return anchor;
     }
 
     // ======================== add / remove ========================
@@ -104,6 +96,9 @@ public class AssetStore extends AssetContext {
     public void addAsset(Asset<?> asset) {
         if (asset == null) {
             throw new AssetException("Asset must not be null.");
+        }
+        if (asset.getId() == ROOT_ID) {
+            throw new AssetException("Asset id %d is reserved for the tree anchor.".formatted(ROOT_ID));
         }
 
         // Atomic put-if-absent to prevent duplicate under concurrent access
@@ -233,11 +228,11 @@ public class AssetStore extends AssetContext {
     }
 
     /**
-     * Returns the root space node.
+     * Returns the neutral tree anchor.
      *
-     * @return the root, or {@code null} if {@link #createRoot} has not been called
+     * @return the anchor top-level assets attach to (never {@code null})
      */
-    public Space getRoot() {
+    public CompoundAsset<AssetType> getRoot() {
         return root;
     }
 
@@ -246,7 +241,7 @@ public class AssetStore extends AssetContext {
      * using {@link #PATH_SEPARATOR} between names.
      *
      * @param asset the target asset
-     * @return the full path string, e.g. "root->floor1->deviceA"
+     * @return the full path string, e.g. "floor1->deviceA->probe1"
      */
     public String getFullPath(Asset<?> asset) {
         if (asset == null) {
@@ -254,7 +249,7 @@ public class AssetStore extends AssetContext {
         }
         List<String> names = new ArrayList<>();
         Asset<?> current = asset;
-        while (current != null) {
+        while (current != null && current != root) {
             names.add(current.getName());
             current = current.getParent();
         }
@@ -263,16 +258,15 @@ public class AssetStore extends AssetContext {
     }
 
     /**
-     * Removes all assets from the store and clears the root reference.
+     * Removes all assets from the store and re-creates a fresh anchor.
      */
     public void clear() {
         assets.clear();
-        root = null;
+        root = newAnchor(this);
     }
 
     // ======================== type managers ========================
 
-    public AssetTypeManager<SpaceType> getSpaceTypes() { return spaceTypes; }
     public AssetTypeManager<DeviceType> getDeviceTypes() { return deviceTypes; }
     public AssetTypeManager<ServiceType> getServiceTypes() { return serviceTypes; }
     public AssetTypeManager<ProbeType> getProbeTypes() { return probeTypes; }
