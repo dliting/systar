@@ -9,7 +9,7 @@ REM    2. Simulator JAR: simulator/systar-simulator-server/target/systar-simulat
 REM    3. Systar JAR:    extensions/systar-server/target/systar-server-1.1.0.jar
 REM
 REM  Ports: Simulator REST=18080  Modbus=55502  OPC-UA=55503
-REM          Systar=8081
+REM          Systar=18081
 REM =====================================================
 
 setlocal enabledelayedexpansion
@@ -66,7 +66,7 @@ echo [E2E] Starting Systar backend...
 echo [E2E]   Simulator API:    http://localhost:18080
 echo [E2E]   Simulator Modbus: localhost:55502
 echo [E2E]   Simulator OPC-UA: opc.tcp://localhost:55503/systar-simulator
-echo [E2E]   Systar Web:       http://localhost:8081
+echo [E2E]   Systar Web:       http://localhost:18081
 echo.
 echo [E2E] Press Ctrl+C to stop both services.
 echo.

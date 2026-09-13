@@ -28,8 +28,8 @@ export default defineConfig({
     host: true,
     open: true,
     proxy: {
-      '/api': { target: 'http://localhost:8081', changeOrigin: true },
-      '/ws':  { target: 'http://localhost:8081', ws: true, changeOrigin: true }
+      '/api': { target: 'http://localhost:18081', changeOrigin: true },
+      '/ws':  { target: 'http://localhost:18081', ws: true, changeOrigin: true }
     }
   },
   build: {

@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * Global exception handler that converts unhandled exceptions into
@@ -33,6 +34,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResponseStatusException.class)
     public Result<Void> handleResponseStatusException(ResponseStatusException ex) {
         return Result.error(ex.getStatusCode().value(), ex.getReason());
+    }
+
+    /**
+     * Unknown paths land on the static-resource handler, which throws this
+     * since Spring 6.1 — a missing resource is a 404, not the generic 500.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Result<Void> handleNoResourceFound(NoResourceFoundException ex) {
+        return Result.error(Result.CODE_NOT_FOUND, ex.getMessage());
     }
 
     @ExceptionHandler(Exception.class)

@@ -1,6 +1,13 @@
 server:
   port: 8081
 
+# 白名单的运维探活端点：只暴露 health，不暴露 env/metrics 等，安全面最小
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
 systar:
   database:
     type: mysql
@@ -38,6 +45,8 @@ logging:
 
 ---
 # Development profile — H2 in-memory database
+# Windows winnat 动态端口保留段可能覆盖基础配置的 8081（bind 失败但无监听进程），
+# dev 改用 10000 以上非知名端口规避；生产部署不受影响，仍用基础配置 8081。
 spring:
   config:
     activate:
@@ -56,6 +65,9 @@ spring:
       encoding: UTF-8
       schema-locations: file:sql/h2/ddl/01-core.sql,file:sql/h2/ddl/02-ops.sql,file:sql/h2/ddl/03-system.sql
       data-locations: file:sql/h2/data/01-init.sql,file:sql/h2/data/03-simulator.sql
+
+server:
+  port: 18081
 
 systar:
   database:

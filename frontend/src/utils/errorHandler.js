@@ -7,7 +7,7 @@
  */
 import { ElMessage } from 'element-plus'
 
-const ERROR_SYSTAR_UNREACHABLE = 'Systar IoT 后端（端口 8081）无法连接，请确认服务已启动'
+const ERROR_SYSTAR_UNREACHABLE = 'Systar IoT 后端无法连接，请确认服务已启动'
 const ERROR_PROXY_TIMEOUT = '请求超时，请检查网络连接与后端服务状态'
 const ERROR_UNKNOWN = '请求失败'
 
