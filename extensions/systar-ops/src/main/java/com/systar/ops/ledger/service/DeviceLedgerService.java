@@ -47,6 +47,10 @@ public class DeviceLedgerService {
         return deviceInfo.listDevices(catalog, lifecycleStatus, page, size);
     }
 
+    public Map<String, Long> countByLifecycleStatus() {
+        return deviceInfo.countByLifecycleStatus();
+    }
+
     public Map<String, Object> getDeviceDetail(Integer deviceId) {
         DeviceDto device = deviceInfo.getById(deviceId);
         List<DeviceAttributeEntity> attributes = attributeMapper.selectList(new LambdaQueryWrapper<DeviceAttributeEntity>()

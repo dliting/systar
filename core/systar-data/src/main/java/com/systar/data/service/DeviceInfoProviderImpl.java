@@ -4,11 +4,14 @@ import com.systar.common.dto.DeviceDto;
 import com.systar.common.dto.PagedResult;
 import com.systar.common.service.DeviceInfoProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class DeviceInfoProviderImpl implements DeviceInfoProvider {
@@ -60,6 +63,17 @@ public class DeviceInfoProviderImpl implements DeviceInfoProvider {
         return jdbc.query(
             SELECT_DEVICE + " WHERE warranty_date >= ? AND warranty_date <= ? ORDER BY warranty_date",
             (rs, i) -> mapDevice(rs), LocalDate.now(), before);
+    }
+
+    @Override
+    public Map<String, Long> countByLifecycleStatus() {
+        Map<String, Long> counts = new HashMap<>();
+        // The cast resolves the RowCallbackHandler/ResultSetExtractor overload
+        // ambiguity of JdbcTemplate.query for this lambda.
+        jdbc.query(
+            "SELECT lifecycle_status, COUNT(*) FROM t_device GROUP BY lifecycle_status",
+            (RowCallbackHandler) rs -> counts.put(rs.getString(1), rs.getLong(2)));
+        return counts;
     }
 
     private DeviceDto mapDevice(java.sql.ResultSet rs) throws java.sql.SQLException {

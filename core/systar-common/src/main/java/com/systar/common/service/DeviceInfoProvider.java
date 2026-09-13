@@ -5,6 +5,7 @@ import com.systar.common.dto.PagedResult;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Read-only device information provider for cross-module access.
@@ -29,4 +30,12 @@ public interface DeviceInfoProvider {
      * Find devices whose warranty expires before the given date.
      */
     List<DeviceDto> findWarrantyExpiring(LocalDate before);
+
+    /**
+     * Count devices grouped by lifecycle status.
+     *
+     * @return map from lifecycle status to device count; rows with NULL status
+     *         are keyed null and still contribute to the total when summing values
+     */
+    Map<String, Long> countByLifecycleStatus();
 }

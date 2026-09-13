@@ -28,6 +28,11 @@ import java.util.Map;
 @RequestMapping("/api/ops/device-ledger")
 public class DeviceLedgerController {
 
+    private static final String LIFECYCLE_IN_SERVICE   = "IN_SERVICE";
+    private static final String LIFECYCLE_UNDER_REPAIR = "UNDER_REPAIR";
+    private static final String LIFECYCLE_RETIRED      = "RETIRED";
+    private static final long  COUNT_WHEN_GROUP_ABSENT = 0L;
+
     private final DeviceLedgerService deviceLedgerService;
     private final MaintenanceRecordService maintenanceRecordService;
     private final MaintenanceAttachmentMapper maintenanceAttachmentMapper;
@@ -51,21 +56,12 @@ public class DeviceLedgerController {
 
     @GetMapping("/stats")
     public Map<String, Object> stats() {
-        PagedResult<DeviceDto> devices = deviceLedgerService.getDeviceLedger(1, Integer.MAX_VALUE, null, null);
-        long inService = devices.records().stream()
-                .filter(device -> "IN_SERVICE".equals(device.lifecycleStatus()))
-                .count();
-        long underRepair = devices.records().stream()
-                .filter(device -> "UNDER_REPAIR".equals(device.lifecycleStatus()))
-                .count();
-        long retired = devices.records().stream()
-                .filter(device -> "RETIRED".equals(device.lifecycleStatus()))
-                .count();
+        Map<String, Long>  counts = deviceLedgerService.countByLifecycleStatus();
         Map<String, Object> stats = new HashMap<>();
-        stats.put("total", (long) devices.records().size());
-        stats.put("inService", inService);
-        stats.put("underRepair", underRepair);
-        stats.put("retired", retired);
+        stats.put("total", counts.values().stream().mapToLong(Long::longValue).sum());
+        stats.put("inService", counts.getOrDefault(LIFECYCLE_IN_SERVICE, COUNT_WHEN_GROUP_ABSENT));
+        stats.put("underRepair", counts.getOrDefault(LIFECYCLE_UNDER_REPAIR, COUNT_WHEN_GROUP_ABSENT));
+        stats.put("retired", counts.getOrDefault(LIFECYCLE_RETIRED, COUNT_WHEN_GROUP_ABSENT));
         return stats;
     }
 

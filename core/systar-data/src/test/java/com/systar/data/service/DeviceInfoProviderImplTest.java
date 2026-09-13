@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -68,6 +69,25 @@ class DeviceInfoProviderImplTest {
         List<DeviceDto> devices = provider.findWarrantyExpiring(LocalDate.now().plusDays(30));
 
         assertThat(devices).extracting(DeviceDto::id).contains(7005).doesNotContain(7006);
+    }
+
+    @Test
+    void countByLifecycleStatus_groupsCountsIncludingNullStatus() {
+        insertDevice(7101, (short) 201, "IN_SERVICE", null);
+        insertDevice(7102, (short) 202, "IN_SERVICE", null);
+        insertDevice(7103, (short) 201, "UNDER_REPAIR", null);
+        insertDevice(7104, (short) 201, "RETIRED", null);
+        insertDevice(7105, (short) 201, "IN_STORAGE", null);
+        insertDevice(7106, (short) 201, null, null);
+
+        Map<String, Long> counts = provider.countByLifecycleStatus();
+
+        assertThat(counts).hasSize(5);
+        assertThat(counts.get("IN_SERVICE")).isEqualTo(2L);
+        assertThat(counts.get("UNDER_REPAIR")).isEqualTo(1L);
+        assertThat(counts.get("RETIRED")).isEqualTo(1L);
+        assertThat(counts.get("IN_STORAGE")).isEqualTo(1L);
+        assertThat(counts.get(null)).isEqualTo(1L);
     }
 
     private void insertDevice(Integer id, Short catalog, String lifecycleStatus,
