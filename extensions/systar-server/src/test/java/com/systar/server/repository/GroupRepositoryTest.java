@@ -40,6 +40,8 @@ class GroupRepositoryTest {
     private static final long SEED_CONTROL_SWITCH_ROW_ID = 40L;
     /** No t_asset row carries this id. */
     private static final long MISSING_ASSET_ROW_ID       = 999_999_999L;
+    /** No t_group_tree row carries this id. */
+    private static final long MISSING_TREE_ID            = 999_999_998L;
     /** Runtime device id outside 01-init, used to stage duplicate view rows. */
     private static final int  DUPLICATE_DEVICE_RUNTIME_ID = 770_001;
 
@@ -117,27 +119,58 @@ class GroupRepositoryTest {
 
         groupRepo.updateGroup(group.id(), "new_name", "新组", 3L, 2, 7);
         groupRepo.updateGroupLevel(group.id(), 9);
+        groupRepo.updateGroupSequence(group.id(), 4);
         GroupRepository.GroupRow updatedGroup = groupRepo.findGroupById(group.id()).orElseThrow();
         assertThat(updatedGroup.name()).isEqualTo("new_name");
         assertThat(updatedGroup.caption()).isEqualTo("新组");
         assertThat(updatedGroup.parent()).isEqualTo(3L);
         assertThat(updatedGroup.level()).isEqualTo(9);
-        assertThat(updatedGroup.sequence()).isEqualTo(7);
+        assertThat(updatedGroup.sequence()).isEqualTo(4);
     }
 
     @Test
-    @DisplayName("findAssetRef bridges t_asset row ids to kind and runtime id")
-    void findAssetRefReadsKindAndRuntimeId() {
-        // 01-init: t_asset.id 22/10/30/40 carry device_id/service_id/probe_id/control_id 1003/100/2001/3001.
-        assertThat(groupRepo.findAssetRef(SEED_ELEC_METER_ROW_ID))
-                .contains(new GroupRepository.AssetRef(AssetKind.DEVICE, 1003));
-        assertThat(groupRepo.findAssetRef(SEED_SERVICE_SVC_ROW_ID))
-                .contains(new GroupRepository.AssetRef(AssetKind.SERVICE, 100));
-        assertThat(groupRepo.findAssetRef(SEED_PROBE_TEMP_ROW_ID))
-                .contains(new GroupRepository.AssetRef(AssetKind.PROBE, 2001));
-        assertThat(groupRepo.findAssetRef(SEED_CONTROL_SWITCH_ROW_ID))
-                .contains(new GroupRepository.AssetRef(AssetKind.CONTROL, 3001));
-        assertThat(groupRepo.findAssetRef(MISSING_ASSET_ROW_ID)).isEmpty();
+    @DisplayName("lockTree returns the tree row when it exists, empty when it does not")
+    void lockTreePresentAndAbsent() {
+        groupRepo.insertTree("locked_tree", "锁树", 3);
+        GroupRepository.GroupTreeRow tree = groupRepo.findTreeByName("locked_tree").orElseThrow();
+
+        assertThat(groupRepo.lockTree(tree.id())).contains(tree);
+        assertThat(groupRepo.lockTree(MISSING_TREE_ID)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("findAssetRefs resolves many row ids across kinds in one query; unresolvable ids stay absent")
+    void findAssetRefsBatchResolvesCrossKind() {
+        // Defensive fixtures: an unknown kind code, and a known kind with no runtime link.
+        jdbc.update("INSERT INTO t_asset (name, caption, kind, parent_id, enabled) "
+                + "VALUES ('ghost_b', 'ghost_b', 99, 0, 1)");
+        jdbc.update("INSERT INTO t_asset (name, caption, kind, parent_id, enabled) "
+                + "VALUES ('unlinked', 'unlinked', 1, 0, 1)");
+        Long ghostRowId    = jdbc.queryForObject("SELECT id FROM t_asset WHERE name='ghost_b'", Long.class);
+        Long unlinkedRowId = jdbc.queryForObject("SELECT id FROM t_asset WHERE name='unlinked'", Long.class);
+
+        Map<Long, GroupRepository.AssetRef> refs = groupRepo.findAssetRefs(List.of(
+                SEED_ELEC_METER_ROW_ID, SEED_SERVICE_SVC_ROW_ID, SEED_PROBE_TEMP_ROW_ID,
+                SEED_CONTROL_SWITCH_ROW_ID, MISSING_ASSET_ROW_ID, ghostRowId, unlinkedRowId));
+
+        assertThat(refs).containsEntry(SEED_ELEC_METER_ROW_ID,
+                new GroupRepository.AssetRef(AssetKind.DEVICE, 1003));
+        assertThat(refs).containsEntry(SEED_SERVICE_SVC_ROW_ID,
+                new GroupRepository.AssetRef(AssetKind.SERVICE, 100));
+        assertThat(refs).containsEntry(SEED_PROBE_TEMP_ROW_ID,
+                new GroupRepository.AssetRef(AssetKind.PROBE, 2001));
+        assertThat(refs).containsEntry(SEED_CONTROL_SWITCH_ROW_ID,
+                new GroupRepository.AssetRef(AssetKind.CONTROL, 3001));
+        assertThat(refs).doesNotContainKey(MISSING_ASSET_ROW_ID);
+        assertThat(refs).doesNotContainKey(ghostRowId);
+        assertThat(refs).doesNotContainKey(unlinkedRowId);
+        assertThat(refs).hasSize(4);
+    }
+
+    @Test
+    @DisplayName("findAssetRefs with an empty collection returns an empty map without querying")
+    void findAssetRefsEmptyCollectionShortCircuits() {
+        assertThat(groupRepo.findAssetRefs(List.of())).isEmpty();
     }
 
     @Test

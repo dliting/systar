@@ -39,7 +39,7 @@ import GroupTreeManageDialog from './GroupTreeManageDialog.vue'
 import { KIND_TREE, useAssetTree } from '@/composables/useAssetTree'
 import { showSystarError } from '@/utils/errorHandler'
 import {
-  createGroup, deleteGroup, listGroups, replaceGroupAssets, updateGroup
+  createGroup, deleteGroup, listGroups, reorderGroups, replaceGroupAssets, updateGroup
 } from '@/api/iot/asset'
 
 const ROOT_PARENT_ID     = 0
@@ -181,25 +181,20 @@ async function listMembersForWrite(groupId, assetRowId) {
 }
 
 /** Sibling resequence for prev/next group drops: splice the dragged group in
- *  before/after the drop target, then rewrite the parent's child order 1..n —
- *  writing only the groups whose sequence actually changed (rename+sequence
- *  payload; the parent change above already went through the move path).
- *  Stored sequences come from the fetched list: tree-node data carries none. */
+ *  before/after the drop target, then send the parent's full ordered child id
+ *  list to the atomic reorder endpoint — one transaction, the server rewrites
+ *  sequence 1..N (complete-set semantics; a stale list fails cleanly instead
+ *  of half-applying). The spliced order is already the parent's complete set.
+ *  Stored order comes from the fetched list: tree-node data carries none. */
 async function reorderSiblings(dragData, dropNode, dropType, parentId) {
   const treeId = Number(currentTree.value)
   const res    = await listGroups(treeId)
   const rows   = res.data || []
-  const storedSequenceById = new Map(rows.map(g => [g.id, g.sequence]))
   const order  = rows.filter(g => Number(g.parent) === Number(parentId) && g.id !== dragData.id)
   const pivot  = order.findIndex(g => g.id === dropNode.data.id)
   if (pivot < 0) return
   order.splice(dropType === 'prev' ? pivot : pivot + 1, 0, dragData)
-  for (let i = 0; i < order.length; i++) {
-    const group    = order[i]
-    const sequence = i + 1
-    if (sequence === storedSequenceById.get(group.id)) continue
-    await updateGroup(group.id, { name: group.name, caption: group.caption, sequence })
-  }
+  await reorderGroups(treeId, { parent: parentId, orderedGroupIds: order.map(g => g.id) })
 }
 
 function onContextMenu(event, data) {

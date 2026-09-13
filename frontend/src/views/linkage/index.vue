@@ -103,9 +103,9 @@
                   :props="treeProps"
                   show-checkbox
                   check-strictly
-                  node-key="id"
+                  node-key="key"
                   :filter-node-method="filterNode"
-                  :default-checked-keys="selectedCauseIds"
+                  :default-checked-keys="selectedCauseKeys"
                   @check="onCauseCheck"
                 >
                   <template #default="{ node, data }">
@@ -151,9 +151,9 @@
                   :props="treeProps"
                   show-checkbox
                   check-strictly
-                  node-key="id"
+                  node-key="key"
                   :filter-node-method="filterNode"
-                  :default-checked-keys="selectedEffectIds"
+                  :default-checked-keys="selectedEffectKeys"
                   @check="onEffectCheck"
                 >
                   <template #default="{ node, data }">
@@ -188,7 +188,7 @@
             <div class="tree-panel">
               <div class="tree-panel-header">
                 <el-icon><WarningFilled /></el-icon> 报警监测器
-                <el-tag size="small" type="info">{{ selectedCauseIds.length }} 个</el-tag>
+                <el-tag size="small" type="info">{{ form.causes.length }} 个</el-tag>
               </div>
               <div class="tree-panel-body">
                 <el-input v-model="alarmSearchKey" placeholder="搜索监测器" clearable class="tree-search" />
@@ -198,9 +198,9 @@
                   :props="treeProps"
                   show-checkbox
                   check-strictly
-                  node-key="id"
+                  node-key="key"
                   :filter-node-method="filterNode"
-                  :default-checked-keys="selectedCauseIds"
+                  :default-checked-keys="selectedCauseKeys"
                   @check="onAlarmCheck"
                 >
                   <template #default="{ node, data }">
@@ -241,9 +241,9 @@
                   :props="treeProps"
                   show-checkbox
                   check-strictly
-                  node-key="id"
+                  node-key="key"
                   :filter-node-method="filterNode"
-                  :default-checked-keys="selectedEffectIds"
+                  :default-checked-keys="selectedEffectKeys"
                   @check="onEffectCheck"
                 >
                   <template #default="{ node, data }">
@@ -357,8 +357,13 @@ const formRules = {
 
 const dialogTitle = computed(() => editingId.value ? '编辑联动规则' : '新增联动规则')
 
-const selectedCauseIds  = computed(() => form.value.causes.map(c => c.causeMonitorId))
-const selectedEffectIds = computed(() => form.value.effects.map(e => e.effectMonitorId))
+// el-tree node identity is TreeNodeVO.key ("GROUP:x"/"ASSET:x"/"KIND:x"):
+// numeric ids collide across the t_group and per-kind runtime id spaces (and
+// kind-tree synthetic roots are all null-id), so checked-key writes must use
+// composite keys. Causes/effects are always PROBE/CONTROL asset nodes, whose
+// key is "ASSET:<runtime id>".
+const selectedCauseKeys  = computed(() => form.value.causes.map(c => 'ASSET:' + c.causeMonitorId))
+const selectedEffectKeys = computed(() => form.value.effects.map(e => 'ASSET:' + e.effectMonitorId))
 
 // ======================== tree data ========================
 
@@ -388,6 +393,7 @@ function pruneTree(node, keepIds) {
     .filter(Boolean)
   // Group ids live in t_group and may collide with asset ids — only real
   // assets are kept by id; groups survive only when they still have children.
+  // Node identity walks the composite key; these keep-ids stay runtime ids.
   const isKeptAsset = node.nodeKind === 'ASSET' && keepIds.has(node.id)
   if (isKeptAsset || children.length > 0) {
     return { ...node, children }
@@ -476,9 +482,9 @@ function removeCause(monitorId) {
   form.value.causes = form.value.causes.filter(c => c.causeMonitorId !== monitorId)
   nextTick(() => {
     if (form.value.causeType === 'MONITOR') {
-      causeTreeRef.value?.setCheckedKeys(form.value.causes.map(c => c.causeMonitorId))
+      causeTreeRef.value?.setCheckedKeys(selectedCauseKeys.value)
     } else {
-      alarmTreeRef.value?.setCheckedKeys(form.value.causes.map(c => c.causeMonitorId))
+      alarmTreeRef.value?.setCheckedKeys(selectedCauseKeys.value)
     }
   })
 }
@@ -486,7 +492,7 @@ function removeCause(monitorId) {
 function removeEffect(monitorId) {
   form.value.effects = form.value.effects.filter(e => e.effectMonitorId !== monitorId)
   nextTick(() => {
-    effectTreeRef.value?.setCheckedKeys(form.value.effects.map(e => e.effectMonitorId))
+    effectTreeRef.value?.setCheckedKeys(selectedEffectKeys.value)
   })
 }
 
@@ -495,7 +501,7 @@ function onCauseTypeChange() {
   causeSearchKey.value  = ''
   effectSearchKey.value = ''
   nextTick(() => {
-    effectTreeRef.value?.setCheckedKeys(form.value.effects.map(e => e.effectMonitorId))
+    effectTreeRef.value?.setCheckedKeys(selectedEffectKeys.value)
   })
 }
 
@@ -542,11 +548,11 @@ async function handleEdit(row) {
   // Set checked keys after tree renders
   nextTick(() => {
     if (form.value.causeType === 'MONITOR') {
-      causeTreeRef.value?.setCheckedKeys(form.value.causes.map(c => c.causeMonitorId))
+      causeTreeRef.value?.setCheckedKeys(selectedCauseKeys.value)
     } else {
-      alarmTreeRef.value?.setCheckedKeys(form.value.causes.map(c => c.causeMonitorId))
+      alarmTreeRef.value?.setCheckedKeys(selectedCauseKeys.value)
     }
-    effectTreeRef.value?.setCheckedKeys(form.value.effects.map(e => e.effectMonitorId))
+    effectTreeRef.value?.setCheckedKeys(selectedEffectKeys.value)
   })
 }
 

@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -111,12 +112,10 @@ class GroupServiceTreeShapeTest {
                 1L, List.of(22L, 23L),
                 2L, List.of(21L)));
         // t_asset row ids (22/23/21) differ from runtime ids (1003/1004/1002), as in 01-init.
-        when(repo.findAssetRef(22L))
-                .thenReturn(Optional.of(new GroupRepository.AssetRef(AssetKind.DEVICE, 1003)));
-        when(repo.findAssetRef(23L))
-                .thenReturn(Optional.of(new GroupRepository.AssetRef(AssetKind.DEVICE, 1004)));
-        when(repo.findAssetRef(21L))
-                .thenReturn(Optional.of(new GroupRepository.AssetRef(AssetKind.DEVICE, 1002)));
+        when(repo.findAssetRefs(anyCollection())).thenReturn(Map.of(
+                22L, new GroupRepository.AssetRef(AssetKind.DEVICE, 1003),
+                23L, new GroupRepository.AssetRef(AssetKind.DEVICE, 1004),
+                21L, new GroupRepository.AssetRef(AssetKind.DEVICE, 1002)));
         // Reverse map: runtime id -> t_asset row id; runtime 1010 has no view row (defensive null).
         when(repo.findRowIdsByRuntimeId())
                 .thenReturn(Map.of(1002, 21L, 1003, 22L, 1004, 23L, 2008, 26L));
@@ -163,14 +162,13 @@ class GroupServiceTreeShapeTest {
                 new GroupRepository.GroupTreeRow(1L, "region", "按区域", 1)));
         when(repo.findAllGroups(1L)).thenReturn(List.of(
                 new GroupRepository.GroupRow(1L, 1L, "machine_room", "机房", 0L, 1, 1)));
-        // 999L is a stale rel row: no t_asset row carries that id (findAssetRef -> empty).
+        // 999L is a stale rel row: no t_asset row carries that id (absent from findAssetRefs).
         // 888L bridges to a live-kind asset whose runtime counterpart is absent from
-        // the store (findAssetRef -> Device 9999, never addDevice) — the store-miss skip.
+        // the store (Device 9999, never addDevice) — the store-miss skip.
         when(repo.findMembersByTree(1L)).thenReturn(Map.of(1L, List.of(999L, 888L, 22L)));
-        when(repo.findAssetRef(22L))
-                .thenReturn(Optional.of(new GroupRepository.AssetRef(AssetKind.DEVICE, 1003)));
-        when(repo.findAssetRef(888L))
-                .thenReturn(Optional.of(new GroupRepository.AssetRef(AssetKind.DEVICE, 9999)));
+        when(repo.findAssetRefs(anyCollection())).thenReturn(Map.of(
+                22L, new GroupRepository.AssetRef(AssetKind.DEVICE, 1003),
+                888L, new GroupRepository.AssetRef(AssetKind.DEVICE, 9999)));
 
         addDevice(1003, "ups_001");
 
@@ -190,8 +188,8 @@ class GroupServiceTreeShapeTest {
                 new GroupRepository.GroupRow(1L, 1L, "machine_room", "机房", 0L, 1, 1)));
         // A stale PROBE rel row must not render, while its probe stays under its device.
         when(repo.findMembersByTree(1L)).thenReturn(Map.of(1L, List.of(30L)));
-        when(repo.findAssetRef(30L))
-                .thenReturn(Optional.of(new GroupRepository.AssetRef(AssetKind.PROBE, 2001)));
+        when(repo.findAssetRefs(anyCollection())).thenReturn(Map.of(
+                30L, new GroupRepository.AssetRef(AssetKind.PROBE, 2001)));
 
         addDevice(1001, "th_sensor_001");
         addProbe(2001, "temp_101", 1001);

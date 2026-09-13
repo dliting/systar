@@ -89,8 +89,9 @@ class AssetViewParentIdTest {
         createdIds.add(result.runtimeId());
 
         assertThat(monitorServer.findAsset(result.runtimeId())).isNotNull();
-        assertThat(groupRepo.findAssetRef(result.assetRowId()))
-                .contains(new GroupRepository.AssetRef(AssetKind.DEVICE, result.runtimeId()));
+        assertThat(groupRepo.findAssetRefs(List.of(result.assetRowId())))
+                .containsEntry(result.assetRowId(),
+                        new GroupRepository.AssetRef(AssetKind.DEVICE, result.runtimeId()));
     }
 
     @Test

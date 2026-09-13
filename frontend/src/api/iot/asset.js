@@ -87,3 +87,6 @@ export function deleteGroup(id) {
 export function replaceGroupAssets(id, assetIds) {
   return systarApi({ url: '/api/monitor/groups/' + id + '/assets', method: 'put', data: { assetIds } })
 }
+export function reorderGroups(treeId, data) {
+  return systarApi({ url: '/api/monitor/group-trees/' + treeId + '/groups/order', method: 'put', data })
+}

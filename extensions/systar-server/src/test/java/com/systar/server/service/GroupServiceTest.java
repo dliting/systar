@@ -7,7 +7,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -43,6 +48,7 @@ class GroupServiceTest {
         store   = new AssetStore();
         service = new GroupService(store, repo);
         when(repo.findTreeById(1L)).thenReturn(Optional.of(TREE));
+        when(repo.lockTree(1L)).thenReturn(Optional.of(TREE));
         when(repo.findAllGroups(1L)).thenReturn(List.of());
         when(repo.findMembersByTree(1L)).thenReturn(Map.of());
     }
@@ -302,11 +308,10 @@ class GroupServiceTest {
     void replaceGroupAssets() {
         when(repo.findGroupById(7L)).thenReturn(Optional.of(
                 new GroupRepository.GroupRow(7L, 1L, "g", "G", 0L, 1, 1)));
-        when(repo.findAssetRef(22L))
-                .thenReturn(Optional.of(new GroupRepository.AssetRef(AssetKind.DEVICE, 1003)));
-        when(repo.findAssetRef(10L))
-                .thenReturn(Optional.of(new GroupRepository.AssetRef(AssetKind.SERVICE, 100)));
-        when(repo.findAssetRef(99L)).thenReturn(Optional.empty());
+        // 99L resolves to no t_asset row — absent from the batch map.
+        when(repo.findAssetRefs(anyCollection())).thenReturn(Map.of(
+                22L, new GroupRepository.AssetRef(AssetKind.DEVICE, 1003),
+                10L, new GroupRepository.AssetRef(AssetKind.SERVICE, 100)));
 
         assertThatThrownBy(() -> service.replaceGroupAssets(7L, List.of(22L, 99L)))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -347,8 +352,7 @@ class GroupServiceTest {
     void replaceGroupAssetsRejectsDuplicates() {
         when(repo.findGroupById(7L)).thenReturn(Optional.of(
                 new GroupRepository.GroupRow(7L, 1L, "g", "G", 0L, 1, 1)));
-        when(repo.findAssetRef(22L))
-                .thenReturn(Optional.of(new GroupRepository.AssetRef(AssetKind.DEVICE, 1003)));
+        // Duplicates are rejected by the in-memory check before any query runs.
 
         assertThatThrownBy(() -> service.replaceGroupAssets(7L, List.of(22L, 22L)))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -363,10 +367,9 @@ class GroupServiceTest {
     void replaceGroupAssetsRejectsMonitorKind() {
         when(repo.findGroupById(7L)).thenReturn(Optional.of(
                 new GroupRepository.GroupRow(7L, 1L, "g", "G", 0L, 1, 1)));
-        when(repo.findAssetRef(22L))
-                .thenReturn(Optional.of(new GroupRepository.AssetRef(AssetKind.PROBE, 2001)));
-        when(repo.findAssetRef(40L))
-                .thenReturn(Optional.of(new GroupRepository.AssetRef(AssetKind.CONTROL, 3001)));
+        when(repo.findAssetRefs(anyCollection())).thenReturn(Map.of(
+                22L, new GroupRepository.AssetRef(AssetKind.PROBE, 2001),
+                40L, new GroupRepository.AssetRef(AssetKind.CONTROL, 3001)));
 
         assertThatThrownBy(() -> service.replaceGroupAssets(7L, List.of(22L)))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -382,6 +385,169 @@ class GroupServiceTest {
                 .hasMessageContaining("CONTROL");
         verify(repo, never()).deleteRelsByGroup(anyLong());
         verify(repo, never()).insertRel(anyLong(), anyLong());
+    }
+
+    // ---- sibling reorder ----
+
+    @Test
+    @DisplayName("reorderSiblings rewrites sequence 1..N in the given order (top level)")
+    void reorderSiblingsRewritesSequences() {
+        when(repo.findAllGroups(1L)).thenReturn(List.of(
+                new GroupRepository.GroupRow(1L, 1L, "a", "A", 0L, 1, 1),
+                new GroupRepository.GroupRow(2L, 1L, "b", "B", 0L, 1, 2)));
+
+        service.reorderSiblings(1L, GroupRepository.TOP_LEVEL_PARENT, List.of(2L, 1L));
+
+        verify(repo).updateGroupSequence(2L, 1);
+        verify(repo).updateGroupSequence(1L, 2);
+    }
+
+    @Test
+    @DisplayName("reorderSiblings reorders the children of a nested parent group")
+    void reorderSiblingsNestedParent() {
+        when(repo.findAllGroups(1L)).thenReturn(List.of(
+                new GroupRepository.GroupRow(1L, 1L, "a", "A", 0L, 1, 1),
+                new GroupRepository.GroupRow(2L, 1L, "deep", "D", 1L, 2, 1)));
+
+        service.reorderSiblings(1L, 1L, List.of(2L));
+
+        verify(repo).updateGroupSequence(2L, 1);
+    }
+
+    @Test
+    @DisplayName("reorderSiblings rejects a list that misses an existing child")
+    void reorderSiblingsRejectsMissingChild() {
+        when(repo.findAllGroups(1L)).thenReturn(List.of(
+                new GroupRepository.GroupRow(1L, 1L, "a", "A", 0L, 1, 1),
+                new GroupRepository.GroupRow(2L, 1L, "b", "B", 0L, 1, 2)));
+
+        assertThatThrownBy(() -> service.reorderSiblings(
+                1L, GroupRepository.TOP_LEVEL_PARENT, List.of(1L)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("missing")
+                .hasMessageContaining("2");
+        verify(repo, never()).updateGroupSequence(anyLong(), anyInt());
+    }
+
+    @Test
+    @DisplayName("reorderSiblings rejects an id that lives under a different parent")
+    void reorderSiblingsRejectsOtherParentsChild() {
+        when(repo.findAllGroups(1L)).thenReturn(List.of(
+                new GroupRepository.GroupRow(1L, 1L, "a", "A", 0L, 1, 1),
+                new GroupRepository.GroupRow(2L, 1L, "deep", "D", 1L, 2, 1)));
+
+        // 2 is a child of group 1, not of the top level
+        assertThatThrownBy(() -> service.reorderSiblings(
+                1L, GroupRepository.TOP_LEVEL_PARENT, List.of(1L, 2L)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("parent")
+                .hasMessageContaining("2");
+        verify(repo, never()).updateGroupSequence(anyLong(), anyInt());
+    }
+
+    @Test
+    @DisplayName("reorderSiblings rejects an id from another tree (absent from this tree's listing)")
+    void reorderSiblingsRejectsCrossTreeId() {
+        when(repo.findAllGroups(1L)).thenReturn(List.of(
+                new GroupRepository.GroupRow(1L, 1L, "a", "A", 0L, 1, 1)));
+
+        assertThatThrownBy(() -> service.reorderSiblings(
+                1L, GroupRepository.TOP_LEVEL_PARENT, List.of(1L, 77L)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("77")
+                .hasMessageContaining("tree");
+        verify(repo, never()).updateGroupSequence(anyLong(), anyInt());
+    }
+
+    @Test
+    @DisplayName("reorderSiblings fails fast when the parent group itself is unknown to the tree")
+    void reorderSiblingsRejectsUnknownParent() {
+        when(repo.findAllGroups(1L)).thenReturn(List.of(
+                new GroupRepository.GroupRow(1L, 1L, "a", "A", 0L, 1, 1)));
+
+        assertThatThrownBy(() -> service.reorderSiblings(1L, 99L, List.of(1L)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Group not found")
+                .hasMessageContaining("99");
+        verify(repo, never()).updateGroupSequence(anyLong(), anyInt());
+    }
+
+    @Test
+    @DisplayName("reorderSiblings rejects duplicate ids")
+    void reorderSiblingsRejectsDuplicates() {
+        when(repo.findAllGroups(1L)).thenReturn(List.of(
+                new GroupRepository.GroupRow(1L, 1L, "a", "A", 0L, 1, 1),
+                new GroupRepository.GroupRow(2L, 1L, "b", "B", 0L, 1, 2)));
+
+        assertThatThrownBy(() -> service.reorderSiblings(
+                1L, GroupRepository.TOP_LEVEL_PARENT, List.of(1L, 2L, 1L)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Duplicate")
+                .hasMessageContaining("1");
+        verify(repo, never()).updateGroupSequence(anyLong(), anyInt());
+    }
+
+    @Test
+    @DisplayName("reorderSiblings rejects a null id element")
+    void reorderSiblingsRejectsNullElement() {
+        assertThatThrownBy(() -> service.reorderSiblings(
+                1L, GroupRepository.TOP_LEVEL_PARENT, Arrays.asList(1L, null)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("must not be null");
+        verify(repo, never()).updateGroupSequence(anyLong(), anyInt());
+    }
+
+    @Test
+    @DisplayName("reorderSiblings accepts an empty list when the parent has no children")
+    void reorderSiblingsEmptyListWithNoChildren() {
+        when(repo.findAllGroups(1L)).thenReturn(List.of());
+
+        service.reorderSiblings(1L, GroupRepository.TOP_LEVEL_PARENT, List.of());
+
+        verify(repo, never()).updateGroupSequence(anyLong(), anyInt());
+    }
+
+    @Test
+    @DisplayName("reorderSiblings fails fast on an unknown tree")
+    void reorderSiblingsUnknownTree() {
+        assertThatThrownBy(() -> service.reorderSiblings(2L, GroupRepository.TOP_LEVEL_PARENT, List.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Tree not found");
+        verify(repo, never()).updateGroupSequence(anyLong(), anyInt());
+    }
+
+    // ---- write-transaction isolation contract ----
+
+    /** Every public write entry point that takes the tree row lock. */
+    private static final List<String> WRITE_METHOD_NAMES = List.of(
+            "createGroup", "renameGroup", "moveGroup", "updateGroup",
+            "deleteGroup", "replaceGroupAssets", "deleteTree", "reorderSiblings");
+
+    /**
+     * The lock invariant needs READ_COMMITTED isolation, not just the tree row
+     * lock: under InnoDB's default REPEATABLE_READ the read view is taken by
+     * the transaction's FIRST plain read (the pre-lock requireTree/requireGroup),
+     * and a locking read does not refresh it — post-lock validation reads
+     * (findAllGroups, uniqueness, delete constraints) would stay on the stale
+     * snapshot even after waiting for and acquiring the lock. H2 (the test DB)
+     * is READ_COMMITTED by default, so the behavior cannot be reproduced here;
+     * this pins the annotation contract against accidental removal instead.
+     */
+    @Test
+    @DisplayName("every grouped-write transaction pins READ_COMMITTED isolation")
+    void writeTransactionsDeclareReadCommitted() {
+        List<String> checked = new ArrayList<>();
+        for (Method method : GroupService.class.getDeclaredMethods()) {
+            if (!WRITE_METHOD_NAMES.contains(method.getName())) {
+                continue;
+            }
+            checked.add(method.getName());
+            Transactional tx = method.getAnnotation(Transactional.class);
+            assertThat(tx).as(method.getName()).isNotNull();
+            assertThat(tx.isolation()).as(method.getName()).isEqualTo(Isolation.READ_COMMITTED);
+        }
+        // Typo guard: all eight write entry points were actually inspected.
+        assertThat(checked).containsExactlyInAnyOrderElementsOf(WRITE_METHOD_NAMES);
     }
 
     @Test

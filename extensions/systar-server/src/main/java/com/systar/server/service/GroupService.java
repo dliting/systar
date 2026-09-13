@@ -11,6 +11,7 @@ import com.systar.server.repository.GroupRepository.AssetRef;
 import com.systar.server.repository.GroupRepository.GroupRow;
 import com.systar.server.repository.GroupRepository.GroupTreeRow;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
@@ -34,6 +35,14 @@ import java.util.stream.Collectors;
  *   <li>{@code level} is maintained recursively on create/move (top = 1)</li>
  *   <li>deleting a tree requires zero groups; deleting a group requires no child
  *       groups and no attached members; members are validated against t_asset</li>
+ *   <li>every grouped write runs in one READ_COMMITTED transaction under the
+ *       tree row lock ({@link GroupRepository#lockTree}), so check-then-write
+ *       invariants (unique names, cycle guard, levels, sequences, delete
+ *       constraints) hold even for concurrent API clients — the single-admin
+ *       serialization of the UI is not relied upon. The isolation is part of
+ *       the invariant: under InnoDB's default REPEATABLE_READ the read view
+ *       taken by the pre-lock reads (requireTree/requireGroup) would keep
+ *       post-lock validation reads stale even after the lock is acquired</li>
  * </ul>
  */
 @Service
@@ -96,9 +105,13 @@ public class GroupService {
         repo.updateTree(id, trimmed, caption, sequence != null ? sequence : tree.sequence());
     }
 
+    /** Locks the tree row before the emptiness check — closes the window where a
+     *  concurrent createGroup lands between count and delete. */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void deleteTree(long id) {
         GroupTreeRow tree = repo.findTreeById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Tree not found: " + id));
+        lockTreeOrThrow(id);
         int groups = repo.countGroupsInTree(id);
         if (groups > 0) {
             throw new IllegalArgumentException(
@@ -121,8 +134,10 @@ public class GroupService {
                 .toList();
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void createGroup(long treeId, String name, String caption, long parentGroupId, int sequence) {
         requireTree(treeId);
+        lockTreeOrThrow(treeId);
         String trimmed = requireText(name, "Group name");
         requireUniqueGroupName(treeId, trimmed, NO_GROUP_ID);
 
@@ -136,9 +151,15 @@ public class GroupService {
         repo.insertGroup(treeId, trimmed, caption == null ? trimmed : caption, parent, level, sequence);
     }
 
-    /** Renames a group; an omitted {@code sequence} keeps the stored sibling order. */
+    /**
+     * Renames a group; an omitted {@code sequence} keeps the stored sibling order.
+     * The tree row is locked before the uniqueness check, so a concurrent
+     * same-name create/rename on the tree cannot slip through the check.
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void renameGroup(long groupId, String name, String caption, Integer sequence) {
         GroupRow group = requireGroup(groupId);
+        lockTreeOrThrow(group.treeId());
         String trimmed = requireText(name, "Group name");
         requireUniqueGroupName(group.treeId(), trimmed, groupId);
         repo.updateGroup(groupId, trimmed, caption, group.parent(), group.level(),
@@ -154,9 +175,10 @@ public class GroupService {
      * self-invocation (the proxy is bypassed); the {@code @Transactional} here
      * covers direct external calls only.
      */
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void moveGroup(long treeId, long groupId, long newParentGroupId) {
         requireTree(treeId);
+        lockTreeOrThrow(treeId);
         List<GroupRow> all = repo.findAllGroups(treeId);
         GroupRow group = requireGroupIn(all, groupId);
 
@@ -190,7 +212,7 @@ public class GroupService {
      * are accepted together or not at all — a half-specified move is rejected
      * instead of silently degrading to a rename.
      */
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void updateGroup(long groupId, Long treeId, Long parent, String name, String caption, Integer sequence) {
         boolean hasTreeId  = treeId != null;
         boolean hasParent  = parent != null;
@@ -210,8 +232,10 @@ public class GroupService {
         }
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void deleteGroup(long groupId) {
         GroupRow group = requireGroup(groupId);
+        lockTreeOrThrow(group.treeId());
         for (GroupRow row : repo.findAllGroups(group.treeId())) {
             if (row.parent() == groupId) {
                 throw new IllegalArgumentException(
@@ -228,9 +252,10 @@ public class GroupService {
         repo.deleteGroup(groupId);
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void replaceGroupAssets(long groupId, List<Long> assetRowIds) {
         GroupRow group = requireGroup(groupId);
+        lockTreeOrThrow(group.treeId());
         if (assetRowIds != null) {
             Set<Long> seen = new HashSet<>();
             for (Long assetRowId : assetRowIds) {
@@ -240,14 +265,17 @@ public class GroupService {
                 if (!seen.add(assetRowId)) {
                     throw new IllegalArgumentException("Duplicate asset row id: " + assetRowId);
                 }
-                Optional<AssetRef> ref = repo.findAssetRef(assetRowId);
-                if (ref.isEmpty()) {
+            }
+            Map<Long, AssetRef> refsById = repo.findAssetRefs(assetRowIds);
+            for (Long assetRowId : assetRowIds) {
+                AssetRef ref = refsById.get(assetRowId);
+                if (ref == null) {
                     throw new IllegalArgumentException("Asset row not found: " + assetRowId);
                 }
-                if (!GROUP_MEMBER_KINDS.contains(ref.get().kind())) {
+                if (!GROUP_MEMBER_KINDS.contains(ref.kind())) {
                     throw new IllegalArgumentException(
                             ("Asset row %d is a %s; only %s assets may join groups.")
-                                    .formatted(assetRowId, ref.get().kind(), GROUP_MEMBER_KIND_LIST));
+                                    .formatted(assetRowId, ref.kind(), GROUP_MEMBER_KIND_LIST));
                 }
             }
         }
@@ -256,6 +284,68 @@ public class GroupService {
             for (Long assetRowId : assetRowIds) {
                 repo.insertRel(assetRowId, group.id());
             }
+        }
+    }
+
+    /**
+     * Atomically rewrites one parent's child order from an ordered id list —
+     * a single transaction under the tree row lock, sequences rewritten
+     * 1..N, so a drag reorder is one intention instead of N independent row
+     * patches that can half-fail. {@code orderedGroupIds} must be the parent's
+     * COMPLETE child set, each id exactly once; {@code parentGroupId} 0 means
+     * top level. Replaying the same list is idempotent. A stale list (a
+     * concurrent writer changed the children in between) is rejected fail-fast
+     * naming the offending or missing ids, instead of silently dropping rows.
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void reorderSiblings(long treeId, long parentGroupId, List<Long> orderedGroupIds) {
+        lockTreeOrThrow(treeId);
+        List<Long> ordered = orderedGroupIds == null ? List.of() : orderedGroupIds;
+
+        Set<Long> seen = new HashSet<>();
+        for (Long id : ordered) {
+            if (id == null) {
+                throw new IllegalArgumentException("Group id must not be null.");
+            }
+            if (!seen.add(id)) {
+                throw new IllegalArgumentException("Duplicate group id: " + id);
+            }
+        }
+
+        List<GroupRow> all = repo.findAllGroups(treeId);
+        if (parentGroupId != GroupRepository.TOP_LEVEL_PARENT) {
+            requireGroupIn(all, parentGroupId);
+        }
+        Map<Long, GroupRow> byId = new HashMap<>();
+        for (GroupRow row : all) {
+            byId.put(row.id(), row);
+        }
+        for (Long id : ordered) {
+            GroupRow row = byId.get(id);
+            if (row == null) {
+                throw new IllegalArgumentException(
+                        "Group %d does not exist in tree %d.".formatted(id, treeId));
+            }
+            if (row.parent() != parentGroupId) {
+                throw new IllegalArgumentException(
+                        "Group %d has parent %d, not %d.".formatted(id, row.parent(), parentGroupId));
+            }
+        }
+
+        List<Long> missing = all.stream()
+                .filter(row -> row.parent() == parentGroupId)
+                .map(GroupRow::id)
+                .filter(id -> !seen.contains(id))
+                .toList();
+        if (!missing.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Reorder list must contain every child group of parent %d; missing: %s."
+                            .formatted(parentGroupId, missing));
+        }
+
+        int sequence = 0;
+        for (Long id : ordered) {
+            repo.updateGroupSequence(id, ++sequence);
         }
     }
 
@@ -334,6 +424,14 @@ public class GroupService {
         List<GroupRow> groups = repo.findAllGroups(treeId);
         Map<Long, List<Long>> membersByGroup = repo.findMembersByTree(treeId);
 
+        // One batched lookup for every member rel of the tree — a per-row query
+        // here made tree rendering cost O(members) SQL round trips.
+        Set<Long> memberRowIds = new HashSet<>();
+        for (List<Long> members : membersByGroup.values()) {
+            memberRowIds.addAll(members);
+        }
+        Map<Long, AssetRef> refsById = repo.findAssetRefs(memberRowIds);
+
         Map<Long, TreeNodeVO> groupNodes = new HashMap<>();
         for (GroupRow group : groups) {
             groupNodes.put(group.id(), new TreeNodeVO("GROUP:" + group.id(), "GROUP", null,
@@ -349,15 +447,15 @@ public class GroupService {
         for (GroupRow group : groups) {
             TreeNodeVO node = groupNodes.get(group.id());
             for (Long assetRowId : membersByGroup.getOrDefault(group.id(), List.of())) {
-                Optional<AssetRef> ref = repo.findAssetRef(assetRowId);
-                if (ref.isEmpty() || !GROUP_MEMBER_KINDS.contains(ref.get().kind())) {
+                AssetRef ref = refsById.get(assetRowId);
+                if (ref == null || !GROUP_MEMBER_KINDS.contains(ref.kind())) {
                     continue; // rel rows pointing at deleted/monitor-kind assets are ignored
                 }
-                Asset<?> asset = store.findAsset(ref.get().runtimeId());
+                Asset<?> asset = store.findAsset(ref.runtimeId());
                 if (asset == null) {
                     continue; // t_asset row without a live runtime counterpart
                 }
-                attached.add((long) ref.get().runtimeId());
+                attached.add((long) ref.runtimeId());
                 node.children().add(assetNode(asset, rowIdsByRuntimeId));
             }
             for (GroupRow child : childrenByParent.getOrDefault(group.id(), List.of())) {
@@ -423,6 +521,16 @@ public class GroupService {
 
     private void requireTree(long treeId) {
         repo.findTreeById(treeId)
+                .orElseThrow(() -> new IllegalArgumentException("Tree not found: " + treeId));
+    }
+
+    /**
+     * Locks the tree row (SELECT ... FOR UPDATE) for the rest of the transaction.
+     * Empty means the tree vanished between the caller's existence check and
+     * the lock acquisition — same fail-fast error as {@link #requireTree}.
+     */
+    private GroupTreeRow lockTreeOrThrow(long treeId) {
+        return repo.lockTree(treeId)
                 .orElseThrow(() -> new IllegalArgumentException("Tree not found: " + treeId));
     }
 

@@ -190,7 +190,7 @@ sql/
 - `t_asset_type_config` — 驱动 XML 类型定义的数据库投影
 - `t_group_tree` — 用户自管理分组树（多棵组织视角树；"按类型"为虚拟树不占行）
 - `t_group` — 分组（树内以 parent/level 维护层级）
-- `t_asset_group_rel` — 资产-分组关联（m2m，成员仅限 DEVICE/SERVICE 资产）。`asset_id` 存 `t_asset` 行 id（非运行时 id）；两个 id 空间经 `t_asset` 的 `device_id/service_id/probe_id/control_id` 外键列互查桥接（`GroupRepository.findAssetRef`）。对外契约上，行 id 以 `TreeNodeVO.assetRowId` 下发（渲染端反向映射 `GroupRepository.findRowIdsByRuntimeId`），且 `POST /assets` 创建响应的 `data` 即该行 id——成员读写两端（树挂载/卸载、分组成员替换、创建后即挂组）均只使用行 id 空间
+- `t_asset_group_rel` — 资产-分组关联（m2m，成员仅限 DEVICE/SERVICE 资产）。`asset_id` 存 `t_asset` 行 id（非运行时 id）；两个 id 空间经 `t_asset` 的 `device_id/service_id/probe_id/control_id` 外键列互查桥接（`GroupRepository.findAssetRefs`）。对外契约上，行 id 以 `TreeNodeVO.assetRowId` 下发（渲染端反向映射 `GroupRepository.findRowIdsByRuntimeId`），且 `POST /assets` 创建响应的 `data` 即该行 id——成员读写两端（树挂载/卸载、分组成员替换、创建后即挂组）均只使用行 id 空间
 
 **采样数据表（按数据类型分表）：**
 - `t_sample_float` — 浮点型采样值
@@ -292,6 +292,7 @@ H2 脚本需去除 `ENGINE=InnoDB`、`COLLATE`、`COMMENT`，用 `MERGE INTO` �
 | 分组 | `/groups` | GET/POST | 树内分组列表/新增 |
 | 分组 | `/groups/{id}` | PUT/DELETE | 分组改名/移动（parent+treeId）/删除 |
 | 分组 | `/groups/{id}/assets` | PUT | 整体替换分组成员（仅 DEVICE/SERVICE 资产） |
+| 分组 | `/group-trees/{treeId}/groups/order` | PUT | 批量重排同级分组（原子单事务，完整集合语义，序列 1..N 重写） |
 | 资产 | `/assets` | GET/POST | 资产列表/新增 |
 | 资产 | `/assets/{id}` | GET/PUT/DELETE | 资产详情/更新/删除 |
 | 资产 | `/assets/{id}/start\|stop\|enable\|disable` | PUT | 运行时启停控制 |

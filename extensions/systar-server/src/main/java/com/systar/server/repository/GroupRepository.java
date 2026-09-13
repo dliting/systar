@@ -7,6 +7,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -75,6 +77,23 @@ public class GroupRepository {
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
     }
 
+    /**
+     * Locks a group tree's row for the rest of the transaction, serializing all
+     * grouped writes on that tree (SELECT ... FOR UPDATE). Empty when the tree
+     * does not exist — callers treat that as the fail-fast unknown-tree case.
+     * <p>
+     * Deadlock safety: every grouped write locks exactly one tree row and takes
+     * it before any group/rel write, so concurrent writers on the same tree
+     * simply queue up, and no write path ever holds two tree locks (a move's
+     * target tree is the group's own tree — cross-tree moves do not exist).
+     */
+    public Optional<GroupTreeRow> lockTree(long id) {
+        List<GroupTreeRow> rows = jdbc.query(
+                "SELECT id, name, caption, sequence FROM t_group_tree WHERE id=? FOR UPDATE",
+                (rs, i) -> mapTreeRow(rs), id);
+        return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
+    }
+
     public void insertTree(String name, String caption, int sequence) {
         jdbc.update("INSERT INTO t_group_tree (name, caption, sequence) VALUES (?, ?, ?)",
                 name, caption, sequence);
@@ -135,6 +154,11 @@ public class GroupRepository {
         jdbc.update("UPDATE t_group SET level=? WHERE id=?", level, id);
     }
 
+    /** Lightweight sibling-order write for the atomic reorder endpoint. */
+    public void updateGroupSequence(long id, int sequence) {
+        jdbc.update("UPDATE t_group SET sequence=? WHERE id=?", sequence, id);
+    }
+
     public void deleteGroup(long id) {
         jdbc.update("DELETE FROM t_group WHERE id=?", id);
     }
@@ -168,7 +192,7 @@ public class GroupRepository {
                 assetRowId, groupId);
     }
 
-    /** Kind and runtime id of a t_asset row (see {@link #findAssetRef(long)}). */
+    /** Kind and runtime id of a t_asset row (see {@link #findAssetRefs}). */
     public record AssetRef(AssetKind kind, int runtimeId) {}
 
     /** t_asset columns linking a view row to its per-kind runtime row. */
@@ -176,36 +200,38 @@ public class GroupRepository {
             "device_id", "service_id", "probe_id", "control_id");
 
     /**
-     * Resolves a t_asset row into kind + runtime id in one query.
+     * Resolves t_asset row ids into kind + runtime id in ONE query.
      * <p>
      * {@code t_asset_group_rel.asset_id} and {@code t_asset.parent_id} live in the
      * t_asset row-id space, while the runtime {@code AssetStore} keys assets by the
      * per-kind row id ({@code t_device/t_service/t_probe/t_control.id}); the FK
-     * columns bridge the two spaces. Empty when the row is missing, carries an
-     * unknown kind code or has no per-kind link (member validation and rendering
-     * treat all three as "no groupable asset row").
+     * columns bridge the two spaces. Ids that are missing, carry an unknown kind
+     * code or link to no runtime asset are simply absent from the map (member
+     * validation and rendering treat all three as "no groupable asset row").
+     * Callers pass realistically bounded lists (one group's members or one
+     * tree's member set), so a single IN(...) needs no chunking. Elements
+     * must be non-null — {@code List.copyOf} enforces this fail-fast at the
+     * repository boundary.
      */
-    public Optional<AssetRef> findAssetRef(long assetRowId) {
-        List<AssetRef> refs = jdbc.query(
-                "SELECT kind, device_id, service_id, probe_id, control_id FROM t_asset WHERE id=?",
-                (rs, i) -> {
-                    AssetKind kind      = AssetKind.fromCode(rs.getInt("kind"));
-                    int       runtimeId = firstRuntimeId(rs);
-                    return kind == null || runtimeId <= 0 ? null : new AssetRef(kind, runtimeId);
-                },
-                assetRowId);
-        return refs.isEmpty() ? Optional.empty() : Optional.ofNullable(refs.get(0));
-    }
-
-    /** First non-null per-kind id column, or 0 when the row links to no runtime asset. */
-    private static int firstRuntimeId(java.sql.ResultSet rs) throws java.sql.SQLException {
-        for (String column : RUNTIME_ID_COLUMNS) {
-            int id = rs.getInt(column);
-            if (!rs.wasNull()) {
-                return id;
-            }
+    public Map<Long, AssetRef> findAssetRefs(Collection<Long> assetRowIds) {
+        if (assetRowIds == null || assetRowIds.isEmpty()) {
+            return Map.of();
         }
-        return 0;
+        String placeholders = String.join(",", Collections.nCopies(assetRowIds.size(), "?"));
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT id, kind, device_id, service_id, probe_id, control_id FROM t_asset "
+                        + "WHERE id IN (" + placeholders + ")",
+                List.copyOf(assetRowIds).toArray());
+        Map<Long, AssetRef> refsById = new LinkedHashMap<>();
+        for (Map<String, Object> row : rows) {
+            AssetKind kind = AssetKind.fromCode(((Number) row.get("kind")).intValue());
+            int runtimeId  = firstRuntimeIdOfRow(row);
+            if (kind == null || runtimeId <= 0) {
+                continue; // same defensive skip as the single-row lookup
+            }
+            refsById.put(((Number) row.get("id")).longValue(), new AssetRef(kind, runtimeId));
+        }
+        return refsById;
     }
 
     /**

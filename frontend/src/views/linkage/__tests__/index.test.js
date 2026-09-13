@@ -95,4 +95,102 @@ describe('Linkage', () => {
     expect(vm.controlTreeData[0].id).toBe(20)
     expect(vm.controlTreeData[0].children[0].id).toBe(30)
   })
+
+  // ======================== node-key collision pins ========================
+  // t_group ids and per-kind runtime ids are independent number spaces: a
+  // GROUP node and an ASSET node in one tree can carry the same numeric id.
+  // el-tree node identity must therefore be the composite TreeNodeVO.key, or
+  // checked-key writes resolve to whichever node registered last for the id.
+
+  const COLLISION_FOREST = [
+    { key: 'KIND:DEVICE', nodeKind: 'ASSET', assetKind: 'DEVICE', id: null, caption: '设备', children: [
+      { key: 'ASSET:10', nodeKind: 'ASSET', assetKind: 'DEVICE', id: 10, name: 'ups_001', caption: 'UPS', children: [
+        { key: 'ASSET:20', nodeKind: 'ASSET', assetKind: 'PROBE', id: 20, name: 'temp_in', caption: '进温', children: [] },
+        { key: 'ASSET:30', nodeKind: 'ASSET', assetKind: 'CONTROL', id: 30, name: 'switch_1', caption: '开关', children: [] }
+      ] }
+    ] },
+    // Second null-id root (the real kind-tree orphan bucket): under
+    // node-key="id" it collides with KIND:DEVICE in the tree's node map.
+    { key: 'KIND:PROBE', nodeKind: 'ASSET', assetKind: 'PROBE', id: null, caption: '孤儿监测器', children: [
+      { key: 'ASSET:40', nodeKind: 'ASSET', assetKind: 'PROBE', id: 40, name: 'loose_probe', caption: '游离探头', children: [] }
+    ] },
+    // GROUP id 20 collides with PROBE runtime id 20, GROUP id 30 with CONTROL
+    // runtime id 30 — both survive pruning via their own kind children.
+    { key: 'GROUP:20', nodeKind: 'GROUP', id: 20, name: 'g20', caption: '一楼', children: [
+      { key: 'ASSET:25', nodeKind: 'ASSET', assetKind: 'PROBE', id: 25, name: 'temp_out', caption: '出温', children: [] }
+    ] },
+    { key: 'GROUP:30', nodeKind: 'GROUP', id: 30, name: 'g30', caption: '二楼', children: [
+      { key: 'ASSET:35', nodeKind: 'ASSET', assetKind: 'CONTROL', id: 35, name: 'switch_2', caption: '开关2', children: [] }
+    ] }
+  ]
+
+  async function mountWithCollisionFixture(rules) {
+    const { getAssetTree, listLinkageRules } = await import('@/api/iot/linkage')
+    getAssetTree.mockResolvedValueOnce({ data: COLLISION_FOREST })
+    listLinkageRules.mockResolvedValueOnce({ data: rules })
+    const wrapper = mountLinkage()
+    await flushPromises()
+    return wrapper.vm
+  }
+
+  it('editing a MONITOR rule checks the colliding probe node, not the group sharing its id', async () => {
+    const vm = await mountWithCollisionFixture([
+      { rule: { id: 1, name: 'r1', causeType: 'MONITOR', caption: '', enabled: true },
+        causes: [{ causeMonitorId: 20, triggerValue: '1' }],
+        effects: [{ effectMonitorId: 30, effectCommand: '-1' }] }
+    ])
+
+    await vm.handleEdit(vm.rules[0])
+    await flushPromises()
+
+    // Every node stays individually addressable under its composite key —
+    // including the two null-id synthetic roots sharing one pruned tree.
+    expect(vm.causeTreeRef.getNode('ASSET:20')).toBeTruthy()
+    expect(vm.causeTreeRef.getNode('GROUP:20')).toBeTruthy()
+    expect(vm.causeTreeRef.getNode('KIND:DEVICE')).toBeTruthy()
+    expect(vm.causeTreeRef.getNode('KIND:PROBE')).toBeTruthy()
+    // The rule's probe is the checked node — not the same-id group.
+    const checkedKeys = vm.causeTreeRef.getCheckedNodes().map(n => n.key)
+    expect(checkedKeys).toContain('ASSET:20')
+    expect(checkedKeys).not.toContain('GROUP:20')
+    // Round trip: the check handler maps the node back to the NUMERIC runtime
+    // id the API payload needs, preserving the stored trigger value.
+    vm.onCauseCheck()
+    expect(vm.form.causes).toEqual([{ causeMonitorId: 20, triggerValue: '1' }])
+  })
+
+  it('editing a MONITOR rule checks the colliding control node, not the group sharing its id', async () => {
+    const vm = await mountWithCollisionFixture([
+      { rule: { id: 2, name: 'r2', causeType: 'MONITOR', caption: '', enabled: true },
+        causes: [{ causeMonitorId: 25, triggerValue: '1' }],
+        effects: [{ effectMonitorId: 30, effectCommand: '-1' }] }
+    ])
+
+    await vm.handleEdit(vm.rules[0])
+    await flushPromises()
+
+    expect(vm.effectTreeRef.getNode('ASSET:30')).toBeTruthy()
+    expect(vm.effectTreeRef.getNode('GROUP:30')).toBeTruthy()
+    const checkedKeys = vm.effectTreeRef.getCheckedNodes().map(n => n.key)
+    expect(checkedKeys).toContain('ASSET:30')
+    expect(checkedKeys).not.toContain('GROUP:30')
+    // Round trip: numeric effect id + preserved command for the API payload.
+    vm.onEffectCheck()
+    expect(vm.form.effects).toEqual([{ effectMonitorId: 30, effectCommand: '-1' }])
+  })
+
+  it('editing an ALARM rule checks the colliding probe node in the alarm tree', async () => {
+    const vm = await mountWithCollisionFixture([
+      { rule: { id: 3, name: 'r3', causeType: 'ALARM', caption: '', enabled: true },
+        causes: [{ causeMonitorId: 20, triggerValue: 'ALARM' }],
+        effects: [{ effectMonitorId: 35, effectCommand: '-1' }] }
+    ])
+
+    await vm.handleEdit(vm.rules[0])
+    await flushPromises()
+
+    const checkedKeys = vm.alarmTreeRef.getCheckedNodes().map(n => n.key)
+    expect(checkedKeys).toContain('ASSET:20')
+    expect(checkedKeys).not.toContain('GROUP:20')
+  })
 })

@@ -12,6 +12,7 @@ vi.mock('@/api/iot/asset', async (importOriginal) => ({
   createGroup: vi.fn().mockResolvedValue(),
   deleteGroup: vi.fn().mockResolvedValue(),
   listGroups: vi.fn().mockResolvedValue({ data: [] }),
+  reorderGroups: vi.fn().mockResolvedValue(),
   replaceGroupAssets: vi.fn().mockResolvedValue(),
   updateGroup: vi.fn().mockResolvedValue()
 }))
@@ -28,7 +29,7 @@ vi.mock('@/utils/errorHandler', () => ({
 import { useAssetTree } from '@/composables/useAssetTree'
 import { ElMessage } from 'element-plus'
 import { showSystarError } from '@/utils/errorHandler'
-import { listGroups, replaceGroupAssets, updateGroup } from '@/api/iot/asset'
+import { listGroups, reorderGroups, replaceGroupAssets, updateGroup } from '@/api/iot/asset'
 import AssetTreePanel from '@/components/AssetTreePanel/index.vue'
 
 // Id spaces are deliberately misaligned (as in the seed DB): `id` is the
@@ -220,9 +221,10 @@ describe('AssetTreePanel', () => {
     expect(useAssetTree().refresh).toHaveBeenCalled()
   })
 
-  it('a prev drop rewrites only the sibling sequences that change', async () => {
-    // Siblings a(1) b(2) c(3) d(4); dragging a before c yields b(1) a(2) c(3) d(4)
-    // — only a and b changed, so c and d must not be rewritten.
+  it('a prev drop sends one atomic reorder with the complete ordered id list', async () => {
+    // Siblings a(1) b(2) c(3) d(4); dragging a before c yields [b, a, c, d] —
+    // ONE reorder request carries the parent's full ordered child id list;
+    // updateGroup stays the move write only, never a per-group sequence patch.
     // mockResolvedValue, not Once: an unconsumed once-value survives clearAllMocks
     // and would poison the next test that reads the list.
     listGroups.mockResolvedValue({ data: [
@@ -236,16 +238,35 @@ describe('AssetTreePanel', () => {
     const gc = { key: 'GROUP:3', nodeKind: 'GROUP', id: 3, name: 'gc', caption: 'C', children: [] }
     wrapper.findComponent(TreePanelStub).vm.$emit('node-drop', nodeOf(ga), nodeOf(gc), 'prev')
     await flushPromises()
-    expect(updateGroup).toHaveBeenNthCalledWith(1, 1, { treeId: 1, parent: 0 }) // the move write
-    expect(updateGroup).toHaveBeenNthCalledWith(2, 2, { name: 'gb', caption: 'B', sequence: 1 })
-    expect(updateGroup).toHaveBeenNthCalledWith(3, 1, { name: 'ga', caption: 'A', sequence: 2 })
-    expect(updateGroup).toHaveBeenCalledTimes(3) // c and d keep their stored sequence
+    expect(updateGroup).toHaveBeenCalledTimes(1)
+    expect(updateGroup).toHaveBeenCalledWith(1, { treeId: 1, parent: 0 }) // the move write only
+    expect(reorderGroups).toHaveBeenCalledTimes(1)
+    expect(reorderGroups).toHaveBeenCalledWith(1, { parent: 0, orderedGroupIds: [2, 1, 3, 4] })
     expect(ElMessage.success).toHaveBeenCalledWith('分组已移动')
     expect(useAssetTree().refresh).toHaveBeenCalled()
   })
 
-  it('a prev/next drop that leaves the order unchanged writes only the move', async () => {
-    // a(1) b(2); dragging a before b is the identity order — no resequence writes.
+  it('a next drop sends the spliced order to the same atomic endpoint', async () => {
+    // Siblings a(1) b(2) c(3) d(4); dragging d after b yields [a, b, d, c].
+    listGroups.mockResolvedValue({ data: [
+      { id: 1, treeId: 1, name: 'ga', caption: 'A', parent: 0, sequence: 1 },
+      { id: 2, treeId: 1, name: 'gb', caption: 'B', parent: 0, sequence: 2 },
+      { id: 3, treeId: 1, name: 'gc', caption: 'C', parent: 0, sequence: 3 },
+      { id: 4, treeId: 1, name: 'gd', caption: 'D', parent: 0, sequence: 4 }
+    ] })
+    const wrapper = mountPanel()
+    const gd = { key: 'GROUP:4', nodeKind: 'GROUP', id: 4, name: 'gd', caption: 'D', children: [] }
+    const gb = { key: 'GROUP:2', nodeKind: 'GROUP', id: 2, name: 'gb', caption: 'B', children: [] }
+    wrapper.findComponent(TreePanelStub).vm.$emit('node-drop', nodeOf(gd), nodeOf(gb), 'next')
+    await flushPromises()
+    expect(updateGroup).toHaveBeenCalledTimes(1)
+    expect(reorderGroups).toHaveBeenCalledTimes(1)
+    expect(reorderGroups).toHaveBeenCalledWith(1, { parent: 0, orderedGroupIds: [1, 2, 4, 3] })
+  })
+
+  it('a prev drop that leaves the order unchanged still sends the identity reorder', async () => {
+    // a(1) b(2); dragging a before b is the identity order — the request is
+    // still sent (complete-set semantics; the server rewrite is idempotent).
     listGroups.mockResolvedValue({ data: [
       { id: 1, treeId: 1, name: 'ga', caption: 'A', parent: 0, sequence: 1 },
       { id: 2, treeId: 1, name: 'gb', caption: 'B', parent: 0, sequence: 2 }
@@ -257,7 +278,24 @@ describe('AssetTreePanel', () => {
     await flushPromises()
     expect(updateGroup).toHaveBeenCalledTimes(1)
     expect(updateGroup).toHaveBeenCalledWith(1, { treeId: 1, parent: 0 })
+    expect(reorderGroups).toHaveBeenCalledTimes(1)
+    expect(reorderGroups).toHaveBeenCalledWith(1, { parent: 0, orderedGroupIds: [1, 2] })
     expect(ElMessage.success).toHaveBeenCalledWith('分组已移动')
+  })
+
+  it('a failed reorder surfaces the error and refreshes', async () => {
+    listGroups.mockResolvedValue({ data: [
+      { id: 1, treeId: 1, name: 'ga', caption: 'A', parent: 0, sequence: 1 },
+      { id: 2, treeId: 1, name: 'gb', caption: 'B', parent: 0, sequence: 2 }
+    ] })
+    reorderGroups.mockRejectedValueOnce(new Error('stale list'))
+    const wrapper = mountPanel()
+    const ga = { key: 'GROUP:1', nodeKind: 'GROUP', id: 1, name: 'ga', caption: 'A', children: [] }
+    const gb = { key: 'GROUP:2', nodeKind: 'GROUP', id: 2, name: 'gb', caption: 'B', children: [] }
+    wrapper.findComponent(TreePanelStub).vm.$emit('node-drop', nodeOf(ga), nodeOf(gb), 'prev')
+    await flushPromises()
+    expect(ElMessage.error).toHaveBeenCalledWith('stale list')
+    expect(useAssetTree().refresh).toHaveBeenCalled()
   })
 
   it('dropping an asset into UNGROUPED removes its row id from every owning group of the tree', async () => {

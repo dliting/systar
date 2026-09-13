@@ -6,6 +6,7 @@ import com.systar.server.controller.vo.GroupTreeVO;
 import com.systar.server.controller.vo.GroupVO;
 import com.systar.server.controller.vo.TreeNodeVO;
 import com.systar.server.dto.GroupMembersRequest;
+import com.systar.server.dto.GroupReorderRequest;
 import com.systar.server.dto.GroupRequest;
 import com.systar.server.dto.GroupTreeRequest;
 import com.systar.server.repository.GroupRepository;
@@ -108,6 +109,20 @@ public class GroupController {
     @PutMapping("/groups/{id}/assets")
     public Result<Void> replaceGroupAssets(@PathVariable long id, @RequestBody GroupMembersRequest req) {
         groupService.replaceGroupAssets(id, req.assetIds());
+        return Result.success(null);
+    }
+
+    /**
+     * Atomic sibling reorder: the body carries the intent (the parent's complete
+     * ordered child id list), the sequence rewrite is derived server-side in one
+     * transaction — unlike N per-group PUTs, a drag can never half-apply.
+     */
+    @RequirePermission("iot:asset:edit")
+    @PutMapping("/group-trees/{treeId}/groups/order")
+    public Result<Void> reorderGroups(@PathVariable long treeId, @RequestBody GroupReorderRequest req) {
+        groupService.reorderSiblings(treeId,
+                req.parent() == null ? GroupRepository.TOP_LEVEL_PARENT : req.parent(),
+                req.orderedGroupIds() == null ? List.of() : req.orderedGroupIds());
         return Result.success(null);
     }
 

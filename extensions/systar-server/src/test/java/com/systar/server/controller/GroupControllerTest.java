@@ -6,6 +6,7 @@ import com.systar.server.controller.vo.GroupTreeVO;
 import com.systar.server.controller.vo.GroupVO;
 import com.systar.server.controller.vo.TreeNodeVO;
 import com.systar.server.dto.GroupMembersRequest;
+import com.systar.server.dto.GroupReorderRequest;
 import com.systar.server.dto.GroupRequest;
 import com.systar.server.dto.GroupTreeRequest;
 import com.systar.server.repository.GroupRepository;
@@ -15,12 +16,15 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -225,6 +229,72 @@ class GroupControllerTest {
             controller.replaceGroupAssets(7L, new GroupMembersRequest(null));
 
             verify(groupService).replaceGroupAssets(7L, null);
+        }
+    }
+
+    @Nested
+    @DisplayName("PUT /group-trees/{treeId}/groups/order")
+    class GroupOrder {
+
+        @Test
+        @DisplayName("delegates the ordered id list with the parent defaulting to top level")
+        void delegatesOrderedList() {
+            Result<Void> result = controller.reorderGroups(
+                    1L, new GroupReorderRequest(null, List.of(3L, 1L, 2L)));
+
+            assertThat(result.getCode()).isEqualTo(0);
+            verify(groupService).reorderSiblings(1L, GroupRepository.TOP_LEVEL_PARENT, List.of(3L, 1L, 2L));
+        }
+
+        @Test
+        @DisplayName("an explicit parent is forwarded verbatim")
+        void forwardsExplicitParent() {
+            controller.reorderGroups(1L, new GroupReorderRequest(5L, List.of(3L)));
+
+            verify(groupService).reorderSiblings(1L, 5L, List.of(3L));
+        }
+
+        @Test
+        @DisplayName("a null ordered list delegates as the empty list; completeness stays the service's call")
+        void nullListDefaultsToEmpty() {
+            Result<Void> result = controller.reorderGroups(1L, new GroupReorderRequest(null, null));
+
+            assertThat(result.getCode()).isEqualTo(0);
+            verify(groupService).reorderSiblings(1L, GroupRepository.TOP_LEVEL_PARENT, List.of());
+        }
+
+        @Test
+        @DisplayName("a rejected reorder propagates the service's error to the shared exception mapper")
+        void rejectionPropagates() {
+            doThrow(new IllegalArgumentException(
+                    "Reorder list must contain every child group of parent 0; missing: [2]."))
+                    .when(groupService).reorderSiblings(1L, GroupRepository.TOP_LEVEL_PARENT, List.of(1L));
+
+            assertThatThrownBy(() -> controller.reorderGroups(
+                    1L, new GroupReorderRequest(null, List.of(1L))))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("missing");
+        }
+
+        @Test
+        @DisplayName("routes as PUT /group-trees/{treeId}/groups/order")
+        void routeMapping() throws Exception {
+            PutMapping mapping = GroupController.class
+                    .getMethod("reorderGroups", long.class, GroupReorderRequest.class)
+                    .getAnnotation(PutMapping.class);
+
+            assertThat(mapping.value()).containsExactly("/group-trees/{treeId}/groups/order");
+        }
+
+        @Test
+        @DisplayName("carries the canonical iot:asset:edit permission")
+        void usesEditPermission() throws Exception {
+            RequirePermission permission = GroupController.class
+                    .getMethod("reorderGroups", long.class, GroupReorderRequest.class)
+                    .getAnnotation(RequirePermission.class);
+
+            assertThat(permission).isNotNull();
+            assertThat(permission.value()).isEqualTo("iot:asset:edit");
         }
     }
 
