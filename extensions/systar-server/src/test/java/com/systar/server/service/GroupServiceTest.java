@@ -24,6 +24,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @Timeout(value = 3, unit = TimeUnit.MINUTES)
@@ -190,6 +191,75 @@ class GroupServiceTest {
     }
 
     @Test
+    @DisplayName("updateGroup rejects a request with neither name nor parent+treeId")
+    void updateGroupNothingToUpdate() {
+        assertThatThrownBy(() -> service.updateGroup(7L, null, null, null, null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Nothing to update");
+        verify(repo, never()).updateGroup(anyLong(), anyString(), anyString(), anyLong(), anyInt(), anyInt());
+    }
+
+    @Test
+    @DisplayName("updateGroup rejects a half-specified move: treeId without parent")
+    void updateGroupRejectsTreeIdWithoutParent() {
+        assertThatThrownBy(() -> service.updateGroup(7L, 1L, null, "g2", null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Incomplete move");
+        verifyNoInteractions(repo);
+    }
+
+    @Test
+    @DisplayName("updateGroup rejects a half-specified move: parent without treeId")
+    void updateGroupRejectsParentWithoutTreeId() {
+        assertThatThrownBy(() -> service.updateGroup(7L, null, 5L, null, null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Incomplete move");
+        verifyNoInteractions(repo);
+    }
+
+    @Test
+    @DisplayName("updateGroup writes the move before rejecting the conflicting rename (rollback job of @Transactional)")
+    void updateGroupMovesThenRejectsConflictingRename() {
+        GroupRepository.GroupRow g = new GroupRepository.GroupRow(7L, 1L, "g", "G", 5L, 2, 3);
+        when(repo.findGroupById(7L)).thenReturn(Optional.of(g));
+        when(repo.findAllGroups(1L)).thenReturn(List.of(g));
+        when(repo.findGroupByName(1L, "taken")).thenReturn(Optional.of(
+                new GroupRepository.GroupRow(8L, 1L, "taken", "T", 0L, 1, 1)));
+
+        assertThatThrownBy(() -> service.updateGroup(7L, 1L, GroupRepository.TOP_LEVEL_PARENT, "taken", null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("already exists");
+
+        // The move write happened; the rename write must not — the transactional
+        // boundary around updateGroup undoes the move on the propagated exception.
+        verify(repo).updateGroup(7L, "g", "G", GroupRepository.TOP_LEVEL_PARENT, 1, 3);
+        verify(repo, never()).updateGroup(eq(7L), eq("taken"), eq("taken"), anyLong(), anyInt(), anyInt());
+    }
+
+    @Test
+    @DisplayName("updateGroup with move only keeps the stored name")
+    void updateGroupMoveOnlyKeepsName() {
+        GroupRepository.GroupRow g = new GroupRepository.GroupRow(7L, 1L, "g", "G", 5L, 2, 3);
+        when(repo.findGroupById(7L)).thenReturn(Optional.of(g));
+        when(repo.findAllGroups(1L)).thenReturn(List.of(g));
+
+        service.updateGroup(7L, 1L, GroupRepository.TOP_LEVEL_PARENT, null, null, null);
+
+        verify(repo).updateGroup(7L, "g", "G", GroupRepository.TOP_LEVEL_PARENT, 1, 3);
+    }
+
+    @Test
+    @DisplayName("updateGroup with rename only keeps the location; null caption falls back to the name")
+    void updateGroupRenameOnlyKeepsLocationAndCaptionFallback() {
+        when(repo.findGroupById(7L)).thenReturn(Optional.of(
+                new GroupRepository.GroupRow(7L, 1L, "g", "G", 5L, 2, 3)));
+
+        service.updateGroup(7L, null, null, "g2", null, null);
+
+        verify(repo).updateGroup(7L, "g2", "g2", 5L, 2, 3);
+    }
+
+    @Test
     @DisplayName("moveGroup shifts descendant levels recursively")
     void moveGroupShiftsDescendantLevels() {
         GroupRepository.GroupRow a = new GroupRepository.GroupRow(1L, 1L, "a", "A", 0L, 1, 1);
@@ -328,6 +398,26 @@ class GroupServiceTest {
     @DisplayName("buildAssetTree rejects a non-numeric selector before the t_asset reverse scan")
     void invalidTreeSelectorFailsFastWithoutReverseScan() {
         assertThatThrownBy(() -> service.buildAssetTree("abc"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid tree selector");
+        verify(repo, never()).findRowIdsByRuntimeId();
+    }
+
+    @Test
+    @DisplayName("buildAssetTree rejects an unknown numeric tree before the t_asset reverse scan")
+    void unknownNumericTreeSelectorFailsFastWithoutReverseScan() {
+        when(repo.findTreeById(42L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.buildAssetTree("42"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Tree not found");
+        verify(repo, never()).findRowIdsByRuntimeId();
+    }
+
+    @Test
+    @DisplayName("buildAssetTree rejects an overflowing numeric tree before the t_asset reverse scan")
+    void overlongNumericTreeSelectorFailsFastWithoutReverseScan() {
+        assertThatThrownBy(() -> service.buildAssetTree("99999999999999999999"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Invalid tree selector");
         verify(repo, never()).findRowIdsByRuntimeId();

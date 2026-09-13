@@ -198,7 +198,7 @@ async function reorderSiblings(dragData, dropNode, dropType, parentId) {
     const group    = order[i]
     const sequence = i + 1
     if (sequence === storedSequenceById.get(group.id)) continue
-    await updateGroup(group.id, { treeId, name: group.name, caption: group.caption, sequence })
+    await updateGroup(group.id, { name: group.name, caption: group.caption, sequence })
   }
 }
 
@@ -229,7 +229,7 @@ async function renameGroup() {
   const group = contextMenu.data
   try {
     const { value } = await ElMessageBox.prompt('分组显示名', '重命名', { inputValue: group.caption })
-    await updateGroup(group.id, { treeId: Number(currentTree.value), name: group.name, caption: value })
+    await updateGroup(group.id, { name: group.name, caption: value })
     await refresh()
   } catch (e) {
     if (e !== 'cancel' && e?.message) ElMessage.error(e.message)

@@ -149,6 +149,10 @@ public class GroupService {
      * Moves a group under a new parent (0 = top-level), maintaining subtree levels.
      * Resolves both endpoints from the tree's in-memory group list — the move needs
      * the whole list anyway for the cycle guard and the level shift.
+     * <p>
+     * Runs in the caller's transaction when composed by {@link #updateGroup} via
+     * self-invocation (the proxy is bypassed); the {@code @Transactional} here
+     * covers direct external calls only.
      */
     @Transactional
     public void moveGroup(long treeId, long groupId, long newParentGroupId) {
@@ -172,6 +176,37 @@ public class GroupService {
         int delta = newLevel - group.level();
         if (delta != 0) {
             shiftSubtreeLevels(all, group.id(), delta);
+        }
+    }
+
+    /**
+     * Atomically moves and/or renames a group — one transaction for the whole
+     * PUT /groups/{id} request. An omitted treeId+parent pair keeps the location,
+     * an omitted name keeps the name; caption/sequence follow renameGroup
+     * semantics. Replaces the controller's two-call sequence whose completed
+     * move stayed committed when the rename failed.
+     * <p>
+     * The move endpoint must be self-consistent: {@code treeId} and {@code parent}
+     * are accepted together or not at all — a half-specified move is rejected
+     * instead of silently degrading to a rename.
+     */
+    @Transactional
+    public void updateGroup(long groupId, Long treeId, Long parent, String name, String caption, Integer sequence) {
+        boolean hasTreeId  = treeId != null;
+        boolean hasParent  = parent != null;
+        boolean hasRename  = name != null;
+        if (!hasTreeId && !hasParent && !hasRename) {
+            throw new IllegalArgumentException("Nothing to update: provide name and/or parent+treeId.");
+        }
+        if (hasTreeId != hasParent) {
+            throw new IllegalArgumentException("Incomplete move: provide both treeId and parent.");
+        }
+        if (hasTreeId) {
+            moveGroup(treeId, groupId, parent);
+        }
+        if (hasRename) {
+            // Update caption is optional: null falls back to the name, symmetric with create semantics.
+            renameGroup(groupId, name, caption == null ? name : caption, sequence);
         }
     }
 
@@ -232,9 +267,10 @@ public class GroupService {
     /**
      * Builds the forest for {@code GET /asset-tree?tree=kind|<treeId>}.
      * <p>
-     * The selector is validated before the t_asset reverse scan, so an invalid
-     * selector fails fast without paying for the full-table lookup; each valid
-     * request performs exactly one reverse scan.
+     * The selector is parsed and the tree's existence checked before the t_asset
+     * reverse scan, so an invalid selector or an unknown tree id fails fast
+     * without paying for the full-table lookup; each valid request performs
+     * exactly one reverse scan.
      */
     public List<TreeNodeVO> buildAssetTree(String tree) {
         if (tree == null || tree.isBlank() || KIND_TREE.equals(tree)) {
@@ -248,6 +284,8 @@ public class GroupService {
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Invalid tree selector: " + tree);
         }
+        repo.findTreeById(treeId)
+                .orElseThrow(() -> new IllegalArgumentException("Tree not found: " + treeId));
         return buildGroupTree(treeId, repo.findRowIdsByRuntimeId());
     }
 
@@ -287,10 +325,12 @@ public class GroupService {
         }
     }
 
-    /** Custom tree: group nodes + member assets; unattached devices/services go to 未分组. */
+    /**
+     * Custom tree: group nodes + member assets; unattached devices/services go to
+     * 未分组. The caller has already validated that {@code treeId} exists, so this
+     * method only reads the tree contents.
+     */
     private List<TreeNodeVO> buildGroupTree(long treeId, Map<Integer, Long> rowIdsByRuntimeId) {
-        repo.findTreeById(treeId)
-                .orElseThrow(() -> new IllegalArgumentException("Tree not found: " + treeId));
         List<GroupRow> groups = repo.findAllGroups(treeId);
         Map<Long, List<Long>> membersByGroup = repo.findMembersByTree(treeId);
 

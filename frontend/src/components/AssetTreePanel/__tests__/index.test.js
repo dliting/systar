@@ -7,7 +7,8 @@ vi.mock('@/composables/useAssetTree', () => ({
   useAssetTree: vi.fn()
 }))
 
-vi.mock('@/api/iot/asset', () => ({
+vi.mock('@/api/iot/asset', async (importOriginal) => ({
+  ...await importOriginal(),
   createGroup: vi.fn().mockResolvedValue(),
   deleteGroup: vi.fn().mockResolvedValue(),
   listGroups: vi.fn().mockResolvedValue({ data: [] }),
@@ -236,8 +237,8 @@ describe('AssetTreePanel', () => {
     wrapper.findComponent(TreePanelStub).vm.$emit('node-drop', nodeOf(ga), nodeOf(gc), 'prev')
     await flushPromises()
     expect(updateGroup).toHaveBeenNthCalledWith(1, 1, { treeId: 1, parent: 0 }) // the move write
-    expect(updateGroup).toHaveBeenNthCalledWith(2, 2, { treeId: 1, name: 'gb', caption: 'B', sequence: 1 })
-    expect(updateGroup).toHaveBeenNthCalledWith(3, 1, { treeId: 1, name: 'ga', caption: 'A', sequence: 2 })
+    expect(updateGroup).toHaveBeenNthCalledWith(2, 2, { name: 'gb', caption: 'B', sequence: 1 })
+    expect(updateGroup).toHaveBeenNthCalledWith(3, 1, { name: 'ga', caption: 'A', sequence: 2 })
     expect(updateGroup).toHaveBeenCalledTimes(3) // c and d keep their stored sequence
     expect(ElMessage.success).toHaveBeenCalledWith('分组已移动')
     expect(useAssetTree().refresh).toHaveBeenCalled()

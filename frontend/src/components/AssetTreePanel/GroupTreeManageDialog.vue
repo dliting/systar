@@ -103,7 +103,7 @@ async function createGroupRow() {
 async function renameRow(row) {
   try {
     const { value } = await ElMessageBox.prompt('分组显示名', '重命名', { inputValue: row.caption })
-    await updateGroup(row.id, { treeId: row.treeId, name: row.name, caption: value })
+    await updateGroup(row.id, { name: row.name, caption: value })
     await loadGroups()
     emit('changed')
   } catch (e) {

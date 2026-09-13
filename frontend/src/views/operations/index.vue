@@ -186,7 +186,6 @@
                 <span class="monitor-time" v-if="detail.lastDetectTime">{{ parseTime(detail.lastDetectTime) }}</span>
               </div>
               <TrendChart
-                ref="miniTrendRef"
                 :data-points="miniDataPoints"
                 :intraday-points="miniIntradayPoints"
                 :summary="miniSummary"
@@ -983,7 +982,6 @@ function childRowClassName({ row }) {
 }
 
 // Mini chart trend state
-const miniTrendRef = ref(null)
 const miniDataPoints = ref([])
 const miniIntradayPoints = ref([])
 const miniSummary = ref(null)
@@ -1657,8 +1655,6 @@ async function updateField(field, value) {
 .monitor-value { font-size: 28px; font-weight: bold; color: #303133; }
 .monitor-unit { font-size: 18px; font-weight: normal; color: #909399; margin-left: 4px; }
 .monitor-time { font-size: 12px; color: #999; }
-
-.control-panel { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 .summary-row {
   display: flex;

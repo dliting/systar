@@ -21,13 +21,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -161,51 +155,51 @@ class GroupControllerTest {
         }
 
         @Test
-        @DisplayName("PUT /groups/{id} with parent and treeId moves then renames")
-        void updateGroupMovesThenRenames() {
+        @DisplayName("PUT /groups/{id} delegates the whole request to the atomic service update")
+        void updateGroupDelegatesToSingleServiceCall() {
             controller.updateGroup(7L, new GroupRequest(1L, "g", "G", 5L, 3));
 
-            verify(groupService).moveGroup(1L, 7L, 5L);
-            verify(groupService).renameGroup(7L, "g", "G", 3);
-        }
-
-        @Test
-        @DisplayName("PUT /groups/{id} without parent renames only")
-        void updateGroupWithoutParentSkipsMove() {
-            controller.updateGroup(7L, new GroupRequest(1L, "g", "G", null, 3));
-
-            verify(groupService, never()).moveGroup(anyLong(), anyLong(), anyLong());
-            verify(groupService).renameGroup(7L, "g", "G", 3);
-        }
-
-        @Test
-        @DisplayName("PUT /groups/{id} with only parent+treeId moves without renaming")
-        void updateGroupMoveOnlySkipsRename() {
-            Result<Void> result = controller.updateGroup(7L, new GroupRequest(1L, null, null, 5L, null));
-
-            assertThat(result.getCode()).isEqualTo(0);
-            verify(groupService).moveGroup(1L, 7L, 5L);
-            // Argument-agnostic pin: renameGroup (and anything else) must not be touched.
+            // Move/rename composition and caption fallback live in the service —
+            // the controller must not call moveGroup/renameGroup directly anymore.
+            verify(groupService).updateGroup(7L, 1L, 5L, "g", "G", 3);
             verifyNoMoreInteractions(groupService);
         }
 
         @Test
-        @DisplayName("PUT /groups/{id} with nothing to update is rejected")
-        void updateGroupNothingToUpdate() {
-            assertThatThrownBy(() -> controller.updateGroup(7L, new GroupRequest(1L, null, null, null, null)))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("Nothing to update");
-            verify(groupService, never()).moveGroup(anyLong(), anyLong(), anyLong());
-            verify(groupService, never()).renameGroup(anyLong(), anyString(), anyString(), any());
+        @DisplayName("PUT /groups/{id} forwards a self-consistent rename-only request verbatim")
+        void updateGroupWithoutParentForwardsNullLocation() {
+            controller.updateGroup(7L, new GroupRequest(null, "g", "G", null, 3));
+
+            verify(groupService).updateGroup(7L, null, null, "g", "G", 3);
         }
 
         @Test
-        @DisplayName("PUT /groups/{id} with null caption falls back to the name and null sequence passes through")
-        void updateGroupNullCaptionFallsBackToName() {
-            controller.updateGroup(7L, new GroupRequest(1L, "g", null, null, null));
+        @DisplayName("PUT /groups/{id} with only parent+treeId forwards a null name")
+        void updateGroupMoveOnlyForwardsNullName() {
+            Result<Void> result = controller.updateGroup(7L, new GroupRequest(1L, null, null, 5L, null));
+
+            assertThat(result.getCode()).isEqualTo(0);
+            verify(groupService).updateGroup(7L, 1L, 5L, null, null, null);
+            // Argument-agnostic pin: moveGroup/renameGroup must not be touched directly.
+            verifyNoMoreInteractions(groupService);
+        }
+
+        @Test
+        @DisplayName("PUT /groups/{id} with nothing to update still delegates verbatim")
+        void updateGroupNothingToUpdateDelegates() {
+            Result<Void> result = controller.updateGroup(7L, new GroupRequest(null, null, null, null, null));
+
+            assertThat(result.getCode()).isEqualTo(0);
+            verify(groupService).updateGroup(7L, null, null, null, null, null);
+        }
+
+        @Test
+        @DisplayName("PUT /groups/{id} forwards the raw caption; fallback to the name is the service's job")
+        void updateGroupForwardsRawCaption() {
+            controller.updateGroup(7L, new GroupRequest(null, "g", null, null, null));
 
             // An omitted sequence is forwarded untouched: the service keeps the stored value.
-            verify(groupService).renameGroup(7L, "g", "g", null);
+            verify(groupService).updateGroup(7L, null, null, "g", null, null);
         }
 
         @Test

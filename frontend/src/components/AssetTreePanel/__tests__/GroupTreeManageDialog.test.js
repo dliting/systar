@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 
-vi.mock('@/api/iot/asset', () => ({
+vi.mock('@/api/iot/asset', async (importOriginal) => ({
+  ...await importOriginal(),
   createGroup: vi.fn().mockResolvedValue(),
   createGroupTree: vi.fn().mockResolvedValue(),
   deleteGroup: vi.fn().mockResolvedValue(),
@@ -144,7 +145,7 @@ describe('GroupTreeManageDialog CRUD flows', () => {
     await clickRowAction(wrapper, 0, '改名')
     await flushPromises()
     expect(ElMessageBox.prompt).toHaveBeenCalledWith('分组显示名', '重命名', { inputValue: '一楼' })
-    expect(updateGroup).toHaveBeenCalledWith(5, { treeId: 1, name: 'g1', caption: '一层' })
+    expect(updateGroup).toHaveBeenCalledWith(5, { name: 'g1', caption: '一层' })
     expect(wrapper.emitted('changed')).toHaveLength(1)
   })
 

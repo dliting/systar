@@ -91,19 +91,9 @@ public class GroupController {
     @RequirePermission("iot:asset:edit")
     @PutMapping("/groups/{id}")
     public Result<Void> updateGroup(@PathVariable long id, @RequestBody GroupRequest req) {
-        boolean hasMove   = req.parent() != null && req.treeId() != null;
-        boolean hasRename = req.name() != null;
-        if (!hasMove && !hasRename) {
-            throw new IllegalArgumentException("Nothing to update: provide name and/or parent+treeId.");
-        }
-        if (hasMove) {
-            groupService.moveGroup(req.treeId(), id, req.parent());
-        }
-        if (hasRename) {
-            // Update caption is optional: null falls back to the name, symmetric with create semantics.
-            groupService.renameGroup(id, req.name(),
-                    req.caption() == null ? req.name() : req.caption(), req.sequence());
-        }
+        // One service call = one transaction: a completed move never survives a
+        // failed rename. Caption fallback lives in the service, symmetric with create.
+        groupService.updateGroup(id, req.treeId(), req.parent(), req.name(), req.caption(), req.sequence());
         return Result.success(null);
     }
 
