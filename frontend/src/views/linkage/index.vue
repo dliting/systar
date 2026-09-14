@@ -289,7 +289,7 @@ import {
 } from '@/api/iot/linkage'
 import { showSystarError, showSystarSuccess } from '@/utils/errorHandler'
 import { Monitor, Switch, Right, WarningFilled, FolderOpened, Coin } from '@element-plus/icons-vue'
-import { ElMessageBox } from 'element-plus'
+import { ElMessageBox, ElMessage } from 'element-plus'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 import EnhancedTable from '@/components/EnhancedTable/index.vue'
 

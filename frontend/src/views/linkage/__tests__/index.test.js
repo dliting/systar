@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import ElementPlus from 'element-plus'
+import ElementPlus, { ElMessage } from 'element-plus'
 
 vi.mock('@/api/iot/linkage', () => ({
   listLinkageRules: vi.fn().mockResolvedValue({ data: [] }),
@@ -192,5 +192,22 @@ describe('Linkage', () => {
     const checkedKeys = vm.alarmTreeRef.getCheckedNodes().map(n => n.key)
     expect(checkedKeys).toContain('ASSET:20')
     expect(checkedKeys).not.toContain('GROUP:20')
+  })
+
+  // ======================== submit validation warnings ========================
+
+  it('submitting with empty causes warns via ElMessage instead of throwing', async () => {
+    const wrapper = mountLinkage()
+    await flushPromises()
+    const vm = wrapper.vm
+
+    await vm.handleAdd()
+    await flushPromises()
+    // Pass the required-name rule so validation reaches the empty-causes branch.
+    vm.form.name = '测试规则'
+
+    const warnSpy = vi.spyOn(ElMessage, 'warning')
+    await vm.handleSubmit()
+    expect(warnSpy).toHaveBeenCalledWith('请至少选择一个触发条件')
   })
 })
