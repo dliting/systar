@@ -30,66 +30,7 @@ interactive trend chart (pan / zoom / automatic granularity switching):
 
 ![Statistics reports](docs/screenshots/statistics.png)
 
-## Features
-
-- **Hierarchical asset modeling** — Devices and Services as top-level assets, with
-  Probes (monitoring points) and Controls (actuation points) attached to Devices
-- **Multi-protocol acquisition** — 14 protocol drivers: Modbus TCP, OPC UA, BACnet/IP,
-  SNMP, Siemens S7, IEC 60870-5-104, MQTT, WebSocket, raw TCP/IP, UPS (SNMP),
-  weather (HTTP API), environmental sensors (passive TCP), a built-in simulator and
-  manual input — supporting both active polling and passive reception
-- **Virtual probes** — SpEL-derived metrics computed from other probes, with
-  dependency tracking and cycle detection
-- **Alarm engine** — three strategies (single, continuous, selective), severity levels
-  and automatic recovery detection, plus alarm correlation and suppression
-- **Linkage engine** — cause → effect automation rules triggered by monitor values or
-  alarms
-- **Scheduled control** — cron-driven tasks with a visual cron wizard in the UI
-- **Realtime push** — WebSocket streaming of probe values and alarm messages
-- **REST API** — asset CRUD, live/history data, control execution, alarm/linkage/schedule
-  management, dashboard aggregation
-- **Operations suite** — work orders, device ledger, inspection management, statistical
-  reports, anomaly detection and health scoring
-- **Dashboard** — ECharts-based KPI dashboard (asset status, online rate, alarm trends)
-- **Data retention** — configurable automatic cleanup of aged samples
-- **Dual database** — MySQL (production) and H2 (development/testing) selected by a
-  dialect adapter
-
-## Architecture
-
-```
-core/                          monitoring framework (usable standalone)
-├── systar-common/             shared utilities (IDs, code dictionaries, config, TimeSpan)
-├── systar-monitor-core/       monitoring engine (asset model, scheduling, result
-│                              dispatch, alarms, linkage, virtual probes)
-├── systar-data/               persistence layer (MyBatis-Plus entities/mappers,
-│                              repository implementations)
-└── systar-monitor-drivers/    protocol drivers (14 implementations)
-extensions/
-├── systar-server/             Spring Boot entry point, REST API, configuration,
-│                              lifecycle management
-├── systar-websocket/          realtime push (probe values + alarm messages)
-├── systar-ops/                operations business (work orders, device ledger,
-│                              inspections, statistics)
-└── systar-system/             administration (users, roles, menus, departments,
-                              notices, logs)
-simulator/                     synthetic fleet generator (random/sine/ramp/correlated
-                               data profiles) for demos and load testing
-frontend/                      Vue 3 single-page application
-sql/                           MySQL + H2 schemas and seed data
-```
-
-Module dependency flow:
-
-```
-systar-server ──→ systar-websocket ──→ systar-monitor-core ──→ systar-common
-systar-server ──→ systar-data ────────→ systar-monitor-core
-systar-server ──→ systar-monitor-drivers → systar-monitor-core
-systar-server ──→ systar-ops ──→ systar-data, systar-common
-systar-server ──→ systar-system ──→ systar-data, systar-common
-```
-
-### Architecture highlights
+## System Highlights
 
 Structural properties that matter if you plan to build on Systar:
 
@@ -127,6 +68,66 @@ engines.
 **Offline-friendly build.** The Maven wrapper plus a vendored repository
 (`lib/maven-repo/`, carrying the GPL-licensed BACnet stack) lets the whole
 backend build and test on an isolated intranet with `./mvnw clean test -o`.
+
+## Features
+
+- **Hierarchical asset modeling** — Devices and Services as top-level assets, with
+  Probes (monitoring points) and Controls (actuation points) attached to Devices
+- **Multi-protocol acquisition** — 14 protocol drivers built in (Modbus TCP, OPC UA,
+  BACnet/IP, SNMP, Siemens S7, IEC 60870-5-104, MQTT, WebSocket, raw TCP/IP,
+  UPS (SNMP), weather (HTTP API), environmental sensors (passive TCP), a built-in
+  simulator and manual input), extensible to new protocols through the
+  plugin-style driver framework — supporting both active polling and passive reception
+- **Virtual probes** — SpEL-derived metrics computed from other probes, with
+  dependency tracking and cycle detection
+- **Alarm engine** — three strategies (single, continuous, selective), severity levels
+  and automatic recovery detection, plus alarm correlation and suppression
+- **Linkage engine** — cause → effect automation rules triggered by monitor values or
+  alarms
+- **Scheduled control** — cron-driven tasks with a visual cron wizard in the UI
+- **Realtime push** — WebSocket streaming of probe values and alarm messages
+- **REST API** — asset CRUD, live/history data, control execution, alarm/linkage/schedule
+  management, dashboard aggregation
+- **Operations suite** — work orders, device ledger, inspection management, statistical
+  reports, anomaly detection and health scoring
+- **Dashboard** — ECharts-based KPI dashboard (asset status, online rate, alarm trends)
+- **Data retention** — configurable automatic cleanup of aged samples
+- **Dual database** — MySQL (production) and H2 (development/testing) selected by a
+  dialect adapter
+
+## Architecture
+
+```
+core/                          monitoring framework (usable standalone)
+├── systar-common/             shared utilities (IDs, code dictionaries, config, TimeSpan)
+├── systar-monitor-core/       monitoring engine (asset model, scheduling, result
+│                              dispatch, alarms, linkage, virtual probes)
+├── systar-data/               persistence layer (MyBatis-Plus entities/mappers,
+│                              repository implementations)
+└── systar-monitor-drivers/    protocol drivers (plugin-style)
+extensions/
+├── systar-server/             Spring Boot entry point, REST API, configuration,
+│                              lifecycle management
+├── systar-websocket/          realtime push (probe values + alarm messages)
+├── systar-ops/                operations business (work orders, device ledger,
+│                              inspections, statistics)
+└── systar-system/             administration (users, roles, menus, departments,
+                              notices, logs)
+simulator/                     synthetic fleet generator (random/sine/ramp/correlated
+                               data profiles) for demos and load testing
+frontend/                      Vue 3 single-page application
+sql/                           MySQL + H2 schemas and seed data
+```
+
+Module dependency flow:
+
+```
+systar-server ──→ systar-websocket ──→ systar-monitor-core ──→ systar-common
+systar-server ──→ systar-data ────────→ systar-monitor-core
+systar-server ──→ systar-monitor-drivers → systar-monitor-core
+systar-server ──→ systar-ops ──→ systar-data, systar-common
+systar-server ──→ systar-system ──→ systar-data, systar-common
+```
 
 ## Tech Stack
 

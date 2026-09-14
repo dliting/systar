@@ -26,55 +26,7 @@ Systar 是一个通用 IoT 工业监控运维框架，适用于智慧园区、�
 
 ![统计报表](docs/screenshots/statistics.png)
 
-## 核心特性
-
-- **资产层级建模** — 设备（Device）与服务（Service）为顶层资产，
-  监测点（Probe）/ 控制点（Control）挂载于设备之下
-- **多协议数据采集** — 14 种协议驱动：Modbus TCP、OPC UA、BACnet/IP、SNMP、Siemens S7、
-  IEC 60870-5-104、MQTT、WebSocket、原始 TCP/IP、UPS（SNMP）、天气（HTTP API）、
-  环境传感器（被动 TCP）、内置模拟器、手动输入——支持主动轮询与被动接收两种模式
-- **虚拟监测点** — 基于 SpEL 表达式的派生指标引擎，支持跨监测点计算、依赖跟踪与循环检测
-- **告警引擎** — 三种策略（单次/持续/选择性）、多级告警、自动恢复检测，附告警关联与抑制
-- **联动引擎** — 因 → 果自动化规则，可由监测值或告警触发
-- **定时控制** — Cron 表达式驱动的计划任务，前端提供可视化 Cron 向导
-- **实时推送** — WebSocket 推送监测值变化与告警消息
-- **REST API** — 资产 CRUD、实时/历史数据、控制执行、告警/联动/定时任务管理、看板聚合
-- **运维套件** — 工单系统、设备台账、巡检管理、统计报表、异常检测与健康评估
-- **数据看板** — 基于 ECharts 的 KPI 大屏（资产状态、在线率、告警趋势）
-- **数据保留策略** — 按配置天数自动清理过期数据
-- **跨数据库** — MySQL（生产）与 H2（开发/测试）通过方言适配器切换
-
-## 架构
-
-```
-core/                          监控框架（可独立使用）
-├── systar-common/             通用工具（ID 生成、代码字典、系统配置、TimeSpan）
-├── systar-monitor-core/       核心监控引擎（资产模型、调度、结果分发、
-│                              告警、联动、虚拟监测点）
-├── systar-data/               数据访问层（MyBatis-Plus 实体/映射器、仓储实现）
-└── systar-monitor-drivers/    协议驱动集合（14 个实现）
-extensions/
-├── systar-server/             Spring Boot 启动入口、REST API、配置、生命周期管理
-├── systar-websocket/          实时推送（监测值 + 告警消息）
-├── systar-ops/                运维业务（工单、设备台账、巡检、统计分析）
-└── systar-system/             系统管理（用户、角色、菜单、部门、通知、日志）
-simulator/                     合成数据发生器（随机/正弦/斜坡/相关数据模板），
-                               用于演示与压力测试
-frontend/                      Vue 3 单页应用
-sql/                           MySQL + H2 双方言脚本与种子数据
-```
-
-模块依赖关系：
-
-```
-systar-server ──→ systar-websocket ──→ systar-monitor-core ──→ systar-common
-systar-server ──→ systar-data ────────→ systar-monitor-core
-systar-server ──→ systar-monitor-drivers → systar-monitor-core
-systar-server ──→ systar-ops ──→ systar-data, systar-common
-systar-server ──→ systar-system ──→ systar-data, systar-common
-```
-
-### 架构亮点
+## 系统亮点
 
 如果你计划基于 Systar 做二次开发，以下结构性特性值得了解：
 
@@ -105,6 +57,55 @@ Java 类与类型 XML 定义同处一个目录。类型在启动时由目录扫�
 **离线友好构建。** Maven Wrapper 加上自带依赖仓库（`lib/maven-repo/`，收纳
 GPL 许可的 BACnet 协议栈），后端可在隔离内网中用 `./mvnw clean test -o`
 完成构建与测试。
+
+## 核心特性
+
+- **资产层级建模** — 设备（Device）与服务（Service）为顶层资产，
+  监测点（Probe）/ 控制点（Control）挂载于设备之下
+- **多协议数据采集** — 目前内置 14 种协议驱动（Modbus TCP、OPC UA、BACnet/IP、SNMP、
+  Siemens S7、IEC 60870-5-104、MQTT、WebSocket、原始 TCP/IP、UPS（SNMP）、天气（HTTP API）、
+  环境传感器（被动 TCP）、内置模拟器、手动输入），并可通过插件式驱动框架扩展新协议
+  ——支持主动轮询与被动接收两种模式
+- **虚拟监测点** — 基于 SpEL 表达式的派生指标引擎，支持跨监测点计算、依赖跟踪与循环检测
+- **告警引擎** — 三种策略（单次/持续/选择性）、多级告警、自动恢复检测，附告警关联与抑制
+- **联动引擎** — 因 → 果自动化规则，可由监测值或告警触发
+- **定时控制** — Cron 表达式驱动的计划任务，前端提供可视化 Cron 向导
+- **实时推送** — WebSocket 推送监测值变化与告警消息
+- **REST API** — 资产 CRUD、实时/历史数据、控制执行、告警/联动/定时任务管理、看板聚合
+- **运维套件** — 工单系统、设备台账、巡检管理、统计报表、异常检测与健康评估
+- **数据看板** — 基于 ECharts 的 KPI 大屏（资产状态、在线率、告警趋势）
+- **数据保留策略** — 按配置天数自动清理过期数据
+- **跨数据库** — MySQL（生产）与 H2（开发/测试）通过方言适配器切换
+
+## 架构
+
+```
+core/                          监控框架（可独立使用）
+├── systar-common/             通用工具（ID 生成、代码字典、系统配置、TimeSpan）
+├── systar-monitor-core/       核心监控引擎（资产模型、调度、结果分发、
+│                              告警、联动、虚拟监测点）
+├── systar-data/               数据访问层（MyBatis-Plus 实体/映射器、仓储实现）
+└── systar-monitor-drivers/    协议驱动集合（插件式）
+extensions/
+├── systar-server/             Spring Boot 启动入口、REST API、配置、生命周期管理
+├── systar-websocket/          实时推送（监测值 + 告警消息）
+├── systar-ops/                运维业务（工单、设备台账、巡检、统计分析）
+└── systar-system/             系统管理（用户、角色、菜单、部门、通知、日志）
+simulator/                     合成数据发生器（随机/正弦/斜坡/相关数据模板），
+                               用于演示与压力测试
+frontend/                      Vue 3 单页应用
+sql/                           MySQL + H2 双方言脚本与种子数据
+```
+
+模块依赖关系：
+
+```
+systar-server ──→ systar-websocket ──→ systar-monitor-core ──→ systar-common
+systar-server ──→ systar-data ────────→ systar-monitor-core
+systar-server ──→ systar-monitor-drivers → systar-monitor-core
+systar-server ──→ systar-ops ──→ systar-data, systar-common
+systar-server ──→ systar-system ──→ systar-data, systar-common
+```
 
 ## 技术栈
 
