@@ -74,6 +74,38 @@ systar-server ──→ systar-ops ──→ systar-data, systar-common
 systar-server ──→ systar-system ──→ systar-data, systar-common
 ```
 
+### 架构亮点
+
+如果你计划基于 Systar 做二次开发，以下结构性特性值得了解：
+
+**插件式协议驱动。** 每个协议独立成包，位于 `core/systar-monitor-drivers` 下，
+Java 类与类型 XML 定义同处一个目录。类型在启动时由目录扫描自动发现——没有
+需要登记的中心索引，新增或移除协议只影响它自己的包。站点专属预设可通过
+`systar.asset-type.scan-paths` 让外置 XML 指向内置驱动类，不写 Java、不改动
+仓库即可扩展类型目录。格式错误或重名的类型定义在启动时快速失败，并指明问题
+文件。详见[驱动二次开发指南](docs/driver-development-guide.md)与
+[类型 XML 规范](docs/design/xml-asset-type-config-design.md)。
+
+**可嵌入的监控核心。** `systar-monitor-core` 不依赖 Web 层：它自定义仓储接口
+（采样、告警、联动、定时任务），由 `systar-data` 提供实现，因此引擎可以作为
+库嵌入其他应用运行。
+
+**统一资产模型。** 设备、服务、监测点、控制点共享同一套类型化属性模型，取值
+优先级明确（实例值 → 类型默认值 → 内置默认值）。虚拟监测点（SpEL 派生指标）
+与用户自定义分组树都构建在这同一模型之上，而非另建平行体系。
+
+**存储层写完整性。** 分组树的结构编辑（改名、移动、重排）在先锁树行的事务内
+执行，名称唯一性、环路防护、原子重排等约束对并发 API 客户端同样成立，而不是
+只对自带前端成立。
+
+**一套 schema 契约，两种数据库。** MySQL 与 H2 脚本按平行目录维护，由
+`DatabaseDialect` 适配器（`systar.database.type`）选择加载，这也是后续接入
+其他数据库的扩展点。
+
+**离线友好构建。** Maven Wrapper 加上自带依赖仓库（`lib/maven-repo/`，收纳
+GPL 许可的 BACnet 协议栈），后端可在隔离内网中用 `./mvnw clean test -o`
+完成构建与测试。
+
 ## 技术栈
 
 | 组件 | 版本 | 用途 |

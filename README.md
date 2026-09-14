@@ -89,6 +89,45 @@ systar-server ──→ systar-ops ──→ systar-data, systar-common
 systar-server ──→ systar-system ──→ systar-data, systar-common
 ```
 
+### Architecture highlights
+
+Structural properties that matter if you plan to build on Systar:
+
+**Plugin-style protocol drivers.** Each protocol lives in one package under
+`core/systar-monitor-drivers`, with the Java classes and the type XML
+definitions colocated. Types are discovered by a startup directory scan —
+there is no central index to register, so adding or removing a protocol
+touches only that package. Site-specific presets can point an external XML
+at a built-in driver class via `systar.asset-type.scan-paths`, extending the
+type catalog without writing Java or modifying the repository. Malformed or
+duplicate type definitions fail fast at startup with the offending file named.
+See the [driver development guide](docs/driver-development-guide.md) and the
+[type XML specification](docs/design/xml-asset-type-config-design.md).
+
+**Embeddable monitoring core.** `systar-monitor-core` has no web dependency.
+It defines its own repository interfaces (samples, alarms, linkages, scheduled
+tasks) which `systar-data` implements, so the engine can run as a library
+inside another application.
+
+**One asset model.** Devices, services, probes and controls share a single
+typed-property model with a defined resolution order (instance value → type
+default → built-in default). Virtual probes (SpEL-derived metrics) and
+user-defined group trees build on that same model instead of parallel ones.
+
+**Write integrity in the storage layer.** Structural edits to group trees
+(rename, move, reorder) run inside transactions that lock the tree row first,
+so invariants — name uniqueness, cycle guards, atomic reordering — hold for
+concurrent API clients, not just for the bundled UI.
+
+**One schema contract, two databases.** MySQL and H2 scripts are maintained
+in parallel trees and selected by a `DatabaseDialect` adapter
+(`systar.database.type`), which is also the extension point for further
+engines.
+
+**Offline-friendly build.** The Maven wrapper plus a vendored repository
+(`lib/maven-repo/`, carrying the GPL-licensed BACnet stack) lets the whole
+backend build and test on an isolated intranet with `./mvnw clean test -o`.
+
 ## Tech Stack
 
 | Component | Version | Purpose |
