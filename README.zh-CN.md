@@ -239,8 +239,7 @@ systar/
 ├── bin/                         启停/构建/初始化脚本（Windows + Linux/macOS）
 ├── lib/maven-repo/              离线构建用 vendored Maven 产物
 │                                （BACnet4J 及其依赖——见 THIRD-PARTY-NOTICES.md）
-├── docs/                        文档
-└── temp/                        运行时临时文件（PID、日志）
+└── docs/                        文档
 ```
 
 ## 文档索引

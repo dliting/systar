@@ -264,8 +264,7 @@ systar/
 ├── bin/                         start/stop/build/init scripts (Windows + Linux/macOS)
 ├── lib/maven-repo/              vendored Maven artifacts for offline builds
 │                                (BACnet4J and dependencies — see THIRD-PARTY-NOTICES.md)
-├── docs/                        documentation
-└── temp/                        runtime temp files (PID files, logs)
+└── docs/                        documentation
 ```
 
 ## Documentation
