@@ -11,6 +11,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.condition.EnabledIf;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
@@ -39,35 +40,50 @@ class XmlAssetTypeLoaderTest {
         store = new AssetStore();
     }
 
+    /**
+     * The BACnet/IEC-104 descriptors ship in the optional systar-drivers-gpl
+     * jar (Maven profile gpl-drivers). Tests asserting them must adapt to —
+     * or be skipped in — the pure-MIT build where the jar is absent.
+     */
+    static boolean gplPresent() {
+        try {
+            Class.forName("com.systar.monitor.drivers.bacnet.BacnetService");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
+
     @Test
-    @DisplayName("Loads all 15 Service types from XML config files")
+    @DisplayName("Loads all Service types (13 built-in, +2 with the GPL module)")
     void loadsServiceTypes() {
         loader.load(store);
 
         List<String> names = store.getServiceTypes().getAll()
                 .stream().map(AssetType::getName).toList();
 
-        assertThat(names).containsExactlyInAnyOrder(
-                "ModbusMaster", "ModbusTcpMaster",
-                "BACnetService", "IEC104Master", "SimulateService",
+        List<String> expected = new ArrayList<>(List.of(
+                "ModbusMaster", "ModbusTcpMaster", "SimulateService",
                 "SiemensService", "SnmpService", "OpcUaService",
                 "WeatherService", "EnvironmentalService", "InputService",
                 "UpsService", "WsService", "TcpIpService", "MqttService"
-        );
+        ));
+        if (gplPresent()) {
+            expected.addAll(List.of("BACnetService", "IEC104Master"));
+        }
+        assertThat(names).containsExactlyInAnyOrderElementsOf(expected);
     }
 
     @Test
-    @DisplayName("Loads all Probe types including new BACnet and SNMP variants")
+    @DisplayName("Loads all Probe types (24 built-in, +4 with the GPL module)")
     void loadsProbeTypes() {
         loader.load(store);
 
         List<String> names = store.getProbeTypes().getAll()
                 .stream().map(AssetType::getName).toList();
 
-        assertThat(names).containsExactlyInAnyOrder(
+        List<String> expected = new ArrayList<>(List.of(
                 "ModbusFloatFC3", "ModbusIntFC3", "ModbusBoolFC1",
-                "BACnetBool", "BACnetFloat", "BACnetInt",
-                "IEC104Float",
                 "SimulateFloat", "SimulateInt",
                 "SiemensFloat", "SnmpStr", "SnmpFloat", "SnmpBool", "SnmpInt",
                 "SnmpInterface", "SnmpInterfaceRecvSpeed", "SnmpInterfaceSendSpeed",
@@ -75,23 +91,29 @@ class XmlAssetTypeLoaderTest {
                 "OpcUaFloat",
                 "WeatherTemp", "EnvironmentalFloat", "InputValue",
                 "UpsValue", "WsProbe", "TcpIpProbe", "MqttValue"
-        );
+        ));
+        if (gplPresent()) {
+            expected.addAll(List.of("BACnetBool", "BACnetFloat", "BACnetInt", "IEC104Float"));
+        }
+        assertThat(names).containsExactlyInAnyOrderElementsOf(expected);
     }
 
     @Test
-    @DisplayName("Loads Control types from XML config files")
+    @DisplayName("Loads Control types (4 built-in, +3 with the GPL module)")
     void loadsControlTypes() {
         loader.load(store);
 
         List<String> names = store.getControlTypes().getAll()
                 .stream().map(AssetType::getName).toList();
 
-        assertThat(names).containsExactlyInAnyOrder(
+        List<String> expected = new ArrayList<>(List.of(
                 "ModbusInt16FC3FC6", "ModbusBoolFC3FC6",
-                "BACnetBoolControl",
-                "IEC104BoolControl", "IEC104FloatControl",
                 "OpcUaBoolControl", "OpcUaFloatControl"
-        );
+        ));
+        if (gplPresent()) {
+            expected.addAll(List.of("BACnetBoolControl", "IEC104BoolControl", "IEC104FloatControl"));
+        }
+        assertThat(names).containsExactlyInAnyOrderElementsOf(expected);
     }
 
     @Test
@@ -157,26 +179,12 @@ class XmlAssetTypeLoaderTest {
     void serviceTypesHaveProperties() {
         loader.load(store);
 
-        // BACnet
-        ServiceType bacnet = store.getServiceTypes().find("BACnetService");
-        assertThat(bacnet).isNotNull();
-        assertThat(bacnet.getProperties()).hasSize(4);
-        assertThat(bacnet.getProperties().stream().map(AssetTypeProperty::getName).toList())
-                .containsExactlyInAnyOrder("Remotehost", "Remoteport", "DeviceId", "Timeout");
-
         // SNMP
         ServiceType snmp = store.getServiceTypes().find("SnmpService");
         assertThat(snmp).isNotNull();
         assertThat(snmp.getProperties()).hasSize(5);
         assertThat(snmp.getProperties().stream().map(AssetTypeProperty::getName).toList())
                 .containsExactlyInAnyOrder("Host", "Port", "Community", "Version", "Timeout");
-
-        // IEC104
-        ServiceType iec = store.getServiceTypes().find("IEC104Master");
-        assertThat(iec).isNotNull();
-        assertThat(iec.getProperties()).hasSize(4);
-        assertThat(iec.getProperties().stream().map(AssetTypeProperty::getName).toList())
-                .containsExactlyInAnyOrder("Host", "Port", "CommonAddrStr", "Timeout");
 
         // MQTT
         ServiceType mqtt = store.getServiceTypes().find("MqttService");
@@ -197,25 +205,6 @@ class XmlAssetTypeLoaderTest {
     @DisplayName("Probe types have PropertyList with constraints")
     void probeTypesHaveConstraints() {
         loader.load(store);
-
-        // BACnetFloat probe
-        ProbeType bacnetFloat = store.getProbeTypes().find("BACnetFloat");
-        assertThat(bacnetFloat).isNotNull();
-        assertThat(bacnetFloat.getProperties()).hasSize(3);
-        AssetTypeProperty objectType = bacnetFloat.getProperties().stream()
-                .filter(p -> "ObjectType".equals(p.getName())).findFirst().orElseThrow();
-        assertThat(objectType.getMin()).isEqualTo(0.0);
-        assertThat(objectType.getMax()).isEqualTo(30.0);
-        assertThat(objectType.isRequired()).isTrue();
-
-        // IEC104Float probe
-        ProbeType iecFloat = store.getProbeTypes().find("IEC104Float");
-        assertThat(iecFloat).isNotNull();
-        assertThat(iecFloat.getProperties()).hasSize(2);
-        AssetTypeProperty address = iecFloat.getProperties().stream()
-                .filter(p -> "Address".equals(p.getName())).findFirst().orElseThrow();
-        assertThat(address.getMin()).isEqualTo(0.0);
-        assertThat(address.getMax()).isEqualTo(2147483647.0);
 
         // SNMP probe
         ProbeType snmpProbe = store.getProbeTypes().find("SnmpStr");
@@ -238,21 +227,7 @@ class XmlAssetTypeLoaderTest {
     }
 
     @Test
-    @DisplayName("BACnetControls no longer references ModbusControl and has PropertyList")
-    void bacnetControlFixedJavaClass() {
-        loader.load(store);
-
-        ControlType bacnetCtrl = store.getControlTypes().find("BACnetBoolControl");
-        assertThat(bacnetCtrl).isNotNull();
-        assertThat(bacnetCtrl.getRelatedClass())
-                .doesNotContain("modbus.ModbusControl");
-        assertThat(bacnetCtrl.getProperties()).hasSize(3);
-        assertThat(bacnetCtrl.getProperties().stream().map(AssetTypeProperty::getName).toList())
-                .containsExactlyInAnyOrder("ObjectType", "InstanceNumber", "PropertyIdentifier");
-    }
-
-    @Test
-    @DisplayName("Total type count: 1+15+28+7 = 51 (with SNMP Interface probes)")
+    @DisplayName("Total type count: 51 with the GPL module, 42 without")
     void totalTypeCount() {
         loader.load(store);
 
@@ -261,7 +236,7 @@ class XmlAssetTypeLoaderTest {
                 + store.getProbeTypes().getAll().size()
                 + store.getControlTypes().getAll().size();
 
-        assertThat(total).isEqualTo(51);
+        assertThat(total).isEqualTo(gplPresent() ? 51 : 42);
     }
 
     // ======================== Min/Max/MaxLength parsing ========================
@@ -286,8 +261,6 @@ class XmlAssetTypeLoaderTest {
         loader.load(store);
 
         assertTimeoutDefault("ModbusTcpMaster", "5000");
-        assertTimeoutDefault("BACnetService", "5000");
-        assertTimeoutDefault("IEC104Master", "10000");
         assertTimeoutDefault("SnmpService", "5000");
         assertTimeoutDefault("UpsService", "5000");
         assertTimeoutDefault("TcpIpService", "5000");
@@ -474,31 +447,13 @@ class XmlAssetTypeLoaderTest {
     }
 
     @Test
-    @DisplayName("IEC104 and OPC UA float controls have ViewType.SLIDER")
+    @DisplayName("OPC UA float control has ViewType.SLIDER")
     void floatControlsHaveSlider() {
         loader.load(store);
-
-        ControlType iec = store.getControlTypes().find("IEC104FloatControl");
-        assertThat(iec).isNotNull();
-        assertThat(iec.getViewType()).isEqualTo(ViewType.SLIDER);
 
         ControlType opcua = store.getControlTypes().find("OpcUaFloatControl");
         assertThat(opcua).isNotNull();
         assertThat(opcua.getViewType()).isEqualTo(ViewType.SLIDER);
-    }
-
-    @Test
-    @DisplayName("BACnet and IEC104 bool controls have ViewType.YESNO")
-    void boolControlsHaveYesNo() {
-        loader.load(store);
-
-        ControlType bacnet = store.getControlTypes().find("BACnetBoolControl");
-        assertThat(bacnet).isNotNull();
-        assertThat(bacnet.getViewType()).isEqualTo(ViewType.YESNO);
-
-        ControlType iec = store.getControlTypes().find("IEC104BoolControl");
-        assertThat(iec).isNotNull();
-        assertThat(iec.getViewType()).isEqualTo(ViewType.YESNO);
     }
 
     @Test
@@ -551,6 +506,106 @@ class XmlAssetTypeLoaderTest {
         AssetTypeProperty regProp = type.findProperty("InRegisterAddr");
         assertThat(regProp).isNotNull();
         assertThat(regProp.getViewType()).isEqualTo(ViewType.TEXTFIELD);
+    }
+
+    // ======================== GPL driver descriptors ========================
+
+    @Nested
+    @DisplayName("GPL driver descriptors (only present with the gpl-drivers profile)")
+    @EnabledIf("com.systar.server.loader.XmlAssetTypeLoaderTest#gplPresent")
+    class GplDescriptors {
+
+        @Test
+        @DisplayName("BACnet/IEC104 service types have PropertyList with expected properties")
+        void gplServiceTypesHaveProperties() {
+            loader.load(store);
+
+            // BACnet
+            ServiceType bacnet = store.getServiceTypes().find("BACnetService");
+            assertThat(bacnet).isNotNull();
+            assertThat(bacnet.getProperties()).hasSize(4);
+            assertThat(bacnet.getProperties().stream().map(AssetTypeProperty::getName).toList())
+                    .containsExactlyInAnyOrder("Remotehost", "Remoteport", "DeviceId", "Timeout");
+
+            // IEC104
+            ServiceType iec = store.getServiceTypes().find("IEC104Master");
+            assertThat(iec).isNotNull();
+            assertThat(iec.getProperties()).hasSize(4);
+            assertThat(iec.getProperties().stream().map(AssetTypeProperty::getName).toList())
+                    .containsExactlyInAnyOrder("Host", "Port", "CommonAddrStr", "Timeout");
+        }
+
+        @Test
+        @DisplayName("BACnet/IEC104 probe types have PropertyList with constraints")
+        void gplProbeTypesHaveConstraints() {
+            loader.load(store);
+
+            // BACnetFloat probe
+            ProbeType bacnetFloat = store.getProbeTypes().find("BACnetFloat");
+            assertThat(bacnetFloat).isNotNull();
+            assertThat(bacnetFloat.getProperties()).hasSize(3);
+            AssetTypeProperty objectType = bacnetFloat.getProperties().stream()
+                    .filter(p -> "ObjectType".equals(p.getName())).findFirst().orElseThrow();
+            assertThat(objectType.getMin()).isEqualTo(0.0);
+            assertThat(objectType.getMax()).isEqualTo(30.0);
+            assertThat(objectType.isRequired()).isTrue();
+
+            // IEC104Float probe
+            ProbeType iecFloat = store.getProbeTypes().find("IEC104Float");
+            assertThat(iecFloat).isNotNull();
+            assertThat(iecFloat.getProperties()).hasSize(2);
+            AssetTypeProperty address = iecFloat.getProperties().stream()
+                    .filter(p -> "Address".equals(p.getName())).findFirst().orElseThrow();
+            assertThat(address.getMin()).isEqualTo(0.0);
+            assertThat(address.getMax()).isEqualTo(2147483647.0);
+        }
+
+        @Test
+        @DisplayName("BACnetControls no longer references ModbusControl and has PropertyList")
+        void bacnetControlFixedJavaClass() {
+            loader.load(store);
+
+            ControlType bacnetCtrl = store.getControlTypes().find("BACnetBoolControl");
+            assertThat(bacnetCtrl).isNotNull();
+            assertThat(bacnetCtrl.getRelatedClass())
+                    .doesNotContain("modbus.ModbusControl");
+            assertThat(bacnetCtrl.getProperties()).hasSize(3);
+            assertThat(bacnetCtrl.getProperties().stream().map(AssetTypeProperty::getName).toList())
+                    .containsExactlyInAnyOrder("ObjectType", "InstanceNumber", "PropertyIdentifier");
+        }
+
+        @Test
+        @DisplayName("BACnet and IEC104 bool controls have ViewType.YESNO")
+        void boolControlsHaveYesNo() {
+            loader.load(store);
+
+            ControlType bacnet = store.getControlTypes().find("BACnetBoolControl");
+            assertThat(bacnet).isNotNull();
+            assertThat(bacnet.getViewType()).isEqualTo(ViewType.YESNO);
+
+            ControlType iec = store.getControlTypes().find("IEC104BoolControl");
+            assertThat(iec).isNotNull();
+            assertThat(iec.getViewType()).isEqualTo(ViewType.YESNO);
+        }
+
+        @Test
+        @DisplayName("IEC104 float control has ViewType.SLIDER")
+        void iec104FloatControlHasSlider() {
+            loader.load(store);
+
+            ControlType iec = store.getControlTypes().find("IEC104FloatControl");
+            assertThat(iec).isNotNull();
+            assertThat(iec.getViewType()).isEqualTo(ViewType.SLIDER);
+        }
+
+        @Test
+        @DisplayName("BACnet/IEC104 services expose Timeout with their driver's built-in default")
+        void gplServicesExposeTunableTimeout() {
+            loader.load(store);
+
+            assertTimeoutDefault("BACnetService", "5000");
+            assertTimeoutDefault("IEC104Master", "10000");
+        }
     }
 
     // ======================== DB sync versioning ========================

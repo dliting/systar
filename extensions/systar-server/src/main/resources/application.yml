@@ -64,7 +64,8 @@ spring:
       mode: always
       encoding: UTF-8
       schema-locations: file:sql/h2/ddl/01-core.sql,file:sql/h2/ddl/02-ops.sql,file:sql/h2/ddl/03-system.sql
-      data-locations: file:sql/h2/data/01-init.sql,file:sql/h2/data/03-simulator.sql
+      # optional: 前缀——GPL 驱动模块不在 classpath（纯 MIT 构建）时该脚本静默跳过
+      data-locations: file:sql/h2/data/01-init.sql,file:sql/h2/data/03-simulator.sql,optional:classpath:sql/h2/data/09-gpl-drivers.sql
 
 server:
   port: 18081
