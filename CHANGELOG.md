@@ -17,6 +17,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+**Licensing**
+- License changed from GPL-3.0-only to **MIT**. BACnet/IP and IEC 60870-5-104 drivers
+  moved to a separate GPL-3.0 module (`gpl/systar-drivers-gpl`, **not part of this
+  repository**) because their underlying libraries (BACnet4J, j60870) are
+  GPL-3.0-only; binaries built with that module follow GPL-3.0 for the combined work.
+  Already-deployed instances are unaffected; fresh deployments wanting those two
+  protocols need the GPL module on the classpath — its demo service seed rows are
+  applied by the module itself
+- org.json replaced with Jackson (Apache-2.0): the JSON License ("Good, not Evil")
+  is not OSI-approved. Two org.json quirks were intentionally dropped — a JSON null
+  at an MQTT jsonPath now yields `null` (was the `JSONObject.NULL` sentinel), and a
+  path continuing past a scalar node yields `null` (was the scalar)
+
 **Protocol drivers (systar-monitor-drivers / systar-server)**
 - Driver modularization: protocol type-definition XMLs moved from server `config/assets/` into the drivers module (co-located with the driver classes); the loader now self-registers types via directory scanning and the global index `Assets.xml` was deleted — adding or removing a driver no longer requires index maintenance
 - New `systar.asset-type.scan-paths` config: supports `file:` external scan directories so private driver types can stay out of the repository

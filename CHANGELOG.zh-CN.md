@@ -17,6 +17,17 @@
 
 ### 变更
 
+**许可证**
+- 许可证由 GPL-3.0-only 改为 **MIT**。BACnet/IP 与 IEC 60870-5-104 驱动迁至独立的
+  GPL-3.0 模块（`gpl/systar-drivers-gpl`，**不在本仓库**）——其底层库 BACnet4J、
+  j60870 均为 GPL-3.0-only；包含该模块的打包物整体遵循 GPL-3.0。已部署实例不受
+  影响；新部署如需这两个协议，需将 GPL 模块加入 classpath——其演示服务种子行由
+  模块自行播种
+- org.json 替换为 Jackson（Apache-2.0）：JSON License（"Good, not Evil"）非 OSI
+  认可。有意丢弃 org.json 的两个怪癖——MQTT jsonPath 命中 JSON null 时返回 `null`
+  （原来是 `JSONObject.NULL` 哨兵）；路径穿过标量节点继续取值时返回 `null`
+  （原来返回该标量）
+
 **协议驱动（systar-monitor-drivers / systar-server）**
 - 驱动模块化：协议类型定义 XML 从 server `config/assets/` 迁入 drivers 模块（与驱动类同包），加载器改为目录扫描自注册，删除全局索引 `Assets.xml`——新增/删除驱动不再需要维护索引
 - 新增 `systar.asset-type.scan-paths` 配置：支持 `file:` 外置目录扫描，私有驱动类型可以不进仓库

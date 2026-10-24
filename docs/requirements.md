@@ -70,10 +70,10 @@
 |------|------|------|
 | Modbus TCP | 功能码 01-06，寄存器读写 | ✅ |
 | OPC UA | Eclipse Milo 客户端，NodeId 读取 | ✅ |
-| BACnet | BACnet4J 4.1.6，LocalDevice + ReadPropertyRequest | ✅ |
+| BACnet | BACnet4J 4.1.6，LocalDevice + ReadPropertyRequest（独立 GPL-3.0 模块，不在本仓库） | ✅ |
 | SNMP | SNMP4J，GET/GETNEXT | ✅ |
 | Siemens S7 | S7Connector，DB/标记读取 | ✅ |
-| IEC 104 | j60870 1.2.0，ClientConnectionBuilder + ConnectionEventListener + ASDU 解码 | ✅ |
+| IEC 104 | j60870 1.2.0，ClientConnectionBuilder + ConnectionEventListener + ASDU 解码（独立 GPL-3.0 模块，不在本仓库） | ✅ |
 | Weather | HTTP API + JSON 解析 + 缓存 | ✅ |
 | UPS | SNMP，RFC 1628 UPS-MIB | ✅ |
 | Environmental | TCP 服务器 + 帧解码器（被动） | ✅ |

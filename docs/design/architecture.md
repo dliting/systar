@@ -19,7 +19,7 @@
 
 ### 1.2 当前状态
 
-v1.1.0 开发中。IoT 核心系统框架完整，14 个协议驱动全部实现，VirtualProbe 派生字段引擎已完成。运维业务（工单/台账/巡检/统计）和系统管理（用户/角色/菜单）模块已实现。前端为独立 Vue3 项目（11 个页面），已完成 Phase 1 UX 改进（导航/通知/面包屑/快捷键），Phase 2 EnhancedTable 进行中。支持离线/内网部署。
+v1.1.0 开发中。IoT 核心系统框架完整，协议驱动全部实现（本仓库内置 12 个，另有 BACnet 与 IEC 104 两个驱动位于独立的 GPL-3.0 模块，见 `mit-relicensing.md`），VirtualProbe 派生字段引擎已完成。运维业务（工单/台账/巡检/统计）和系统管理（用户/角色/菜单）模块已实现。前端为独立 Vue3 项目（11 个页面），已完成 Phase 1 UX 改进（导航/通知/面包屑/快捷键），Phase 2 EnhancedTable 进行中。支持离线/内网部署。
 
 ---
 
@@ -32,7 +32,7 @@ v1.1.0 开发中。IoT 核心系统框架完整，14 个协议驱动全部实现
 | **systar-common** | `core/` | 通用工具：ID 生成、代码字典、系统配置、TimeSpan | AssetIdGenerator, CodeDictManager, SystemConfigManager, TimeSpan |
 | **systar-monitor-core** | `core/` | 核心监控引擎，无 Web 依赖，可嵌入 | Asset, Monitor, Probe, Control, ResultDispatcher, MonitorScheduler, AlarmHandler, LinkageHandler |
 | **systar-data** | `core/` | 核心IoT数据访问层（MyBatis-Plus，DIP模式） | Entity, Mapper, Service（alarm/sample/linkage/scheduled_task 等） |
-| **systar-monitor-drivers** | `core/` | 协议驱动集合（14 个完整实现） | ModbusConnection, BacnetConnection, Iec104Connection, MqttService 等 |
+| **systar-monitor-drivers** | `core/` | 协议驱动集合（12 个完整实现；BACnet/IEC 104 见独立 GPL 模块 `gpl/systar-drivers-gpl`，不在本仓库） | ModbusConnection, MqttService 等 |
 | **systar-server** | `extensions/` | Spring Boot 启动入口、REST API、配置、资产 CRUD | SystarApplication, AssetController, AssetOrchestrator, ServerLifeCycle, DatabaseAssetLoader, XmlAssetTypeLoader |
 | **systar-ops** | `extensions/` | 运维业务（巡检/台账/工单/统计分析），自有数据层 | InspectionTaskService, DeviceLedgerService, WorkOrderService, StatisticsService, MonitorStatsAggregator |
 | **systar-system** | `extensions/` | 系统管理（用户/角色/菜单/日志），自有数据层 | SysUserService, SysRoleService, SysMenuService, MybatisPlusConfig |
@@ -418,14 +418,16 @@ H2 脚本需去除 `ENGINE=InnoDB`、`COLLATE`、`COMMENT`，用 `MERGE INTO` �
 
 ### 7.3 现有驱动参考
 
+本仓库内置 12 个驱动；BACnet 与 IEC 104 位于独立 GPL-3.0 模块（`gpl/systar-drivers-gpl`，不在本仓库，许可边界见 `mit-relicensing.md`）。
+
 | 驱动 | 类型 | 协议/库 | 模式 | 参考实现 |
 |------|------|---------|------|----------|
 | Modbus TCP | 工业协议 | jamod | 主动 | ModbusConnection |
 | OPC UA | 工业协议 | Eclipse Milo 0.6.8 | 主动 | OpcUaDriver |
-| BACnet | 建筑自动化 | BACnet4J 4.1.6 | 主动 | BacnetConnection |
+| BACnet | 建筑自动化 | BACnet4J 4.1.6（GPL 模块） | 主动 | BacnetConnection |
 | SNMP | 网络协议 | SNMP4J 3.7.7 | 主动 | SnmpDriver |
 | Siemens S7 | PLC | S7Connector 2.1 | 主动 | S7Connection |
-| IEC 104 | 电力协议 | j60870 1.2.0 | 主动 | Iec104Connection |
+| IEC 104 | 电力协议 | j60870 1.2.0（GPL 模块） | 主动 | Iec104Connection |
 | Weather | HTTP API | java.net.http | 主动 | WeatherService |
 | UPS | SNMP | SNMP4J 3.7.7 | 主动 | UpsConnection |
 | Environmental | 环境监测 | ServerSocket | 被动 | EnvironmentalDriver |

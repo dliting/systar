@@ -4,7 +4,7 @@
 
 相关文档：
 
-- `docs/design/architecture.md` §7 — 驱动架构总览与 14 个现有驱动清单
+- `docs/design/architecture.md` §7 — 驱动架构总览与现有驱动清单（本仓库内置 12 个；BACnet/IEC 104 位于独立 GPL-3.0 模块，不在本仓库，见 `docs/design/mit-relicensing.md`）
 - `docs/design/xml-asset-type-config-design.md` — 类型 XML 的完整规格（扫描路径、元素命名、DB 同步、私有部署）
 - `docs/tech_overview.md` — 系统整体技术概览
 

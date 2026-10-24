@@ -65,19 +65,20 @@ in parallel trees and selected by a `DatabaseDialect` adapter
 (`systar.database.type`), which is also the extension point for further
 engines.
 
-**Offline-friendly build.** The Maven wrapper plus a vendored repository
-(`lib/maven-repo/`, carrying the GPL-licensed BACnet stack) lets the whole
-backend build and test on an isolated intranet with `./mvnw clean test -o`.
+**Offline-friendly build.** The Maven wrapper lets the whole backend build and
+test on an isolated intranet with `./mvnw clean test -o` once the local Maven
+cache is primed; every dependency of this repository resolves from Maven Central.
 
 ## Features
 
 - **Hierarchical asset modeling** — Devices and Services as top-level assets, with
   Probes (monitoring points) and Controls (actuation points) attached to Devices
-- **Multi-protocol acquisition** — 14 protocol drivers built in (Modbus TCP, OPC UA,
-  BACnet/IP, SNMP, Siemens S7, IEC 60870-5-104, MQTT, WebSocket, raw TCP/IP,
-  UPS (SNMP), weather (HTTP API), environmental sensors (passive TCP), a built-in
-  simulator and manual input), extensible to new protocols through the
-  plugin-style driver framework — supporting both active polling and passive reception
+- **Multi-protocol acquisition** — 12 protocol drivers built in (Modbus TCP, OPC UA,
+  SNMP, Siemens S7, MQTT, WebSocket, raw TCP/IP, UPS (SNMP), weather (HTTP API),
+  environmental sensors (passive TCP), a built-in simulator and manual input),
+  extensible to new protocols through the plugin-style driver framework — supporting
+  both active polling and passive reception. BACnet/IP and IEC 60870-5-104 are
+  available through a separate GPL-3.0 module (see [License](#license))
 - **Virtual probes** — SpEL-derived metrics computed from other probes, with
   dependency tracking and cycle detection
 - **Alarm engine** — three strategies (single, continuous, selective), severity levels
@@ -262,8 +263,6 @@ systar/
 │   ├── h2/{ddl,data}/           H2 schema + seed data
 │   └── mysql/{ddl,data}/        MySQL schema + seed data, plus init.sh / init.bat
 ├── bin/                         start/stop/build/init scripts (Windows + Linux/macOS)
-├── lib/maven-repo/              vendored Maven artifacts for offline builds
-│                                (BACnet4J and dependencies — see THIRD-PARTY-NOTICES.md)
 └── docs/                        documentation
 ```
 
@@ -303,9 +302,17 @@ Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## License
 
-Copyright (C) 2026 Hao Yufei.
+Copyright (c) 2026 Alan Dlite.
 
-Systar is licensed under the **GNU General Public License v3.0 only** — see
-[LICENSE](LICENSE). The vendored BACnet4J 4.1.6 artifact under `lib/maven-repo/` is
-likewise GPL-3.0 (dual-licensed upstream). Full component attribution:
-[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+Systar is licensed under the **MIT License** — see [LICENSE](LICENSE).
+Full component attribution: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+### Optional GPL driver module
+
+BACnet/IP and IEC 60870-5-104 support is provided by a separate module
+(`gpl/systar-drivers-gpl`) that links GPL-3.0-only libraries (BACnet4J, j60870).
+That module is GPL-3.0 as a whole and is **not part of this repository**; binaries
+built with it follow GPL-3.0 for the combined work, while everything here stays
+MIT. If you need those two protocols you can implement drivers against the
+descriptor-based plug-and-play loader yourself (see `XmlAssetTypeLoader`); the
+underlying libraries BACnet4J and j60870 are GPL-3.0.

@@ -54,18 +54,19 @@ Java 类与类型 XML 定义同处一个目录。类型在启动时由目录扫�
 `DatabaseDialect` 适配器（`systar.database.type`）选择加载，这也是后续接入
 其他数据库的扩展点。
 
-**离线友好构建。** Maven Wrapper 加上自带依赖仓库（`lib/maven-repo/`，收纳
-GPL 许可的 BACnet 协议栈），后端可在隔离内网中用 `./mvnw clean test -o`
-完成构建与测试。
+**离线友好构建。** Maven Wrapper 让后端在隔离内网中用 `./mvnw clean test -o`
+完成构建与测试（本地 Maven 缓存就绪后即可离线）；本仓库的全部依赖均可从
+Maven Central 解析。
 
 ## 核心特性
 
 - **资产层级建模** — 设备（Device）与服务（Service）为顶层资产，
   监测点（Probe）/ 控制点（Control）挂载于设备之下
-- **多协议数据采集** — 目前内置 14 种协议驱动（Modbus TCP、OPC UA、BACnet/IP、SNMP、
-  Siemens S7、IEC 60870-5-104、MQTT、WebSocket、原始 TCP/IP、UPS（SNMP）、天气（HTTP API）、
+- **多协议数据采集** — 目前内置 12 种协议驱动（Modbus TCP、OPC UA、SNMP、
+  Siemens S7、MQTT、WebSocket、原始 TCP/IP、UPS（SNMP）、天气（HTTP API）、
   环境传感器（被动 TCP）、内置模拟器、手动输入），并可通过插件式驱动框架扩展新协议
-  ——支持主动轮询与被动接收两种模式
+  ——支持主动轮询与被动接收两种模式。BACnet/IP 与 IEC 60870-5-104 由独立的
+  GPL-3.0 模块提供（见[许可证](#许可证)）
 - **虚拟监测点** — 基于 SpEL 表达式的派生指标引擎，支持跨监测点计算、依赖跟踪与循环检测
 - **告警引擎** — 三种策略（单次/持续/选择性）、多级告警、自动恢复检测，附告警关联与抑制
 - **联动引擎** — 因 → 果自动化规则，可由监测值或告警触发
@@ -237,8 +238,6 @@ systar/
 │   ├── h2/{ddl,data}/           H2 schema + 种子数据
 │   └── mysql/{ddl,data}/        MySQL schema + 种子数据，附 init.sh / init.bat
 ├── bin/                         启停/构建/初始化脚本（Windows + Linux/macOS）
-├── lib/maven-repo/              离线构建用 vendored Maven 产物
-│                                （BACnet4J 及其依赖——见 THIRD-PARTY-NOTICES.md）
 └── docs/                        文档
 ```
 
@@ -277,9 +276,15 @@ systar/
 
 ## 许可证
 
-Copyright (C) 2026 Hao Yufei。
+Copyright (c) 2026 Alan Dlite。
 
-Systar 以 **GNU General Public License v3.0 only** 许可发布——见
-[LICENSE](LICENSE)。`lib/maven-repo/` 下的 BACnet4J 4.1.6 产物同样为 GPL-3.0
-（上游双许可）。完整组件归因见
-[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+Systar 以 **MIT License** 许可发布——见 [LICENSE](LICENSE)。
+完整组件归因见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+
+### 可选 GPL 驱动模块
+
+BACnet/IP 与 IEC 60870-5-104 支持由独立模块（`gpl/systar-drivers-gpl`）提供，
+该模块链接 GPL-3.0-only 的库（BACnet4J、j60870），整体为 GPL-3.0 许可，
+**不在本仓库内**；包含它的打包物整体遵循 GPL-3.0，本仓库内容始终保持 MIT。
+如需这两个协议，也可按描述符即插即用加载器（见 `XmlAssetTypeLoader`）自行实现
+驱动；其底层库 BACnet4J 与 j60870 均为 GPL-3.0。
