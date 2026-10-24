@@ -8,30 +8,40 @@
 
 ---
 
-## [未发布]
+## [1.1.1] - 2026-10-24
+
+驱动插件目录架构——驱动从核心构建中拆出、成为拷入即用的自包含插件目录——以及 MIT 重新授权。
 
 ### 新增
 
+**驱动插件目录架构**
+- 每个协议驱动现在是一个自包含插件目录——`driver.jar` + `lib/` + 可选 `seed/` CSV——启动时在 `systar.drivers.path`（默认 `./drivers`，按工作目录解析）下发现。拷入插件目录重启即生效：不改服务器代码、不重新打包。删除插件也从不导致启动失败——受影响的数据行按名 WARN 跳过，并级联到依赖它们的行
+- 每插件独立类加载器隔离私有协议库；核心 API 类按 parent-first 共享
+- XML-only 插件目录（目录根放 loose 类型 XML）无需写 Java 即可扩展类型目录，可引用其他插件提供的类
+- 插件种子 CSV：白名单表（`dictionary` / `service` / `asset` / `asset_attribute` / `probe` / `control`），列头 = 数据库列名，按主键 insert-if-absent，执行条件与主 SQL 种子一致
+- 格式错误或重名的类型定义在启动时快速失败，并指明问题插件
+
 **协议驱动**
-- 新增协议驱动二次开发指南（`docs/driver-development-guide.md`）：驱动模块结构、类型 XML 自注册、外置扫描路径部署配方
+- 新增协议驱动二次开发指南（`docs/driver-development-guide.md`）：插件目录布局、类型 XML 自注册、种子 CSV 规范、私有驱动部署配方
 
 ### 变更
 
+**驱动插件目录架构（drivers/）**
+- `core/systar-monitor-drivers` 拆分为 14 个 `drivers/systar-driver-*` 插件模块（每协议一个）；每个模块在 `target/plugin/` 下构建自己的插件目录，聚合到 `drivers/dist/` 供开发运行时使用
+- 服务器 fat jar 瘦身：不再捆绑驱动类与私有协议库——运行期经驱动搜索路径加载，`systar-server` 与驱动无编译期依赖
+- `gpl-drivers` Maven profile 及其 `settings.xml` 激活机制退役——GPL 驱动就是普通插件模块；导出公开仓库时删除其两个目录及 `drivers/pom.xml` 中对应两行 `<module>`
+- GPL 演示种子行（字典 803、服务 103/104、资产 44/45）从共享 SQL 种子脚本迁入 GPL 插件自带的 `seed/` CSV，沿用原 id 使已播种的存量库保持幂等
+- `systar.asset-type.scan-paths`（本周期早前新增）在发布前退役——外置类型 XML 改用 XML-only 插件目录
+
 **许可证**
-- 许可证由 GPL-3.0-only 改为 **MIT**。BACnet/IP 与 IEC 60870-5-104 驱动迁至独立的
-  GPL-3.0 模块（`gpl/systar-drivers-gpl`，**不在本仓库**）——其底层库 BACnet4J、
-  j60870 均为 GPL-3.0-only；包含该模块的打包物整体遵循 GPL-3.0。重新授权前已播种
-  的数据库仍带有 GPL 演示行（服务 103/104、资产 44/45）：改用纯 MIT 构建时，这些
-  行的缺失驱动类会导致启动失败——需删除这些行，或保留 GPL 模块在 classpath。新
-  部署如需这两个协议，需将 GPL 模块加入 classpath——其演示服务种子行由模块自行播种
+- 许可证由 GPL-3.0-only 改为 **MIT**。BACnet/IP 与 IEC 60870-5-104 驱动以 GPL-3.0 驱动插件目录提供（`drivers/systar-driver-bacnet`、`drivers/systar-driver-iec104`，**不在本仓库**）——其底层库 BACnet4J、j60870 均为 GPL-3.0-only；包含这些插件目录的分发物整体遵循 GPL-3.0。重新授权前已播种的数据库仍带有 GPL 演示行（服务 103/104、资产 44/45）：改用纯 MIT 构建时，这些行在启动加载时被 WARN 跳过（行残留于库中、资产树不再显示），不再导致启动失败；重装 GPL 插件目录重启即恢复。新部署如需这两个协议，将 GPL 插件目录拷入驱动搜索路径即可——其演示种子行以种子 CSV 随插件自带
 - org.json 替换为 Jackson（Apache-2.0）：JSON License（"Good, not Evil"）非 OSI
   认可。有意丢弃 org.json 的两个怪癖——MQTT jsonPath 命中 JSON null 时返回 `null`
   （原来是 `JSONObject.NULL` 哨兵）；路径穿过标量节点继续取值时返回 `null`
   （原来返回该标量）
 
-**协议驱动（systar-monitor-drivers / systar-server）**
-- 驱动模块化：协议类型定义 XML 从 server `config/assets/` 迁入 drivers 模块（与驱动类同包），加载器改为目录扫描自注册，删除全局索引 `Assets.xml`——新增/删除驱动不再需要维护索引
-- 新增 `systar.asset-type.scan-paths` 配置：支持 `file:` 外置目录扫描，私有驱动类型可以不进仓库
+**协议驱动（drivers/ / systar-server）**
+- 驱动模块化：协议类型定义 XML 从 server `config/assets/` 迁入驱动插件模块（与驱动类同包），加载器改为目录扫描自注册，删除全局索引 `Assets.xml`——新增/删除驱动不再需要维护索引
 - ModbusService 手写配置解析链（metadata > 类型默认 > 内置默认）统一到框架属性绑定 `bindProperties`
 - 类型配置版本号仅在内容实际变化时递增，修复每次启动无条件 version+1 的版本膨胀
 - Timeout/MaxConnections 支持按实例配置（类型默认值兜底）

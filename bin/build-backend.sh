@@ -15,4 +15,4 @@ cd "$PROJECT_DIR"
 
 echo "[Build] Building systar-server..."
 mvn clean package -pl extensions/systar-server -am -DskipTests -q
-echo "[Build] OK — extensions/systar-server/target/systar-server-1.0.0.jar"
+echo "[Build] OK — extensions/systar-server/target/systar-server-1.1.1.jar"

@@ -16,4 +16,4 @@ if %ERRORLEVEL% neq 0 (
     echo [Build] FAILED
     exit /b 1
 )
-echo [Build] OK — extensions\systar-server\target\systar-server-1.0.0.jar
+echo [Build] OK — extensions\systar-server\target\systar-server-1.1.1.jar

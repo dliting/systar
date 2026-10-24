@@ -7,6 +7,8 @@ import com.systar.server.dto.AssetUpdateRequest;
 import com.systar.server.dto.BatchResult;
 import com.systar.server.event.AssetChangedEvent;
 import com.systar.server.event.AssetChangedEvent.Action;
+import com.systar.server.plugin.DriverClassRegistry;
+import com.systar.server.plugin.DriverPluginLoader;
 import com.systar.server.repository.AssetRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -38,7 +40,11 @@ class AssetOrchestratorTest {
         repo = mock(AssetRepository.class);
         store = new AssetStore();
         events = mock(ApplicationEventPublisher.class);
-        orchestrator = new AssetOrchestrator(repo, store, events);
+        // missing plugin dir -> empty class index -> parent-classpath fallback,
+        // behaviorally equivalent to the old bare Class.forName
+        DriverClassRegistry registry =
+                new DriverClassRegistry(new DriverPluginLoader("./target/no-plugins"));
+        orchestrator = new AssetOrchestrator(repo, store, events, registry);
         eventCaptor = ArgumentCaptor.forClass(Object.class);
     }
 

@@ -6,12 +6,12 @@ import com.systar.monitor.asset.AssetException;
 import com.systar.monitor.asset.AssetKind;
 import com.systar.monitor.asset.AssetStore;
 import com.systar.monitor.asset.type.*;
+import com.systar.server.plugin.DriverPluginLoader;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.api.condition.EnabledIf;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
@@ -36,53 +36,36 @@ class XmlAssetTypeLoaderTest {
     void setUp() {
         mapper = mock(AssetTypeConfigMapper.class);
         when(mapper.selectList(any())).thenReturn(List.of());
-        loader = new XmlAssetTypeLoader(mapper);
+        loader = new XmlAssetTypeLoader(mapper, new DriverPluginLoader("./target/no-plugins"));
         store = new AssetStore();
     }
 
-    /**
-     * The BACnet/IEC-104 descriptors ship in the optional systar-drivers-gpl
-     * jar (Maven profile gpl-drivers). Tests asserting them must adapt to —
-     * or be skipped in — the pure-MIT build where the jar is absent.
-     */
-    static boolean gplPresent() {
-        try {
-            Class.forName("com.systar.monitor.drivers.bacnet.BacnetService");
-            return true;
-        } catch (ClassNotFoundException e) {
-            return false;
-        }
-    }
-
     @Test
-    @DisplayName("Loads all Service types (13 built-in, +2 with the GPL module)")
+    @DisplayName("Loads all Service types (13)")
     void loadsServiceTypes() {
         loader.load(store);
 
         List<String> names = store.getServiceTypes().getAll()
                 .stream().map(AssetType::getName).toList();
 
-        List<String> expected = new ArrayList<>(List.of(
+        List<String> expected = List.of(
                 "ModbusMaster", "ModbusTcpMaster", "SimulateService",
                 "SiemensService", "SnmpService", "OpcUaService",
                 "WeatherService", "EnvironmentalService", "InputService",
                 "UpsService", "WsService", "TcpIpService", "MqttService"
-        ));
-        if (gplPresent()) {
-            expected.addAll(List.of("BACnetService", "IEC104Master"));
-        }
+        );
         assertThat(names).containsExactlyInAnyOrderElementsOf(expected);
     }
 
     @Test
-    @DisplayName("Loads all Probe types (24 built-in, +4 with the GPL module)")
+    @DisplayName("Loads all Probe types (24)")
     void loadsProbeTypes() {
         loader.load(store);
 
         List<String> names = store.getProbeTypes().getAll()
                 .stream().map(AssetType::getName).toList();
 
-        List<String> expected = new ArrayList<>(List.of(
+        List<String> expected = List.of(
                 "ModbusFloatFC3", "ModbusIntFC3", "ModbusBoolFC1",
                 "SimulateFloat", "SimulateInt",
                 "SiemensFloat", "SnmpStr", "SnmpFloat", "SnmpBool", "SnmpInt",
@@ -91,28 +74,22 @@ class XmlAssetTypeLoaderTest {
                 "OpcUaFloat",
                 "WeatherTemp", "EnvironmentalFloat", "InputValue",
                 "UpsValue", "WsProbe", "TcpIpProbe", "MqttValue"
-        ));
-        if (gplPresent()) {
-            expected.addAll(List.of("BACnetBool", "BACnetFloat", "BACnetInt", "IEC104Float"));
-        }
+        );
         assertThat(names).containsExactlyInAnyOrderElementsOf(expected);
     }
 
     @Test
-    @DisplayName("Loads Control types (4 built-in, +3 with the GPL module)")
+    @DisplayName("Loads Control types (4)")
     void loadsControlTypes() {
         loader.load(store);
 
         List<String> names = store.getControlTypes().getAll()
                 .stream().map(AssetType::getName).toList();
 
-        List<String> expected = new ArrayList<>(List.of(
+        List<String> expected = List.of(
                 "ModbusInt16FC3FC6", "ModbusBoolFC3FC6",
                 "OpcUaBoolControl", "OpcUaFloatControl"
-        ));
-        if (gplPresent()) {
-            expected.addAll(List.of("BACnetBoolControl", "IEC104BoolControl", "IEC104FloatControl"));
-        }
+        );
         assertThat(names).containsExactlyInAnyOrderElementsOf(expected);
     }
 
@@ -227,7 +204,7 @@ class XmlAssetTypeLoaderTest {
     }
 
     @Test
-    @DisplayName("Total type count: 51 with the GPL module, 42 without")
+    @DisplayName("Total type count: 42")
     void totalTypeCount() {
         loader.load(store);
 
@@ -236,7 +213,7 @@ class XmlAssetTypeLoaderTest {
                 + store.getProbeTypes().getAll().size()
                 + store.getControlTypes().getAll().size();
 
-        assertThat(total).isEqualTo(gplPresent() ? 51 : 42);
+        assertThat(total).isEqualTo(42);
     }
 
     // ======================== Min/Max/MaxLength parsing ========================
@@ -508,106 +485,6 @@ class XmlAssetTypeLoaderTest {
         assertThat(regProp.getViewType()).isEqualTo(ViewType.TEXTFIELD);
     }
 
-    // ======================== GPL driver descriptors ========================
-
-    @Nested
-    @DisplayName("GPL driver descriptors (only present with the gpl-drivers profile)")
-    @EnabledIf("com.systar.server.loader.XmlAssetTypeLoaderTest#gplPresent")
-    class GplDescriptors {
-
-        @Test
-        @DisplayName("BACnet/IEC104 service types have PropertyList with expected properties")
-        void gplServiceTypesHaveProperties() {
-            loader.load(store);
-
-            // BACnet
-            ServiceType bacnet = store.getServiceTypes().find("BACnetService");
-            assertThat(bacnet).isNotNull();
-            assertThat(bacnet.getProperties()).hasSize(4);
-            assertThat(bacnet.getProperties().stream().map(AssetTypeProperty::getName).toList())
-                    .containsExactlyInAnyOrder("Remotehost", "Remoteport", "DeviceId", "Timeout");
-
-            // IEC104
-            ServiceType iec = store.getServiceTypes().find("IEC104Master");
-            assertThat(iec).isNotNull();
-            assertThat(iec.getProperties()).hasSize(4);
-            assertThat(iec.getProperties().stream().map(AssetTypeProperty::getName).toList())
-                    .containsExactlyInAnyOrder("Host", "Port", "CommonAddrStr", "Timeout");
-        }
-
-        @Test
-        @DisplayName("BACnet/IEC104 probe types have PropertyList with constraints")
-        void gplProbeTypesHaveConstraints() {
-            loader.load(store);
-
-            // BACnetFloat probe
-            ProbeType bacnetFloat = store.getProbeTypes().find("BACnetFloat");
-            assertThat(bacnetFloat).isNotNull();
-            assertThat(bacnetFloat.getProperties()).hasSize(3);
-            AssetTypeProperty objectType = bacnetFloat.getProperties().stream()
-                    .filter(p -> "ObjectType".equals(p.getName())).findFirst().orElseThrow();
-            assertThat(objectType.getMin()).isEqualTo(0.0);
-            assertThat(objectType.getMax()).isEqualTo(30.0);
-            assertThat(objectType.isRequired()).isTrue();
-
-            // IEC104Float probe
-            ProbeType iecFloat = store.getProbeTypes().find("IEC104Float");
-            assertThat(iecFloat).isNotNull();
-            assertThat(iecFloat.getProperties()).hasSize(2);
-            AssetTypeProperty address = iecFloat.getProperties().stream()
-                    .filter(p -> "Address".equals(p.getName())).findFirst().orElseThrow();
-            assertThat(address.getMin()).isEqualTo(0.0);
-            assertThat(address.getMax()).isEqualTo(2147483647.0);
-        }
-
-        @Test
-        @DisplayName("BACnetControls no longer references ModbusControl and has PropertyList")
-        void bacnetControlFixedJavaClass() {
-            loader.load(store);
-
-            ControlType bacnetCtrl = store.getControlTypes().find("BACnetBoolControl");
-            assertThat(bacnetCtrl).isNotNull();
-            assertThat(bacnetCtrl.getRelatedClass())
-                    .doesNotContain("modbus.ModbusControl");
-            assertThat(bacnetCtrl.getProperties()).hasSize(3);
-            assertThat(bacnetCtrl.getProperties().stream().map(AssetTypeProperty::getName).toList())
-                    .containsExactlyInAnyOrder("ObjectType", "InstanceNumber", "PropertyIdentifier");
-        }
-
-        @Test
-        @DisplayName("BACnet and IEC104 bool controls have ViewType.YESNO")
-        void boolControlsHaveYesNo() {
-            loader.load(store);
-
-            ControlType bacnet = store.getControlTypes().find("BACnetBoolControl");
-            assertThat(bacnet).isNotNull();
-            assertThat(bacnet.getViewType()).isEqualTo(ViewType.YESNO);
-
-            ControlType iec = store.getControlTypes().find("IEC104BoolControl");
-            assertThat(iec).isNotNull();
-            assertThat(iec.getViewType()).isEqualTo(ViewType.YESNO);
-        }
-
-        @Test
-        @DisplayName("IEC104 float control has ViewType.SLIDER")
-        void iec104FloatControlHasSlider() {
-            loader.load(store);
-
-            ControlType iec = store.getControlTypes().find("IEC104FloatControl");
-            assertThat(iec).isNotNull();
-            assertThat(iec.getViewType()).isEqualTo(ViewType.SLIDER);
-        }
-
-        @Test
-        @DisplayName("BACnet/IEC104 services expose Timeout with their driver's built-in default")
-        void gplServicesExposeTunableTimeout() {
-            loader.load(store);
-
-            assertTimeoutDefault("BACnetService", "5000");
-            assertTimeoutDefault("IEC104Master", "10000");
-        }
-    }
-
     // ======================== DB sync versioning ========================
 
     @Nested
@@ -716,7 +593,7 @@ class XmlAssetTypeLoaderTest {
         }
     }
 
-    // ======================== directory scan & extra scan paths ========================
+    // ======================== plugin-sourced type XMLs ========================
 
     @Nested
     @DisplayName("Directory scanning and extra scan paths")
@@ -725,9 +602,22 @@ class XmlAssetTypeLoaderTest {
         @TempDir
         Path tempDir;
 
+        /** Plugin loader rooted at tempDir; one plugin "extra" holds the fixture XMLs. */
+        private XmlAssetTypeLoader extraLoader() {
+            DriverPluginLoader pluginLoader = new DriverPluginLoader(tempDir.toString());
+            pluginLoader.afterPropertiesSet();
+            return new XmlAssetTypeLoader(mapper, pluginLoader);
+        }
+
+        private void writeXml(String fileName, String content) throws Exception {
+            Path pkg = Files.createDirectories(
+                    tempDir.resolve("extra/com/systar/monitor/drivers/extra"));
+            Files.writeString(pkg.resolve(fileName), content);
+        }
+
         @Test
-        @DisplayName("extra file: scan path contributes types alongside the built-ins")
-        void discoversTypeFromExtraScanPath() throws Exception {
+        @DisplayName("plugin-sourced type contributes alongside the built-ins")
+        void discoversTypeFromPluginSource() throws Exception {
             writeXml("private-services.xml", """
                     <?xml version="1.0" encoding="UTF-8"?>
                     <Services>
@@ -737,11 +627,10 @@ class XmlAssetTypeLoaderTest {
                     </Services>
                     """);
 
-            XmlAssetTypeLoader extraLoader = new XmlAssetTypeLoader(mapper, tempDir.toUri() + "*.xml");
-            extraLoader.load(store);
+            extraLoader().load(store);
 
             ServiceType privateType = store.getServiceTypes().find("MyPrivateService");
-            assertThat(privateType).as("type from extra scan path should be registered").isNotNull();
+            assertThat(privateType).as("plugin-sourced type should be registered").isNotNull();
             assertThat(privateType.getRelatedClass())
                     .isEqualTo("com.systar.monitor.drivers.simulate.SimulateService");
             assertThat(store.getServiceTypes().find("ModbusMaster"))
@@ -758,15 +647,14 @@ class XmlAssetTypeLoaderTest {
                     </FancyList>
                     """);
 
-            XmlAssetTypeLoader extraLoader = new XmlAssetTypeLoader(mapper, tempDir.toUri() + "*.xml");
-            assertThatThrownBy(() -> extraLoader.load(store))
+            assertThatThrownBy(() -> extraLoader().load(store))
                     .isInstanceOf(AssetException.class)
                     .hasMessageContaining("bad-root.xml")
                     .hasMessageContaining("Services");
         }
 
         @Test
-        @DisplayName("duplicate type name across scan paths throws (no override semantics)")
+        @DisplayName("duplicate type name across sources throws (no override semantics)")
         void duplicateTypeNameAcrossPathsThrows() throws Exception {
             writeXml("dup-services.xml", """
                     <?xml version="1.0" encoding="UTF-8"?>
@@ -775,25 +663,75 @@ class XmlAssetTypeLoaderTest {
                     </Services>
                     """);
 
-            XmlAssetTypeLoader extraLoader = new XmlAssetTypeLoader(mapper, tempDir.toUri() + "*.xml");
-            assertThatThrownBy(() -> extraLoader.load(store))
+            assertThatThrownBy(() -> extraLoader().load(store))
                     .isInstanceOf(AssetException.class)
                     .hasMessageContaining("ModbusMaster");
         }
 
         @Test
-        @DisplayName("non-existent extra file: path resolves to nothing and is not an error")
-        void nonExistentExtraPathIgnored() {
-            XmlAssetTypeLoader extraLoader = new XmlAssetTypeLoader(mapper, "file:/definitely/not/here/*.xml");
+        @DisplayName("missing plugin root resolves to nothing and is not an error")
+        void missingPluginRootIgnored() {
+            DriverPluginLoader pluginLoader = new DriverPluginLoader(tempDir.resolve("nope").toString());
+            pluginLoader.afterPropertiesSet();
+            XmlAssetTypeLoader l = new XmlAssetTypeLoader(mapper, pluginLoader);
 
-            assertThatCode(() -> extraLoader.load(store)).doesNotThrowAnyException();
+            assertThatCode(() -> l.load(store)).doesNotThrowAnyException();
             assertThat(store.getServiceTypes().find("ModbusMaster"))
-                    .as("built-in types still load when an extra path is empty")
+                    .as("built-in types still load when the plugin root is empty")
                     .isNotNull();
         }
+    }
 
-        private void writeXml(String fileName, String content) throws Exception {
-            Files.writeString(tempDir.resolve(fileName), content);
+    @Nested
+    @DisplayName("Plugin-sourced types and failure semantics")
+    class PluginSources {
+
+        @TempDir
+        Path root;
+
+        private XmlAssetTypeLoader loaderWithFixturePlugins() throws Exception {
+            // plugin "p1": service type + probe type whose Source exists
+            Path p1 = Files.createDirectories(root.resolve("p1/com/systar/monitor/drivers/p1"));
+            Files.writeString(p1.resolve("p1-services.xml"),
+                    "<Services><Service Name=\"P1Svc\"><JavaClass>com.systar.monitor.drivers.p1.P1Service</JavaClass></Service></Services>");
+            Files.writeString(p1.resolve("p1-probes.xml"),
+                    "<ProbeList><Probe Name=\"P1Probe\"><Source>P1Svc</Source><DataType>FLOAT</DataType></Probe></ProbeList>");
+            // plugin "p2": probe type whose Source service type is absent (XML-only dangling)
+            Path p2 = Files.createDirectories(root.resolve("p2/com/systar/monitor/drivers/p2"));
+            Files.writeString(p2.resolve("p2-probes.xml"),
+                    "<ProbeList><Probe Name=\"P2Probe\"><Source>MissingSvc</Source><DataType>FLOAT</DataType></Probe>"
+                            + "<Probe Name=\"P2Ok\"><Source>P1Svc</Source><DataType>INT</DataType></Probe></ProbeList>");
+            DriverPluginLoader pluginLoader = new DriverPluginLoader(root.toString());
+            pluginLoader.afterPropertiesSet();
+            return new XmlAssetTypeLoader(mapper, pluginLoader);
+        }
+
+        @Test
+        @DisplayName("XML-only plugin with missing Source: that type WARN-skipped, siblings load")
+        void danglingSourceSkipsOnlyThatType() throws Exception {
+            AssetStore s = new AssetStore();
+            loaderWithFixturePlugins().load(s);
+            assertThat(s.getProbeTypes().find("P1Probe")).isNotNull();
+            assertThat(s.getProbeTypes().find("P2Ok")).isNotNull();
+            assertThat(s.getProbeTypes().find("P2Probe")).isNull();
+        }
+
+        @Test
+        @DisplayName("Same type name from two plugins fails startup naming both sources")
+        void duplicateTypeNameAcrossPluginsNamesBoth() throws Exception {
+            for (String p : new String[]{"aaa", "bbb"}) {
+                Path d = Files.createDirectories(root.resolve(p + "/com/systar/monitor/drivers/" + p));
+                Files.writeString(d.resolve("s.xml"),
+                        "<Services><Service Name=\"DupSvc\"/></Services>");
+            }
+            DriverPluginLoader pluginLoader = new DriverPluginLoader(root.toString());
+            pluginLoader.afterPropertiesSet();
+            XmlAssetTypeLoader l = new XmlAssetTypeLoader(mapper, pluginLoader);
+            assertThatThrownBy(() -> l.load(new AssetStore()))
+                    .isInstanceOf(AssetException.class)
+                    .hasMessageContaining("DupSvc")
+                    .hasMessageContaining("aaa")
+                    .hasMessageContaining("bbb");
         }
     }
 }

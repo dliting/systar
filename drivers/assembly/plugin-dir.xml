@@ -1,0 +1,29 @@
+<assembly xmlns="http://maven.apache.org/ASSEMBLY/2.1.1"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/ASSEMBLY/2.1.1 https://maven.apache.org/xsd/assembly-2.1.1.xsd">
+    <id>plugin</id>
+    <formats><format>dir</format></formats>
+    <includeBaseDirectory>false</includeBaseDirectory>
+    <files>
+        <file>
+            <source>${project.build.directory}/${project.build.finalName}.jar</source>
+            <outputDirectory></outputDirectory>
+            <destName>driver.jar</destName>
+        </file>
+    </files>
+    <dependencySets>
+        <dependencySet>
+            <outputDirectory>lib</outputDirectory>
+            <scope>runtime</scope>
+            <useTransitiveDependencies>true</useTransitiveDependencies>
+            <!-- the project jar already ships as driver.jar; keep it out of lib/ -->
+            <useProjectArtifact>false</useProjectArtifact>
+        </dependencySet>
+    </dependencySets>
+    <fileSets>
+        <fileSet>
+            <directory>${project.basedir}/seed</directory>
+            <outputDirectory>seed</outputDirectory>
+        </fileSet>
+    </fileSets>
+</assembly>

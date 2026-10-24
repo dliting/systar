@@ -43,7 +43,7 @@ if !ERRORLEVEL! equ 0 (
 )
 
 REM --- Find jar ---
-set JAR=extensions\systar-server\target\systar-server-1.0.0.jar
+set JAR=extensions\systar-server\target\systar-server-1.1.1.jar
 if not exist "!JAR!" (
     echo [Backend] JAR not found: !JAR!
     echo           Run bin\build-backend.bat to build first.
@@ -53,7 +53,7 @@ if not exist "!JAR!" (
 REM --- Start ---
 echo [Backend] Starting on http://localhost:%BACKEND_PORT% ...
 echo.
-start /B java -Xms512m -Xmx1024m -jar "!JAR!" --spring.profiles.active=mysql
+start /B java -Xms512m -Xmx1024m -jar "!JAR!" --spring.profiles.active=mysql --systar.drivers.path=./drivers/dist
 
 REM --- Wait for startup ---
 echo [Backend] Waiting for startup...

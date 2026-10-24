@@ -23,8 +23,8 @@ cd frontend && npm test   # frontend
 
 - JDK 17 is required (the project targets Java 17).
 - The Maven Wrapper (`./mvnw`) pins the supported Maven version — no local Maven install
-  needed. Offline builds (`-o`) work against `lib/maven-repo/` for the vendored
-  BACnet4J artifacts.
+  needed. Offline builds (`-o`) work against `lib/maven-repo/`, the project-local Maven
+  repository vendoring the build's dependencies.
 - Always run full regression with `./mvnw clean test -o`. Without `clean`, test JVMs are
   reused across modules and Spring application contexts can bleed between modules,
   causing intermittent failures.

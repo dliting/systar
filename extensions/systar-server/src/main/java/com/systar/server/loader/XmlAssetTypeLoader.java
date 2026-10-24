@@ -6,12 +6,13 @@ import com.systar.monitor.asset.AssetException;
 import com.systar.monitor.asset.AssetKind;
 import com.systar.monitor.asset.AssetStore;
 import com.systar.monitor.asset.type.*;
+import com.systar.server.plugin.DriverPluginLoader;
+import com.systar.server.plugin.PluginTypeResource;
 import org.dom4j.Element;
 import org.dom4j.io.SAXReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Component;
@@ -26,10 +27,8 @@ import java.util.*;
  * <p>
  * Scanned locations are the built-in defaults — type XMLs shipped inside the
  * drivers module ({@value #DRIVERS_PATTERN}) and the server-side generic
- * Device XMLs ({@value #GENERIC_PATTERN}) — plus any extra patterns from
- * the {@code systar.asset-type.scan-paths} property (comma-separated resource
- * location patterns, e.g. {@code file:./config/drivers/*.xml} for private
- * driver types kept outside the repository).
+ * Device XMLs ({@value #GENERIC_PATTERN}) — plus every type XML discovered
+ * inside a driver plugin directory (see {@link DriverPluginLoader}).
  * <p>
  * Key loading rules:
  * <ul>
@@ -40,10 +39,13 @@ import java.util.*;
  *       kind, files are processed in sorted location order and document order
  *       is preserved, so a {@code Super} parent declared earlier in the same
  *       file resolves</li>
- *   <li>Type names are unique within a kind across all scan paths — a
- *       duplicate throws (no override semantics)</li>
+ *   <li>Type names are unique within a kind across all sources — the built-in
+ *       classpath and every plugin — a duplicate throws naming both providers
+ *       (no override semantics)</li>
  *   <li>Probe/Control {@code <Source>} references a Service type by name,
- *       satisfied by the kind loading order</li>
+ *       satisfied by the kind loading order; a dangling {@code Source}
+ *       (e.g. its plugin is absent) WARNs and skips only that type, whose DB
+ *       config row is then removed as obsolete</li>
  *   <li>DB sync inserts new configs (version 1), updates with version+1 only
  *       when caption/driverClass/serialized properties actually changed, and
  *       deletes configs no longer present in any scan path</li>
@@ -70,32 +72,26 @@ public class XmlAssetTypeLoader implements com.systar.monitor.asset.type.AssetTy
     /** Version stamped on first insert of a type config row. */
     private static final int INITIAL_VERSION = 1;
 
-    private final AssetTypeConfigMapper typeConfigMapper;
+    /** Built-in classpath scan patterns, in resolution order. */
+    private static final List<String> BUILTIN_PATTERNS = List.of(DRIVERS_PATTERN, GENERIC_PATTERN);
 
-    /** All scan patterns: built-in defaults first, then configured extras. */
-    private final List<String> scanPatterns;
+    /** Source label for type XMLs found on the server classpath. */
+    private static final String BUILTIN_SOURCE = "built-in classpath";
+
+    private final AssetTypeConfigMapper typeConfigMapper;
+    private final DriverPluginLoader pluginLoader;
 
     @Autowired
     public XmlAssetTypeLoader(AssetTypeConfigMapper typeConfigMapper,
-                              @Value("${systar.asset-type.scan-paths:}") String extraScanPaths) {
+                              DriverPluginLoader pluginLoader) {
         this.typeConfigMapper = typeConfigMapper;
-        List<String> patterns = new ArrayList<>(List.of(DRIVERS_PATTERN, GENERIC_PATTERN));
-        for (String pattern : extraScanPaths.split(",")) {
-            if (!pattern.isBlank()) {
-                patterns.add(pattern.trim());
-            }
-        }
-        this.scanPatterns = List.copyOf(patterns);
-    }
-
-    /** Constructor without extra scan paths (built-in defaults only). */
-    public XmlAssetTypeLoader(AssetTypeConfigMapper typeConfigMapper) {
-        this(typeConfigMapper, "");
+        this.pluginLoader = pluginLoader;
     }
 
     @Override
     public void load(AssetStore store) {
-        log.info("Loading asset types from scan paths {}...", scanPatterns);
+        log.info("Loading asset types from built-in classpath patterns {} plus {} plugin type XML(s)...",
+                BUILTIN_PATTERNS, pluginLoader.typeResources().size());
 
         Map<AssetKind, List<TypeResource>> resourcesByKind = scanAndClassify();
         Map<AssetKind, Set<String>> seenByKind = new EnumMap<>(AssetKind.class);
@@ -124,19 +120,20 @@ public class XmlAssetTypeLoader implements com.systar.monitor.asset.type.AssetTy
 
     // ======================== resource scanning ========================
 
-    /** A scanned XML resource with its resolved location (sort/dedup key). */
-    private record TypeResource(String location, Resource resource) {}
+    /** A scanned XML resource with its resolved location (sort/dedup key) and owning source. */
+    private record TypeResource(String location, Resource resource, String source) {}
 
     /**
-     * Resolves every scan pattern and classifies each unique resource by its
-     * root element. Resources matching several patterns load once (first
-     * pattern wins); unknown root elements fail fast.
+     * Resolves the built-in classpath patterns and the plugin type XMLs, then
+     * classifies each unique resource by its root element. Resources matching
+     * several patterns load once (first pattern wins); built-in and plugin
+     * locations are disjoint by construction; unknown root elements fail fast.
      */
     private Map<AssetKind, List<TypeResource>> scanAndClassify() {
         var resolver = new PathMatchingResourcePatternResolver();
         Map<String, TypeResource> uniqueByLocation = new TreeMap<>();
 
-        for (String pattern : scanPatterns) {
+        for (String pattern : BUILTIN_PATTERNS) {
             Resource[] matched;
             try {
                 matched = resolver.getResources(pattern);
@@ -151,6 +148,10 @@ public class XmlAssetTypeLoader implements com.systar.monitor.asset.type.AssetTy
                 uniqueByLocation.putIfAbsent(typeResource.location(), typeResource);
             }
         }
+        for (PluginTypeResource pr : pluginLoader.typeResources()) {
+            uniqueByLocation.putIfAbsent(pr.location(),
+                    new TypeResource(pr.location(), pr.resource(), pr.pluginName()));
+        }
 
         Map<AssetKind, List<TypeResource>> byKind = new EnumMap<>(AssetKind.class);
         for (TypeResource typeResource : uniqueByLocation.values()) {
@@ -163,6 +164,19 @@ public class XmlAssetTypeLoader implements com.systar.monitor.asset.type.AssetTy
             }
             byKind.computeIfAbsent(kind, k -> new ArrayList<>()).add(typeResource);
         }
+
+        // Per-plugin attribution counts: which plugin contributed what (spec §4 observability)
+        Map<String, Integer> countBySource = new TreeMap<>();
+        for (List<TypeResource> list : byKind.values()) {
+            for (TypeResource tr : list) {
+                countBySource.merge(tr.source(), 1, Integer::sum);
+            }
+        }
+        for (Map.Entry<String, Integer> entry : countBySource.entrySet()) {
+            if (!BUILTIN_SOURCE.equals(entry.getKey())) {
+                log.info("Plugin '{}': {} type XML(s) attributed.", entry.getKey(), entry.getValue());
+            }
+        }
         return byKind;
     }
 
@@ -173,10 +187,10 @@ public class XmlAssetTypeLoader implements com.systar.monitor.asset.type.AssetTy
 
     private TypeResource describe(Resource resource) {
         try {
-            return new TypeResource(resource.getURL().toExternalForm(), resource);
+            return new TypeResource(resource.getURL().toExternalForm(), resource, BUILTIN_SOURCE);
         } catch (IOException e) {
             log.debug("Cannot resolve URL for resource {}; using toString() as sort key.", resource, e);
-            return new TypeResource(resource.toString(), resource);
+            return new TypeResource(resource.toString(), resource, BUILTIN_SOURCE);
         }
     }
 
@@ -197,6 +211,7 @@ public class XmlAssetTypeLoader implements com.systar.monitor.asset.type.AssetTy
                                                     Map<AssetKind, List<TypeResource>> resourcesByKind,
                                                     Map<AssetKind, Set<String>> seenByKind) throws Exception {
         Set<String> seenInXml = seenByKind.computeIfAbsent(kind, k -> new LinkedHashSet<>());
+        Map<String, String> firstSourceByName = new HashMap<>();
         int count = 0;
 
         for (TypeResource typeResource : resourcesByKind.getOrDefault(kind, List.of())) {
@@ -217,6 +232,15 @@ public class XmlAssetTypeLoader implements com.systar.monitor.asset.type.AssetTy
             for (Object itemObj : items) {
                 Element item = (Element) itemObj;
                 T type = parseType(store, item, kind, manager);
+                if (type == null) {
+                    continue;   // WARN-skipped (dangling Source); not in seenInXml → obsolete DB cleanup
+                }
+                String prevSource = firstSourceByName.putIfAbsent(type.getName(), typeResource.source());
+                if (prevSource != null) {
+                    throw new AssetException("Duplicate type name '%s' in %s config; provided by '%s' and '%s' — "
+                                    + "type names must be unique across all plugins and the server classpath.",
+                            type.getName(), kind, prevSource, typeResource.source());
+                }
                 seenInXml.add(type.getName());
                 try {
                     manager.register(type);
@@ -234,6 +258,11 @@ public class XmlAssetTypeLoader implements com.systar.monitor.asset.type.AssetTy
 
     // ======================== XML type parsing ========================
 
+    /**
+     * Parses one type element. Returns {@code null} when the type is
+     * WARN-skipped — a MonitorType whose {@code <Source>} service type is not
+     * registered (its plugin may be absent); the caller must not register it.
+     */
     @SuppressWarnings("unchecked")
     private <T extends AssetType> T parseType(AssetStore store, Element item, AssetKind kind,
                                                AssetTypeManager<T> manager) {
@@ -251,8 +280,8 @@ public class XmlAssetTypeLoader implements com.systar.monitor.asset.type.AssetTy
 
         loadCommonInfo(store, type, item, kind);
 
-        if (type instanceof MonitorType mt) {
-            loadMonitorAttrs(store, item, mt);
+        if (type instanceof MonitorType mt && !loadMonitorAttrs(store, item, mt)) {
+            return null;
         }
 
         return (T) type;
@@ -347,14 +376,17 @@ public class XmlAssetTypeLoader implements com.systar.monitor.asset.type.AssetTy
         }
     }
 
-    private void loadMonitorAttrs(AssetStore store, Element item, MonitorType type) {
+    /** @return false when the type must be skipped (dangling {@code <Source>}). */
+    private boolean loadMonitorAttrs(AssetStore store, Element item, MonitorType type) {
         // Source: references a Service type by name (must be already registered)
         String sourceName = item.elementText("Source");
         if (sourceName != null && !sourceName.isBlank()) {
             ServiceType sourceType = store.getServiceTypes().find(sourceName);
             if (sourceType == null) {
-                throw new AssetException("Source service type '%s' not found for monitor type '%s'.",
-                        sourceName, type.getName());
+                log.warn("Skipped monitor type '{}': source service type '{}' is not registered "
+                                + "(its plugin may be absent); the type's DB config row will be removed as obsolete.",
+                        type.getName(), sourceName);
+                return false;
             }
             type.setSource(sourceName);
         }
@@ -383,6 +415,7 @@ public class XmlAssetTypeLoader implements com.systar.monitor.asset.type.AssetTy
         if (descEl != null) {
             type.setTransform(descEl.getTextTrim());
         }
+        return true;
     }
 
     // ======================== DB sync ========================

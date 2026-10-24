@@ -3,6 +3,7 @@ package com.systar.server.repository;
 import com.systar.common.util.TimeSpan;
 import com.systar.monitor.asset.*;
 import com.systar.monitor.asset.type.*;
+import com.systar.server.plugin.DriverClassRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -25,11 +26,13 @@ public class AssetRepository {
 
     private final JdbcTemplate jdbc;
     private final AssetStore store;
+    private final DriverClassRegistry classRegistry;
     private final TypeResolver typeResolver;
 
-    public AssetRepository(JdbcTemplate jdbc, AssetStore store) {
+    public AssetRepository(JdbcTemplate jdbc, AssetStore store, DriverClassRegistry classRegistry) {
         this.jdbc = jdbc;
         this.store = store;
+        this.classRegistry = classRegistry;
         this.typeResolver = new TypeResolver(store);
     }
 
@@ -281,26 +284,35 @@ public class AssetRepository {
 
     // ======================== Batch Loading Methods ========================
 
-    public List<Device> findAllDevices() {
-        return jdbc.query(SELECT_DEVICE, (rs, i) -> toDevice(mapDeviceRow(rs)));
+    public List<DeviceRow> findAllDeviceRows() {
+        return jdbc.query(SELECT_DEVICE, (rs, i) -> mapDeviceRow(rs));
     }
 
-    public List<MonitorService> findAllServices(Map<Integer, MonitorService> serviceIndex) {
-        return jdbc.query(SELECT_SERVICE,
-                (rs, i) -> toService(mapServiceRow(rs), serviceIndex));
+    public List<ServiceRow> findAllServiceRows() {
+        return jdbc.query(SELECT_SERVICE, (rs, i) -> mapServiceRow(rs));
     }
 
-    public List<Probe> findAllProbes(Map<Integer, MonitorService> serviceIndex) {
-        return jdbc.query(SELECT_PROBE,
-                (rs, i) -> toProbe(mapProbeRow(rs), serviceIndex));
+    public List<ProbeRow> findAllProbeRows() {
+        return jdbc.query(SELECT_PROBE, (rs, i) -> mapProbeRow(rs));
     }
 
-    public List<Control> findAllControls(Map<Integer, MonitorService> serviceIndex) {
-        return jdbc.query(SELECT_CONTROL,
-                (rs, i) -> toControl(mapControlRow(rs), serviceIndex));
+    public List<ControlRow> findAllControlRows() {
+        return jdbc.query(SELECT_CONTROL, (rs, i) -> mapControlRow(rs));
     }
 
     // ======================== Assembly Methods ========================
+
+    /** Assemble one device row; throws AssetException naming the row on any resolution failure. */
+    public Device assembleDevice(DeviceRow row) { return toDevice(row); }
+
+    /** Assemble one service row (also indexes it); throws AssetException naming the row. */
+    public MonitorService assembleService(ServiceRow row, Map<Integer, MonitorService> index) { return toService(row, index); }
+
+    /** Assemble one probe row; throws AssetException naming the row. */
+    public Probe assembleProbe(ProbeRow row, Map<Integer, MonitorService> index) { return toProbe(row, index); }
+
+    /** Assemble one control row; throws AssetException naming the row. */
+    public Control assembleControl(ControlRow row, Map<Integer, MonitorService> index) { return toControl(row, index); }
 
     private Device toDevice(DeviceRow row) {
         DeviceType type = typeResolver.resolveDeviceType(row.typeName(), row.id(), row.name());
@@ -411,7 +423,7 @@ public class AssetRepository {
         String driverClass = type.getRelatedClass();
         if (driverClass != null && !driverClass.isBlank()) {
             try {
-                Class<?> cls = Class.forName(driverClass);
+                Class<?> cls = classRegistry.loadClass(driverClass);
                 return (Probe) cls.getDeclaredConstructor().newInstance();
             } catch (AssetException e) {
                 throw e;
@@ -428,7 +440,7 @@ public class AssetRepository {
         String driverClass = type.getRelatedClass();
         if (driverClass != null && !driverClass.isBlank()) {
             try {
-                Class<?> cls = Class.forName(driverClass);
+                Class<?> cls = classRegistry.loadClass(driverClass);
                 return (Control) cls.getDeclaredConstructor().newInstance();
             } catch (AssetException e) {
                 throw e;
@@ -459,7 +471,7 @@ public class AssetRepository {
 
         if (driverClass != null && !driverClass.isBlank()) {
             try {
-                Class<?> cls = Class.forName(driverClass);
+                Class<?> cls = classRegistry.loadClass(driverClass);
                 MonitorService service = (MonitorService) cls.getDeclaredConstructor().newInstance();
                 if (service.getMode() != mode) {
                     throw new AssetException(

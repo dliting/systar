@@ -33,7 +33,7 @@
 加载链路：`XmlAssetTypeLoader.load()`（类型定义）→ `DatabaseAssetLoader.load()`（实例加载）。
 
 具体机制：
-1. **驱动 XML 是类型定义源**：`XmlAssetTypeLoader` 按目录扫描发现类型 XML（驱动模块包内 `classpath*:com/systar/monitor/drivers/**/*.xml` 自注册 + 可选 `systar.asset-type.scan-paths` 外置路径，详见 `xml-asset-type-config-design.md`），解析 Device/Service/Probe/Control 类型定义、Java 实现类、属性名称/数据类型/默认值、version。
+1. **驱动 XML 是类型定义源**：`XmlAssetTypeLoader` 按双来源发现类型 XML（驱动插件 jar 包内 `classpath*:com/systar/monitor/drivers/**/*.xml` 自注册 + 驱动插件目录自有 XML，详见 `xml-asset-type-config-design.md`），解析 Device/Service/Probe/Control 类型定义、Java 实现类、属性名称/数据类型/默认值、version。
 2. **XML 解析后注册到内存**：解析出的类型注册到 `AssetStore` 的各类 `AssetTypeManager`，运行时实例加载通过 `type_name` 在内存查找类型，而非从 DB 重建类型。
 3. **XML 同步 DB**：解析后的配置内容/version/属性 schema 同步到 `t_asset_type_config`。DB 表是 XML 的投影，用于资产实例 `type_name` 关联、前端 schema 查询、导入校验和版本比对审计，不是人工维护的主数据源。
 4. **XML 变更驱动类型变更**：开发人员修改 XML 中 Probe/Control 的属性类型、名称、默认值、实现类或 version 后，系统重启时重新解析 XML 并同步更新 DB `t_asset_type_config`。
@@ -67,7 +67,7 @@ Phase 2 已完成：CRUD Service、Event、Listener、Controller 扩展、运行
 - `XmlAssetTypeLoader` 在 `systar-server` 实现，作为 Spring Bean 注册
 - `MonitorServer.loadAssets()` 注入 `List<AssetTypeLoader>`，逐个调用
 - 未来驱动模块可提供自己的 `AssetTypeLoader` Bean 和 XML，无需修改核心代码
-- XML 路径：无主索引；驱动类型 XML 在 `core/systar-monitor-drivers` 的包 resources 内（放入即自注册），服务端通用 Device 类型 XML 在 `extensions/systar-server/src/main/resources/config/assets/`（`generic-*.xml`，如 `generic-devices.xml`），外置扩展路径经 `systar.asset-type.scan-paths` 配置
+- XML 路径：无主索引；驱动类型 XML 在各驱动插件模块的包 resources 内（放入即自注册），服务端通用 Device 类型 XML 在 `extensions/systar-server/src/main/resources/config/assets/`（`generic-*.xml`，如 `generic-devices.xml`），外置扩展 XML 放插件目录根（XML-only 插件）
 - CRUD 创建资产时，用户选择 `typeName` → 后端校验 typeName 已注册且 kind 匹配
 - 前端根据 typeName 获取属性定义，动态渲染表单
 - `DatabaseAssetLoader` 重构：从 `new ProbeType("probe-" + id)` 改为通过 typeName 查找注册的类型

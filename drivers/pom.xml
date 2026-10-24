@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.systar</groupId>
+        <artifactId>systar</artifactId>
+        <version>1.1.1</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+    <artifactId>systar-drivers-aggregator</artifactId>
+    <packaging>pom</packaging>
+    <name>systar-drivers-aggregator</name>
+    <description>Driver plugin modules; each packages a self-contained plugin directory under drivers/dist/</description>
+
+    <modules>
+        <module>systar-driver-modbus</module>
+        <module>systar-driver-mqtt</module>
+        <module>systar-driver-opcua</module>
+        <module>systar-driver-snmp</module>
+        <module>systar-driver-siemens</module>
+        <module>systar-driver-websocket</module>
+        <module>systar-driver-weather</module>
+        <module>systar-driver-environmental</module>
+        <module>systar-driver-input</module>
+        <module>systar-driver-simulate</module>
+        <module>systar-driver-tcpip</module>
+        <module>systar-driver-ups</module>
+    </modules>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-assembly-plugin</artifactId>
+                    <executions>
+                        <execution>
+                            <id>plugin-dir</id>
+                            <phase>package</phase>
+                            <goals><goal>single</goal></goals>
+                            <configuration>
+                                <appendAssemblyId>false</appendAssemblyId>
+                                <!-- dir format ALWAYS nests under ${outputDirectory}/${finalName};
+                                     pin finalName=plugin and root the output at target/ so the
+                                     result lands exactly at target/plugin/ (antrun source) -->
+                                <finalName>plugin</finalName>
+                                <descriptors>
+                                    <descriptor>../assembly/plugin-dir.xml</descriptor>
+                                </descriptors>
+                                <outputDirectory>${project.build.directory}</outputDirectory>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-antrun-plugin</artifactId>
+                    <executions>
+                        <execution>
+                            <id>dist-copy</id>
+                            <phase>package</phase>
+                            <goals><goal>run</goal></goals>
+                            <configuration>
+                                <target>
+                                    <delete dir="${maven.multiModuleProjectDirectory}/drivers/dist/${project.artifactId}" quiet="true"/>
+                                    <copy todir="${maven.multiModuleProjectDirectory}/drivers/dist/${project.artifactId}">
+                                        <fileset dir="${project.build.directory}/plugin"/>
+                                    </copy>
+                                </target>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>

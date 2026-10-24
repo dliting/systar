@@ -7,11 +7,13 @@ with their licenses, so that recipients can comply with the respective terms.
 This notice is informational. For the exact legally binding terms, always refer to the
 license text of each component (linked below).
 
-**Optional GPL module**: BACnet and IEC 60870-5-104 protocol support is provided by a
-separate GPL-3.0-licensed module (`gpl/systar-drivers-gpl`) that is **not part of this
-repository**. It links BACnet4J (GPL-3.0, dual-licensed by Radix IoT) and j60870
-(GPL-3.0, openmuc). Binaries built with that module follow GPL-3.0 for the combined work;
-everything in this repository stays MIT.
+**Optional GPL driver plugins**: BACnet and IEC 60870-5-104 protocol support is provided
+by two GPL-3.0-licensed driver plugins (`drivers/systar-driver-bacnet`,
+`drivers/systar-driver-iec104`) that are **not part of this repository**. Their `lib/`
+directories link BACnet4J (GPL-3.0, dual-licensed by Radix IoT) and j60870 (GPL-3.0,
+openmuc); the server fat jar itself contains no GPL code. Distributions that include
+those plugin directories follow GPL-3.0 for the combined work; everything in this
+repository stays MIT.
 
 ## 1. Vendored Maven artifacts (`lib/maven-repo/`)
 
@@ -22,14 +24,14 @@ are not redistributed in this repository.
 
 | Artifact | Version | License | Upstream source |
 |----------|---------|---------|-----------------|
-| `com.serotonin:bacnet4j` | 4.1.6 | GPL-3.0 (dual-licensed; a commercial license is also offered) — local GPL module only, not redistributed here | https://github.com/RadixIoT/BACnet4J |
-| `com.lohbihler:sero-scheduler` | 1.1.0 | MIT © 2017 Matthew Lohbihler — transitive dependency of BACnet4J, local GPL module only | https://github.com/mlohbihler/sero-scheduler |
-| `com.lohbihler:sero-warp` | 1.0.0 | *license not declared upstream* — transitive dependency of BACnet4J, local GPL module only | distributed via the MangoAutomation repository `maven.mangoautomation.net/repository/ias-release/` (published May 2017) |
+| `com.serotonin:bacnet4j` | 4.1.6 | GPL-3.0 (dual-licensed; a commercial license is also offered) — local GPL plugin builds only, not redistributed here | https://github.com/RadixIoT/BACnet4J |
+| `com.lohbihler:sero-scheduler` | 1.1.0 | MIT © 2017 Matthew Lohbihler — transitive dependency of BACnet4J, local GPL plugin builds only | https://github.com/mlohbihler/sero-scheduler |
+| `com.lohbihler:sero-warp` | 1.0.0 | *license not declared upstream* — transitive dependency of BACnet4J, local GPL plugin builds only | distributed via the MangoAutomation repository `maven.mangoautomation.net/repository/ias-release/` (published May 2017) |
 
 **sero-warp note**: neither the published POM nor the JAR declares license terms, and no
 public source repository for this artifact could be located. It is a small runtime utility
 by the same author as sero-scheduler (Matthew Lohbihler), pulled in transitively by
-BACnet4J. It is consumed only by the local GPL module; this repository does not
+BACnet4J. It is consumed only by the local GPL BACnet plugin; this repository does not
 redistribute it. If you are the copyright holder and would like the attribution above
 corrected, please open an issue.
 
@@ -44,6 +46,7 @@ Build and application framework:
 | Spring Boot starters (`web`, `websocket`, `aop`, `cache`, `test`) | 3.3.6 | Apache-2.0 |
 | Spring Security Crypto | 6.x (from Spring Boot BOM) | Apache-2.0 |
 | Jackson (`jackson-databind`) | 2.x (from Spring Boot BOM) | Apache-2.0 |
+| Apache Commons CSV (`commons-csv`) | 1.11.0 | Apache-2.0 |
 | MyBatis-Plus Boot Starter | 3.5.7 | Apache-2.0 |
 | Hutool | 5.8.27 | MulanPSL-2.0 |
 | Caffeine | 3.x (from Spring Boot BOM) | Apache-2.0 |
@@ -78,8 +81,11 @@ Protocol drivers (this repository):
 | org.eclipse.paho:org.eclipse.paho.client.mqttv3 | 1.2.5 | EPL-2.0 |
 | org.java-websocket:Java-WebSocket | 1.5.4 | MIT |
 
-BACnet (BACnet4J) and IEC 60870-5-104 (j60870) drivers are GPL-3.0 and ship in the
-separate optional module described in the preamble — not among this repository's
+These libraries are declared by the driver plugin modules and ship inside each plugin's
+`lib/` directory at runtime — they are not bundled in the server fat jar.
+
+BACnet (BACnet4J) and IEC 60870-5-104 (j60870) are GPL-3.0 and ship in the `lib/` of the
+two optional GPL driver plugins described in the preamble — not among this repository's
 dependencies.
 
 Utilities:

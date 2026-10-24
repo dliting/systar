@@ -5,8 +5,8 @@ REM  end-to-end integration testing.
 REM
 REM  Prerequisites:
 REM    1. Build all:     ./mvnw clean package -DskipTests -o
-REM    2. Simulator JAR: simulator/systar-simulator-server/target/systar-simulator-server-1.1.0.jar
-REM    3. Systar JAR:    extensions/systar-server/target/systar-server-1.1.0.jar
+REM    2. Simulator JAR: simulator/systar-simulator-server/target/systar-simulator-server-1.1.1.jar
+REM    3. Systar JAR:    extensions/systar-server/target/systar-server-1.1.1.jar
 REM
 REM  Ports: Simulator REST=18080  Modbus=55502  OPC-UA=55503
 REM          Systar=18081
@@ -15,7 +15,7 @@ REM =====================================================
 setlocal enabledelayedexpansion
 cd /d "%~dp0\.."
 
-set SIM_JAR=simulator\systar-simulator-server\target\systar-simulator-server-1.1.0.jar
+set SIM_JAR=simulator\systar-simulator-server\target\systar-simulator-server-1.1.1.jar
 set SIM_PORT=18080
 set MAX_WAIT=30
 
@@ -54,7 +54,7 @@ echo [E2E] Simulator ready at http://localhost:!SIM_PORT!
 echo.
 
 REM --- Start Systar backend (H2 dev profile) ---
-set SYSTAR_JAR=extensions\systar-server\target\systar-server-1.1.0.jar
+set SYSTAR_JAR=extensions\systar-server\target\systar-server-1.1.1.jar
 if not exist "!SYSTAR_JAR!" (
     echo [E2E] ERROR: Systar JAR not found: !SYSTAR_JAR!
     echo [E2E] Run: ./mvnw clean package -DskipTests -o

@@ -7,6 +7,7 @@ import com.systar.server.dto.AssetUpdateRequest;
 import com.systar.server.dto.BatchResult;
 import com.systar.server.event.AssetChangedEvent;
 import com.systar.server.event.AssetChangedEvent.Action;
+import com.systar.server.plugin.DriverClassRegistry;
 import com.systar.server.repository.AssetRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,13 +26,16 @@ public class AssetOrchestrator {
     private final AssetRepository repo;
     private final AssetStore assetStore;
     private final ApplicationEventPublisher eventPublisher;
+    private final DriverClassRegistry classRegistry;
 
     public AssetOrchestrator(AssetRepository repo,
                              AssetStore assetStore,
-                             ApplicationEventPublisher eventPublisher) {
+                             ApplicationEventPublisher eventPublisher,
+                             DriverClassRegistry classRegistry) {
         this.repo = repo;
         this.assetStore = assetStore;
         this.eventPublisher = eventPublisher;
+        this.classRegistry = classRegistry;
     }
 
     // ======================== create ========================
@@ -144,7 +148,7 @@ public class AssetOrchestrator {
             return null;
         }
         try {
-            Class<?> cls = Class.forName(driverClass);
+            Class<?> cls = classRegistry.loadClass(driverClass);
             MonitorService service = (MonitorService) cls.getDeclaredConstructor().newInstance();
             return service.getMode().getCode();
         } catch (AssetException e) {

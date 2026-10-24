@@ -1,7 +1,7 @@
 # Systar 概要设计文档
 
-> **版本**: 1.1
-> **日期**: 2026-06-07
+> **版本**: 1.1.1
+> **日期**: 2026-10-24
 > **定位**: 概要级设计文档
 
 ---
@@ -19,7 +19,7 @@
 
 ### 1.2 当前状态
 
-v1.1.0 开发中。IoT 核心系统框架完整，协议驱动全部实现（本仓库内置 12 个，另有 BACnet 与 IEC 104 两个驱动位于独立的 GPL-3.0 模块，见 `mit-relicensing.md`），VirtualProbe 派生字段引擎已完成。运维业务（工单/台账/巡检/统计）和系统管理（用户/角色/菜单）模块已实现。前端为独立 Vue3 项目（11 个页面），已完成 Phase 1 UX 改进（导航/通知/面包屑/快捷键），Phase 2 EnhancedTable 进行中。支持离线/内网部署。
+v1.1.1 开发中。IoT 核心系统框架完整，协议驱动全部实现为驱动插件模块（`drivers/` 下 14 个：12 个 MIT + BACnet/IEC 104 两个 GPL 插件目录，后者不在公开仓库，见 `mit-relicensing.md`），驱动插件目录架构见 §7 与 `docs/driver-development-guide.md`，VirtualProbe 派生字段引擎已完成。运维业务（工单/台账/巡检/统计）和系统管理（用户/角色/菜单）模块已实现。前端为独立 Vue3 项目（11 个页面），已完成 Phase 1 UX 改进（导航/通知/面包屑/快捷键），Phase 2 EnhancedTable 进行中。支持离线/内网部署。
 
 ---
 
@@ -32,7 +32,7 @@ v1.1.0 开发中。IoT 核心系统框架完整，协议驱动全部实现（本
 | **systar-common** | `core/` | 通用工具：ID 生成、代码字典、系统配置、TimeSpan | AssetIdGenerator, CodeDictManager, SystemConfigManager, TimeSpan |
 | **systar-monitor-core** | `core/` | 核心监控引擎，无 Web 依赖，可嵌入 | Asset, Monitor, Probe, Control, ResultDispatcher, MonitorScheduler, AlarmHandler, LinkageHandler |
 | **systar-data** | `core/` | 核心IoT数据访问层（MyBatis-Plus，DIP模式） | Entity, Mapper, Service（alarm/sample/linkage/scheduled_task 等） |
-| **systar-monitor-drivers** | `core/` | 协议驱动集合（12 个完整实现；BACnet/IEC 104 见独立 GPL 模块 `gpl/systar-drivers-gpl`，不在本仓库） | ModbusConnection, MqttService 等 |
+| **systar-driver-\*（14 个插件模块）** | `drivers/` | 协议驱动插件（12 个 MIT；BACnet/IEC 104 为 GPL 插件目录，不在公开仓库）；每模块构建为自包含插件目录 `driver.jar` + `lib/` + `seed/`，拷贝进服务器 `drivers/` 即生效 | ModbusConnection, MqttService 等 |
 | **systar-server** | `extensions/` | Spring Boot 启动入口、REST API、配置、资产 CRUD | SystarApplication, AssetController, AssetOrchestrator, ServerLifeCycle, DatabaseAssetLoader, XmlAssetTypeLoader |
 | **systar-ops** | `extensions/` | 运维业务（巡检/台账/工单/统计分析），自有数据层 | InspectionTaskService, DeviceLedgerService, WorkOrderService, StatisticsService, MonitorStatsAggregator |
 | **systar-system** | `extensions/` | 系统管理（用户/角色/菜单/日志），自有数据层 | SysUserService, SysRoleService, SysMenuService, MybatisPlusConfig |
@@ -43,15 +43,20 @@ v1.1.0 开发中。IoT 核心系统框架完整，协议驱动全部实现（本
 
 ```
                     systar-server（启动入口）
-               /    |    \       \          \
-              /     |     \       \          \
-    systar-data  systar-  systar-  systar-  systar-
-    (MyBatis-+)  websocket drivers  ops      system
-          \        |       /       |          |
-           \       |      /        |          |
-          systar-monitor-core     systar-data  systar-data
-                      |           systar-common systar-common
+                /       |        \          \
+               /        |         \          \
+    systar-data    systar-       systar-    systar-
+    (MyBatis-+)    websocket     ops        system
+          \           |           |           |
+           \          |          systar-data  systar-data
+            \         |          systar-common systar-common
+          systar-monitor-core（核心引擎）
+                      |
                systar-common（工具）
+
+  drivers/ 14 个驱动插件模块：编译期仅依赖 systar-monitor-core（provided），
+  不进 fat jar；运行期由 systar-server 经插件目录（URLClassLoader）加载，
+  与服务器无编译期依赖
 ```
 
 ### 2.3 关键设计决策
@@ -369,24 +374,31 @@ H2 脚本需去除 `ENGINE=InnoDB`、`COLLATE`、`COMMENT`，用 `MERGE INTO` �
 
 ### 6.2 服务启动
 
-由 `ServerLifeCycle` 编排，有序执行：
+Bean 初始化阶段先于 `ServerLifeCycle`：`DriverPluginLoader` 扫描 `systar.drivers.path`
+插件目录——每插件建独立 `URLClassLoader`、收集类型 XML（插件自有来源）、登记种子 CSV。
+随后由 `ServerLifeCycle` 编排，有序执行：
 
 ```
 1. 加载系统配置（t_system_setting → SystemConfigManager）
 2. 加载代码字典（t_code_dict/t_code_catalog → CodeDictManager）
-3. 加载资产类型定义（AssetTypeLoader → AssetTypeManager → t_asset_type_config）
-4. 加载资产树（数据库 → DatabaseAssetLoader → AssetStore）
+3. 加载资产类型定义（XmlAssetTypeLoader：内置 classpath 扫描 + 插件贡献 XML
+   → AssetTypeManager → t_asset_type_config）
+4. 执行插件种子 CSV（PluginSeedExecutor，条件同主种子机制：dev 每次重启 /
+   生产 init-data=true；按主键 insert-if-absent）
+5. 加载资产树（数据库 → DatabaseAssetLoader → AssetStore）
    顺序：Device → Service → Probe → Control
    加载后执行 bindProperties() 将 metadata 绑定到驱动 setter
-5. 加载告警规则（t_alarm_rule → AlarmHandler）
-6. 加载联动规则（t_linkage_rule_cause/effect → LinkageHandler）
-7. 加载定时控制任务（t_scheduled_task → TimeControlService）
-8. 启动数据保留策略调度（DataRetentionService）
-9. 启动 MonitorServer
-   a. 启动被动服务（PassiveService）
-   b. 注册被动监测点路由
-   c. 启动调度器（MonitorScheduler）
-   d. 启动告警关联服务（AlarmCorrelationService）
+   驱动类经 DriverClassRegistry 解析（插件加载器 → classpath 回退）；
+   解析失败行 WARN 跳过并级联跳过引用行，不阻断启动
+6. 加载告警规则（t_alarm_rule → AlarmHandler）
+7. 加载联动规则（t_linkage_rule_cause/effect → LinkageHandler）
+8. 加载定时控制任务（t_scheduled_task → TimeControlService）
+9. 启动数据保留策略调度（DataRetentionService）
+10. 启动 MonitorServer
+    a. 启动被动服务（PassiveService）
+    b. 注册被动监测点路由
+    c. 启动调度器（MonitorScheduler）
+    d. 启动告警关联服务（AlarmCorrelationService）
 ```
 
 关闭时反向：停止调度 → 排空告警/联动队列 → 释放连接。
@@ -406,28 +418,28 @@ H2 脚本需去除 `ENGINE=InnoDB`、`COLLATE`、`COMMENT`，用 `MERGE INTO` �
 
 ### 7.2 添加新驱动步骤
 
-1. **创建驱动类**：在 `systar-monitor-drivers` 的对应包下创建
+1. **创建驱动插件模块**：在 `drivers/` 下新建插件模块（拷贝现有模块为模板，并在 `drivers/pom.xml` 登记 `<module>`），在协议包下创建驱动类
 2. **实现接口**：
    - 主动驱动：继承 `ActiveService`，实现 `createConnection()`
    - 被动驱动：继承 `PassiveService`，实现 `receive()` 数据处理
 3. **连接管理**：实现 `MonitorConnection` 接口（connect/disconnect/detect）
-4. **类型定义 XML**：在驱动包 resources 下（`com/systar/monitor/drivers/<proto>/`）放置 `<proto>-services.xml`、`<proto>-probes.xml` 等——启动时由 `XmlAssetTypeLoader` 目录扫描**自注册**，无需登记任何全局索引（详见 `xml-asset-type-config-design.md`）
+4. **类型定义 XML**：在驱动插件模块 resources 下（`com/systar/monitor/drivers/<proto>/`）放置 `<proto>-services.xml`、`<proto>-probes.xml` 等——构建进 `driver.jar`，启动时由 `DriverPluginLoader` 按插件自有来源发现、`XmlAssetTypeLoader` **自注册**，无需登记任何全局索引（详见 `xml-asset-type-config-design.md`）
 5. **单元测试**：编写驱动测试
 
-**私有驱动扩展**：不愿公开进仓库的驱动类型，经 `systar.asset-type.scan-paths` 配置外置 `file:` 扫描目录加载（XML-only 扩展指向内置驱动类，或配合 Spring Boot `loader.path` 挂载私有 JAR），配置方法见 `xml-asset-type-config-design.md`。
+**私有驱动扩展**：不愿公开进仓库的驱动，构建为插件目录拷贝进服务器 `drivers/` 即生效（XML-only 扩展只需一个放类型 XML 的目录，可引用其他插件已注册的类型/类），配方见 `docs/driver-development-guide.md` §12。
 
 ### 7.3 现有驱动参考
 
-本仓库内置 12 个驱动；BACnet 与 IEC 104 位于独立 GPL-3.0 模块（`gpl/systar-drivers-gpl`，不在本仓库，许可边界见 `mit-relicensing.md`）。
+本仓库 `drivers/` 下 14 个驱动插件模块（12 个 MIT）；BACnet 与 IEC 104 为 GPL-3.0 插件目录（`drivers/systar-driver-bacnet`、`drivers/systar-driver-iec104`，不在公开仓库，许可边界见 `mit-relicensing.md`）。
 
 | 驱动 | 类型 | 协议/库 | 模式 | 参考实现 |
 |------|------|---------|------|----------|
 | Modbus TCP | 工业协议 | jamod | 主动 | ModbusConnection |
 | OPC UA | 工业协议 | Eclipse Milo 0.6.8 | 主动 | OpcUaDriver |
-| BACnet | 建筑自动化 | BACnet4J 4.1.6（GPL 模块） | 主动 | BacnetConnection |
+| BACnet | 建筑自动化 | BACnet4J 4.1.6（GPL 插件目录） | 主动 | BacnetConnection |
 | SNMP | 网络协议 | SNMP4J 3.7.7 | 主动 | SnmpDriver |
 | Siemens S7 | PLC | S7Connector 2.1 | 主动 | S7Connection |
-| IEC 104 | 电力协议 | j60870 1.2.0（GPL 模块） | 主动 | Iec104Connection |
+| IEC 104 | 电力协议 | j60870 1.2.0（GPL 插件目录） | 主动 | Iec104Connection |
 | Weather | HTTP API | java.net.http | 主动 | WeatherService |
 | UPS | SNMP | SNMP4J 3.7.7 | 主动 | UpsConnection |
 | Environmental | 环境监测 | ServerSocket | 被动 | EnvironmentalDriver |

@@ -8,33 +8,41 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [Unreleased]
+## [1.1.1] - 2026-10-24
+
+Driver plugin directory architecture — drivers split out of the core build into
+self-contained, copy-in plugin directories — plus the MIT relicensing.
 
 ### Added
 
+**Driver plugin directory architecture**
+- Each protocol driver is now a self-contained plugin directory — `driver.jar` + `lib/` + optional `seed/` CSV — discovered at startup under `systar.drivers.path` (default `./drivers`, resolved against the working directory). Copy a plugin directory in and restart: no server code change, no repackaging. Removing one never breaks startup — affected database rows are WARN-skipped by name, cascading to rows that depend on them
+- Per-plugin class loaders isolate private protocol libraries; core API classes are shared parent-first
+- XML-only plugin directories (loose type XML at the directory root) extend the type catalog without writing Java, referencing classes provided by other plugins
+- Plugin seed CSVs: whitelisted tables (`dictionary` / `service` / `asset` / `asset_attribute` / `probe` / `control`), header = DB column names, insert-if-absent by primary key, executed under the same conditions as the main SQL seeds
+- Malformed or duplicate type definitions fail fast at startup with the offending plugin(s) named
+
 **Protocol drivers**
-- New protocol driver development guide (`docs/driver-development-guide.md`): driver module structure, type-XML self-registration, and external scan-path deployment recipes
+- New protocol driver development guide (`docs/driver-development-guide.md`): plugin directory layout, type-XML self-registration, seed CSV specification, and private-driver deployment recipes
 
 ### Changed
 
+**Driver plugin directory architecture (drivers/)**
+- `core/systar-monitor-drivers` split into 14 `drivers/systar-driver-*` plugin modules (one per protocol); each module builds its plugin directory under `target/plugin/`, aggregated into `drivers/dist/` for the dev runtime
+- Server fat jar slimmed: driver classes and private protocol libraries are no longer bundled — they load at runtime from the driver search path, and `systar-server` has no compile-time dependency on the drivers
+- The `gpl-drivers` Maven profile and its `settings.xml` activation retired — GPL drivers are ordinary plugin modules; exporting the public repository deletes their two directories and their two `<module>` lines in `drivers/pom.xml`
+- GPL demo seed rows (code dict 803, services 103/104, assets 44/45) migrated from the shared SQL seed scripts to the GPL plugins' own `seed/` CSVs, keeping the original ids so already-seeded databases stay idempotent
+- `systar.asset-type.scan-paths` (added earlier in this cycle) retired before release — external type XML now ships as XML-only plugin directories
+
 **Licensing**
-- License changed from GPL-3.0-only to **MIT**. BACnet/IP and IEC 60870-5-104 drivers
-  moved to a separate GPL-3.0 module (`gpl/systar-drivers-gpl`, **not part of this
-  repository**) because their underlying libraries (BACnet4J, j60870) are
-  GPL-3.0-only; binaries built with that module follow GPL-3.0 for the combined work.
-  Databases seeded before the split still carry the GPL demo rows (services 103/104,
-  assets 44/45): an MIT-only build fails at startup on their missing driver classes
-  unless those rows are deleted or the GPL module stays on the classpath. Fresh
-  deployments wanting those two protocols need the GPL module on the classpath — its
-  demo service seed rows are applied by the module itself
+- License changed from GPL-3.0-only to **MIT**. BACnet/IP and IEC 60870-5-104 drivers ship as GPL-3.0 driver plugin directories (`drivers/systar-driver-bacnet`, `drivers/systar-driver-iec104`, **not part of this repository**) because their underlying libraries (BACnet4J, j60870) are GPL-3.0-only; distributions that include those plugin directories follow GPL-3.0 for the combined work. Databases seeded before the split still carry the GPL demo rows (services 103/104, assets 44/45): an MIT-only build WARN-skips them at startup (the rows remain in the database, hidden from the asset tree) instead of failing; reinstalling the GPL plugin directories restores them. Fresh deployments wanting those two protocols just copy the GPL plugin directories into the driver search path — their demo seed rows ship inside the plugins as seed CSVs
 - org.json replaced with Jackson (Apache-2.0): the JSON License ("Good, not Evil")
   is not OSI-approved. Two org.json quirks were intentionally dropped — a JSON null
   at an MQTT jsonPath now yields `null` (was the `JSONObject.NULL` sentinel), and a
   path continuing past a scalar node yields `null` (was the scalar)
 
-**Protocol drivers (systar-monitor-drivers / systar-server)**
-- Driver modularization: protocol type-definition XMLs moved from server `config/assets/` into the drivers module (co-located with the driver classes); the loader now self-registers types via directory scanning and the global index `Assets.xml` was deleted — adding or removing a driver no longer requires index maintenance
-- New `systar.asset-type.scan-paths` config: supports `file:` external scan directories so private driver types can stay out of the repository
+**Protocol drivers (drivers/ / systar-server)**
+- Driver modularization: protocol type-definition XMLs moved from server `config/assets/` into the driver plugin modules (co-located with the driver classes); the loader now self-registers types via directory scanning and the global index `Assets.xml` was deleted — adding or removing a driver no longer requires index maintenance
 - ModbusService's hand-written config resolution chain (metadata > type default > built-in default) unified into the framework property binding (`bindProperties`)
 - Type-config version numbers now increment only when content actually changes, fixing the version inflation caused by an unconditional version+1 on every startup
 - Timeout/MaxConnections are now configurable per instance (with type-level defaults)

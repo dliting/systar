@@ -1,10 +1,10 @@
 # Systar 开发路线图
 
-## 当前版本：v1.1.0（开发中）
+## 当前版本：v1.1.1（开发中）
 
 > **项目状态**：Phase 1–7 全部完成，Phase 8 数据保留策略已实现，前端 UX Phase 2 进行中。下一步聚焦前端 UX 改进和时序数据库接入。
 
-P0 核心功能已实现，P1 协议驱动 14 个全部完整实现（其中 BACnet 与 IEC 104 现位于独立 GPL-3.0 模块，不在本仓库，见 `design/mit-relicensing.md`），P1.5 VirtualProbe 引擎已完成，支持 MySQL/H2 双数据库，系统可通过 IntelliJ/Maven 启动并跑通完整端到端流程（采集→存储→告警→联动→控制→统计→运维→看板）。
+P0 核心功能已实现，P1 协议驱动 14 个全部完整实现（均为 `drivers/` 下的驱动插件模块，其中 BACnet 与 IEC 104 为 GPL-3.0 插件、导出公开仓库时剔除，见 `design/mit-relicensing.md`），P1.5 VirtualProbe 引擎已完成，支持 MySQL/H2 双数据库，系统可通过 IntelliJ/Maven 启动并跑通完整端到端流程（采集→存储→告警→联动→控制→统计→运维→看板）。
 
 ---
 

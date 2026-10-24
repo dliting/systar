@@ -7,7 +7,7 @@
     <parent>
         <groupId>com.systar</groupId>
         <artifactId>systar-simulator</artifactId>
-        <version>1.1.0</version>
+        <version>1.1.1</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -37,11 +37,24 @@
             <artifactId>jaxb-api</artifactId>
             <version>2.3.1</version>
         </dependency>
-        <!-- Test: Systar's real protocol clients for round-trip tests -->
+        <!-- Test: Systar's real protocol clients for round-trip tests (drivers are
+             plugin modules; RoundTripTests import their client classes directly) -->
         <dependency>
             <groupId>com.systar</groupId>
-            <artifactId>systar-monitor-drivers</artifactId>
-            <version>${project.version}</version>
+            <artifactId>systar-driver-modbus</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.systar</groupId>
+            <artifactId>systar-driver-opcua</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Driver modules declare systar-monitor-core as provided, and provided
+             dependencies do not transit — tests importing MonitorConnection/ActiveService
+             need it explicitly -->
+        <dependency>
+            <groupId>com.systar</groupId>
+            <artifactId>systar-monitor-core</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

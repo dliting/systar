@@ -22,7 +22,7 @@ cd frontend && npm test   # 前端
 
 - 需要 JDK 17（项目基于 Java 17）。
 - Maven Wrapper（`./mvnw`）已固定支持的 Maven 版本——无需本地安装 Maven。离线构建
-  （`-o`）通过 `lib/maven-repo/` 中的 BACnet4J vendored 产物完成。
+  （`-o`）通过项目本地 Maven 仓库 `lib/maven-repo/`（内置构建所需依赖产物）完成。
 - 全量回归必须用 `./mvnw clean test -o`。不加 `clean` 时测试 JVM 跨模块复用，Spring
   应用上下文可能跨模块互相污染，引发间歇性失败。
 

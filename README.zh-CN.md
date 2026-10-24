@@ -2,7 +2,7 @@
 
 [English](README.md) | 简体中文
 
-> **项目状态**：v1.1.0，持续开发中。端到端链路（采集 → 存储 → 告警 → 联动 → 控制 →
+> **项目状态**：v1.1.1，持续开发中。端到端链路（采集 → 存储 → 告警 → 联动 → 控制 →
 > 统计 → 运维 → 看板）已完成，并有自动化测试覆盖。
 
 Systar 是一个通用 IoT 工业监控运维框架，适用于智慧园区、工厂产线、能源管理、数据中心等
@@ -30,12 +30,13 @@ Systar 是一个通用 IoT 工业监控运维框架，适用于智慧园区、�
 
 如果你计划基于 Systar 做二次开发，以下结构性特性值得了解：
 
-**插件式协议驱动。** 每个协议独立成包，位于 `core/systar-monitor-drivers` 下，
-Java 类与类型 XML 定义同处一个目录。类型在启动时由目录扫描自动发现——没有
-需要登记的中心索引，新增或移除协议只影响它自己的包。站点专属预设可通过
-`systar.asset-type.scan-paths` 让外置 XML 指向内置驱动类，不写 Java、不改动
-仓库即可扩展类型目录。格式错误或重名的类型定义在启动时快速失败，并指明问题
-文件。详见[驱动二次开发指南](docs/driver-development-guide.md)与
+**自包含驱动插件。** 每个协议是一个插件目录——`driver.jar` + `lib/` + 可选
+`seed/` CSV——在启动时从可配置的搜索路径（`systar.drivers.path`，默认
+`./drivers`）发现。把插件目录拷进去、重启即生效：不改服务器代码、不重新打包；
+删掉插件也从不导致启动失败（受影响的数据行按名 WARN 跳过）。站点专属预设可以
+是一个 XML-only 插件目录，引用其他插件的驱动类，不写 Java 即可扩展类型目录。
+每个插件拥有独立类加载器，私有协议库按插件相互隔离。格式错误或重名的类型定义
+在启动时快速失败，并指明问题插件。详见[驱动二次开发指南](docs/driver-development-guide.md)与
 [类型 XML 规范](docs/design/xml-asset-type-config-design.md)。
 
 **可嵌入的监控核心。** `systar-monitor-core` 不依赖 Web 层：它自定义仓储接口
@@ -62,11 +63,11 @@ Maven Central 解析。
 
 - **资产层级建模** — 设备（Device）与服务（Service）为顶层资产，
   监测点（Probe）/ 控制点（Control）挂载于设备之下
-- **多协议数据采集** — 目前内置 12 种协议驱动（Modbus TCP、OPC UA、SNMP、
+- **多协议数据采集** — 目前内置 12 种 MIT 协议驱动插件（Modbus TCP、OPC UA、SNMP、
   Siemens S7、MQTT、WebSocket、原始 TCP/IP、UPS（SNMP）、天气（HTTP API）、
-  环境传感器（被动 TCP）、内置模拟器、手动输入），并可通过插件式驱动框架扩展新协议
-  ——支持主动轮询与被动接收两种模式。BACnet/IP 与 IEC 60870-5-104 由独立的
-  GPL-3.0 模块提供（见[许可证](#许可证)）
+  环境传感器（被动 TCP）、内置模拟器、手动输入），把插件目录拷进驱动搜索路径即可
+  扩展新协议——支持主动轮询与被动接收两种模式。BACnet/IP 与 IEC 60870-5-104 以
+  GPL-3.0 驱动插件提供（见[许可证](#许可证)）
 - **虚拟监测点** — 基于 SpEL 表达式的派生指标引擎，支持跨监测点计算、依赖跟踪与循环检测
 - **告警引擎** — 三种策略（单次/持续/选择性）、多级告警、自动恢复检测，附告警关联与抑制
 - **联动引擎** — 因 → 果自动化规则，可由监测值或告警触发
@@ -85,8 +86,9 @@ core/                          监控框架（可独立使用）
 ├── systar-common/             通用工具（ID 生成、代码字典、系统配置、TimeSpan）
 ├── systar-monitor-core/       核心监控引擎（资产模型、调度、结果分发、
 │                              告警、联动、虚拟监测点）
-├── systar-data/               数据访问层（MyBatis-Plus 实体/映射器、仓储实现）
-└── systar-monitor-drivers/    协议驱动集合（插件式）
+└── systar-data/               数据访问层（MyBatis-Plus 实体/映射器、仓储实现）
+drivers/                       协议驱动插件模块（每协议一个 Maven 模块；
+                               各自构建为自包含插件目录）
 extensions/
 ├── systar-server/             Spring Boot 启动入口、REST API、配置、生命周期管理
 ├── systar-websocket/          实时推送（监测值 + 告警消息）
@@ -103,9 +105,11 @@ sql/                           MySQL + H2 双方言脚本与种子数据
 ```
 systar-server ──→ systar-websocket ──→ systar-monitor-core ──→ systar-common
 systar-server ──→ systar-data ────────→ systar-monitor-core
-systar-server ──→ systar-monitor-drivers → systar-monitor-core
 systar-server ──→ systar-ops ──→ systar-data, systar-common
 systar-server ──→ systar-system ──→ systar-data, systar-common
+
+驱动插件 ──→ systar-monitor-core（仅 provided；运行期经驱动搜索路径加载，
+与 systar-server 无编译期依赖）
 ```
 
 ## 技术栈
@@ -137,12 +141,18 @@ systar-server ──→ systar-system ──→ systar-data, systar-common
 ### 运行后端（端口 8081）
 
 ```bash
-# H2 开发模式——自动加载 schema 与种子数据
+# H2 开发模式——自动加载 schema 与种子数据；install 步骤同时把驱动插件
+# 构建进 drivers/dist/（开发用驱动搜索路径）
+./mvnw install -DskipTests
 ./mvnw spring-boot:run -pl extensions/systar-server -Dspring-boot.run.profiles=dev
 
-# MySQL 生产模式
-./mvnw clean package -pl extensions/systar-server -am -DskipTests
-java -jar extensions/systar-server/target/systar-server-1.1.0.jar
+# MySQL 生产模式——部署形态：服务器 jar + 其旁的 drivers/ 插件目录
+# （systar.drivers.path 按工作目录解析）
+./mvnw clean package -DskipTests
+mkdir -p deploy
+cp extensions/systar-server/target/systar-server-1.1.1.jar deploy/
+cp -r drivers/dist deploy/drivers
+cd deploy && java -jar systar-server-1.1.1.jar
 ```
 
 API 基础路径：`http://localhost:8081/api/monitor` · WebSocket：`ws://localhost:8081/ws/monitor`
@@ -178,7 +188,8 @@ npm run dev
 | `SYSTAR_SECRET` | JWT 签名密钥 | `changeme-default-secret` |
 | `SYSTAR_DB_PASSWORD` | MySQL 口令（两个数据源共用） | `123456` |
 
-其他重要配置项：`systar.database.type`（`mysql` \| `h2`）、`systar.security.whitelist`
+其他重要配置项：`systar.database.type`（`mysql` \| `h2`）、`systar.drivers.path`
+（驱动插件搜索目录，默认 `./drivers`，按工作目录解析）、`systar.security.whitelist`
 （免认证路径白名单）、独立统计数据源（`systar.stats-datasource.*`）。
 
 > **安全提示**
@@ -231,6 +242,7 @@ cd frontend && npm test   # 前端单元测试
 ```
 systar/
 ├── core/                        监控核心模块（见"架构"）
+├── drivers/                     协议驱动插件模块（见"架构"）
 ├── extensions/                  服务与业务模块（见"架构"）
 ├── simulator/                   合成数据发生器
 ├── frontend/                    Vue 3 应用（views / components / composables / api）
@@ -281,10 +293,12 @@ Copyright (c) 2026 Hao Yufei。
 Systar 以 **MIT License** 许可发布——见 [LICENSE](LICENSE)。
 完整组件归因见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
 
-### 可选 GPL 驱动模块
+### 可选 GPL 驱动插件
 
-BACnet/IP 与 IEC 60870-5-104 支持由独立模块（`gpl/systar-drivers-gpl`）提供，
-该模块链接 GPL-3.0-only 的库（BACnet4J、j60870），整体为 GPL-3.0 许可，
-**不在本仓库内**；包含它的打包物整体遵循 GPL-3.0，本仓库内容始终保持 MIT。
-如需这两个协议，也可按描述符即插即用加载器（见 `XmlAssetTypeLoader`）自行实现
-驱动；其底层库 BACnet4J 与 j60870 均为 GPL-3.0。
+BACnet/IP 与 IEC 60870-5-104 支持由两个驱动插件（`drivers/systar-driver-bacnet`、
+`drivers/systar-driver-iec104`）提供，其 `lib/` 链接 GPL-3.0-only 的库
+（BACnet4J、j60870）。这两个插件整体为 GPL-3.0 许可，**不在本仓库内**；包含它们
+的分发物整体遵循 GPL-3.0，本仓库内容始终保持 MIT。如需这两个协议，可自行构建
+插件，或按插件目录加载器自行实现驱动（见
+[驱动二次开发指南](docs/driver-development-guide.md)）；其底层库 BACnet4J 与
+j60870 均为 GPL-3.0。

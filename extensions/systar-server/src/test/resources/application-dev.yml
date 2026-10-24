@@ -1,0 +1,5 @@
+# Full-context tests keep drivers on the test classpath; disable plugin
+# discovery so built-in and plugin scans never see the same type XMLs.
+systar:
+  drivers:
+    path: ./target/test-no-drivers

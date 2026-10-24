@@ -7,7 +7,7 @@
     <parent>
         <groupId>com.systar</groupId>
         <artifactId>systar</artifactId>
-        <version>1.1.0</version>
+        <version>1.1.1</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
@@ -32,9 +32,68 @@
             <groupId>com.systar</groupId>
             <artifactId>systar-websocket</artifactId>
         </dependency>
+        <!-- Driver plugins live in drivers/ at runtime, never in the fat jar; they stay on
+             the test classpath so XmlAssetTypeLoaderTest's classpath-scan counts and runtime
+             instantiation tests can exercise them without a plugin-directory build -->
         <dependency>
             <groupId>com.systar</groupId>
-            <artifactId>systar-monitor-drivers</artifactId>
+            <artifactId>systar-driver-modbus</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.systar</groupId>
+            <artifactId>systar-driver-mqtt</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.systar</groupId>
+            <artifactId>systar-driver-opcua</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.systar</groupId>
+            <artifactId>systar-driver-snmp</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.systar</groupId>
+            <artifactId>systar-driver-siemens</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.systar</groupId>
+            <artifactId>systar-driver-websocket</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.systar</groupId>
+            <artifactId>systar-driver-weather</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.systar</groupId>
+            <artifactId>systar-driver-environmental</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.systar</groupId>
+            <artifactId>systar-driver-input</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.systar</groupId>
+            <artifactId>systar-driver-simulate</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.systar</groupId>
+            <artifactId>systar-driver-tcpip</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.systar</groupId>
+            <artifactId>systar-driver-ups</artifactId>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>com.systar</groupId>
@@ -98,23 +157,13 @@
             <artifactId>jaxb-api</artifactId>
             <version>2.3.1</version>
         </dependency>
+        <!-- Plugin seed CSV parsing (Apache-2.0) -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-csv</artifactId>
+            <version>1.11.0</version>
+        </dependency>
     </dependencies>
-
-    <!--
-        GPL-3.0 drivers (BACnet, IEC 104), local-only: activated together with
-        the root pom's gpl-drivers profile, which also builds gpl/systar-drivers-gpl.
-    -->
-    <profiles>
-        <profile>
-            <id>gpl-drivers</id>
-            <dependencies>
-                <dependency>
-                    <groupId>com.systar</groupId>
-                    <artifactId>systar-drivers-gpl</artifactId>
-                </dependency>
-            </dependencies>
-        </profile>
-    </profiles>
 
     <build>
         <plugins>

@@ -2,7 +2,7 @@
 
 English | [简体中文](README.zh-CN.md)
 
-> **Status**: v1.1.0, active development. The end-to-end pipeline (acquisition → storage →
+> **Status**: v1.1.1, active development. The end-to-end pipeline (acquisition → storage →
 > alarming → linkage → control → statistics → operations → dashboard) is complete and
 > covered by automated tests.
 
@@ -34,15 +34,17 @@ interactive trend chart (pan / zoom / automatic granularity switching):
 
 Structural properties that matter if you plan to build on Systar:
 
-**Plugin-style protocol drivers.** Each protocol lives in one package under
-`core/systar-monitor-drivers`, with the Java classes and the type XML
-definitions colocated. Types are discovered by a startup directory scan —
-there is no central index to register, so adding or removing a protocol
-touches only that package. Site-specific presets can point an external XML
-at a built-in driver class via `systar.asset-type.scan-paths`, extending the
-type catalog without writing Java or modifying the repository. Malformed or
-duplicate type definitions fail fast at startup with the offending file named.
-See the [driver development guide](docs/driver-development-guide.md) and the
+**Self-contained driver plugins.** Each protocol is a plugin directory —
+`driver.jar` + `lib/` + optional `seed/` CSV — discovered at startup under a
+configurable search path (`systar.drivers.path`, default `./drivers`). Copy a
+plugin directory in, restart, done: no server code change, no repackaging, and
+removing one never breaks startup (affected rows are WARN-skipped by name).
+Site-specific presets can be an XML-only plugin directory referencing another
+plugin's driver class, extending the type catalog without writing Java. Each
+plugin gets its own class loader, so private protocol libraries are isolated
+per plugin. Malformed or duplicate type definitions fail fast at startup with
+the offending plugin named. See the
+[driver development guide](docs/driver-development-guide.md) and the
 [type XML specification](docs/design/xml-asset-type-config-design.md).
 
 **Embeddable monitoring core.** `systar-monitor-core` has no web dependency.
@@ -73,12 +75,12 @@ cache is primed; every dependency of this repository resolves from Maven Central
 
 - **Hierarchical asset modeling** — Devices and Services as top-level assets, with
   Probes (monitoring points) and Controls (actuation points) attached to Devices
-- **Multi-protocol acquisition** — 12 protocol drivers built in (Modbus TCP, OPC UA,
-  SNMP, Siemens S7, MQTT, WebSocket, raw TCP/IP, UPS (SNMP), weather (HTTP API),
+- **Multi-protocol acquisition** — 12 MIT protocol driver plugins built in (Modbus TCP,
+  OPC UA, SNMP, Siemens S7, MQTT, WebSocket, raw TCP/IP, UPS (SNMP), weather (HTTP API),
   environmental sensors (passive TCP), a built-in simulator and manual input),
-  extensible to new protocols through the plugin-style driver framework — supporting
-  both active polling and passive reception. BACnet/IP and IEC 60870-5-104 are
-  available through a separate GPL-3.0 module (see [License](#license))
+  extensible to new protocols by dropping a plugin directory into the driver search
+  path — supporting both active polling and passive reception. BACnet/IP and
+  IEC 60870-5-104 are available as GPL-3.0 driver plugins (see [License](#license))
 - **Virtual probes** — SpEL-derived metrics computed from other probes, with
   dependency tracking and cycle detection
 - **Alarm engine** — three strategies (single, continuous, selective), severity levels
@@ -103,9 +105,10 @@ core/                          monitoring framework (usable standalone)
 ├── systar-common/             shared utilities (IDs, code dictionaries, config, TimeSpan)
 ├── systar-monitor-core/       monitoring engine (asset model, scheduling, result
 │                              dispatch, alarms, linkage, virtual probes)
-├── systar-data/               persistence layer (MyBatis-Plus entities/mappers,
-│                              repository implementations)
-└── systar-monitor-drivers/    protocol drivers (plugin-style)
+└── systar-data/               persistence layer (MyBatis-Plus entities/mappers,
+                               repository implementations)
+drivers/                       protocol driver plugins (one Maven module per protocol;
+                               each builds to a self-contained plugin directory)
 extensions/
 ├── systar-server/             Spring Boot entry point, REST API, configuration,
 │                              lifecycle management
@@ -125,9 +128,11 @@ Module dependency flow:
 ```
 systar-server ──→ systar-websocket ──→ systar-monitor-core ──→ systar-common
 systar-server ──→ systar-data ────────→ systar-monitor-core
-systar-server ──→ systar-monitor-drivers → systar-monitor-core
 systar-server ──→ systar-ops ──→ systar-data, systar-common
 systar-server ──→ systar-system ──→ systar-data, systar-common
+
+driver plugins ──→ systar-monitor-core (provided only; loaded at runtime from the
+driver search path, no compile-time dependency on systar-server)
 ```
 
 ## Tech Stack
@@ -159,12 +164,18 @@ Build: Maven (multi-module, wrapper included — no local Maven install required
 ### Run the backend (port 8081)
 
 ```bash
-# H2 development profile — schema and seed data load automatically
+# H2 development profile — schema and seed data load automatically; the install
+# step also builds driver plugins into drivers/dist/ (the dev driver search path)
+./mvnw install -DskipTests
 ./mvnw spring-boot:run -pl extensions/systar-server -Dspring-boot.run.profiles=dev
 
-# MySQL production mode
-./mvnw clean package -pl extensions/systar-server -am -DskipTests
-java -jar extensions/systar-server/target/systar-server-1.1.0.jar
+# MySQL production mode — deployment layout: server jar + drivers/ plugin
+# directory beside it (systar.drivers.path resolves against the working dir)
+./mvnw clean package -DskipTests
+mkdir -p deploy
+cp extensions/systar-server/target/systar-server-1.1.1.jar deploy/
+cp -r drivers/dist deploy/drivers
+cd deploy && java -jar systar-server-1.1.1.jar
 ```
 
 API base path: `http://localhost:8081/api/monitor` · WebSocket: `ws://localhost:8081/ws/monitor`
@@ -200,9 +211,10 @@ Key settings in `extensions/systar-server/src/main/resources/application.yml`:
 | `SYSTAR_SECRET` | JWT signing secret | `changeme-default-secret` |
 | `SYSTAR_DB_PASSWORD` | MySQL password (both datasources) | `123456` |
 
-Other notable keys: `systar.database.type` (`mysql` \| `h2`), `systar.security.whitelist`
-(paths exempt from authentication), and the separate statistics datasource
-(`systar.stats-datasource.*`).
+Other notable keys: `systar.database.type` (`mysql` \| `h2`), `systar.drivers.path`
+(driver plugin search directory, default `./drivers`, resolved against the working
+directory), `systar.security.whitelist` (paths exempt from authentication), and the
+separate statistics datasource (`systar.stats-datasource.*`).
 
 > **Security notes**
 > - The seed database ships an `admin` / `admin123` account — change it before exposing
@@ -256,6 +268,7 @@ cd frontend && npm test   # frontend unit tests
 ```
 systar/
 ├── core/                        monitoring core modules (see Architecture)
+├── drivers/                     protocol driver plugin modules (see Architecture)
 ├── extensions/                  server & business modules (see Architecture)
 ├── simulator/                   synthetic data generator
 ├── frontend/                    Vue 3 application (views, components, composables, api)
@@ -307,12 +320,14 @@ Copyright (c) 2026 Hao Yufei.
 Systar is licensed under the **MIT License** — see [LICENSE](LICENSE).
 Full component attribution: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
-### Optional GPL driver module
+### Optional GPL driver plugins
 
-BACnet/IP and IEC 60870-5-104 support is provided by a separate module
-(`gpl/systar-drivers-gpl`) that links GPL-3.0-only libraries (BACnet4J, j60870).
-That module is GPL-3.0 as a whole and is **not part of this repository**; binaries
-built with it follow GPL-3.0 for the combined work, while everything here stays
-MIT. If you need those two protocols you can implement drivers against the
-descriptor-based plug-and-play loader yourself (see `XmlAssetTypeLoader`); the
-underlying libraries BACnet4J and j60870 are GPL-3.0.
+BACnet/IP and IEC 60870-5-104 support is provided by two driver plugins
+(`drivers/systar-driver-bacnet`, `drivers/systar-driver-iec104`) that link
+GPL-3.0-only libraries (BACnet4J, j60870) in their `lib/`. Those plugins are
+GPL-3.0 as a whole and are **not part of this repository**; distributions that
+include them follow GPL-3.0 for the combined work, while everything here stays
+MIT. If you need those two protocols you can build the plugins yourself or
+implement drivers against the plugin-directory loader (see the
+[driver development guide](docs/driver-development-guide.md)); the underlying
+libraries BACnet4J and j60870 are GPL-3.0.

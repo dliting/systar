@@ -2,11 +2,14 @@ package com.systar.server.loader;
 
 import com.systar.monitor.asset.*;
 import com.systar.monitor.asset.type.*;
+import com.systar.server.config.DatabaseInitializer;
+import com.systar.server.plugin.PluginSeedExecutor;
 import com.systar.server.repository.AssetRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -26,19 +29,24 @@ class DatabaseAssetLoaderTest {
         repo = mock(AssetRepository.class);
         store = new AssetStore();
         VirtualProbeEngine engine = mock(VirtualProbeEngine.class);
-        loader = new DatabaseAssetLoader(repo, engine);
+        PluginSeedExecutor seedExecutor = mock(PluginSeedExecutor.class);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<DatabaseInitializer> dbInit = mock(ObjectProvider.class);
+        loader = new DatabaseAssetLoader(repo, engine, seedExecutor, dbInit);
 
-        when(repo.findAllDevices()).thenReturn(Collections.emptyList());
-        when(repo.findAllServices(any())).thenReturn(Collections.emptyList());
-        when(repo.findAllProbes(any())).thenReturn(Collections.emptyList());
-        when(repo.findAllControls(any())).thenReturn(Collections.emptyList());
+        when(repo.findAllDeviceRows()).thenReturn(List.of());
+        when(repo.findAllServiceRows()).thenReturn(List.of());
+        when(repo.findAllProbeRows()).thenReturn(List.of());
+        when(repo.findAllControlRows()).thenReturn(List.of());
     }
 
     @Test
     @DisplayName("Loads devices into asset store")
     void loadsDevices() {
         Device device = createTestDevice(1, "floor1", "First Floor");
-        when(repo.findAllDevices()).thenReturn(List.of(device));
+        var row = deviceRow(1, "floor1", "First Floor");
+        when(repo.findAllDeviceRows()).thenReturn(List.of(row));
+        when(repo.assembleDevice(eq(row))).thenReturn(device);
 
         loader.load(store);
 
@@ -52,20 +60,21 @@ class DatabaseAssetLoaderTest {
     @Test
     @DisplayName("Loads probes with source service binding")
     void loadsProbesWithSource() {
-        var svc = new com.systar.monitor.asset.ActiveService() {
-            @Override public void start() {}
-            @Override public void stop() {}
-            @Override public MonitorConnection createConnection() { return null; }
-        };
-        svc.init(new ServiceType("test-svc"), 100, "modbus-svc");
+        var svc = service(100, "modbus-svc");
+        var svcRow = new AssetRepository.ServiceRow(100, "modbus-svc", null, 0, null, 5, "test-svc");
 
         Probe probe = new Probe();
         probe.init(new ProbeType("test-probe"), 200, "temp1");
         probe.setCaption("Temperature");
         probe.setSource(svc);
+        var probeRow = new AssetRepository.ProbeRow(200, "temp1", "Temperature", 0, 100, null,
+                "1s", "1m", null, null, (short) 0, "FLOAT", null, null, "test-probe",
+                0, null, null);
 
-        when(repo.findAllServices(any())).thenReturn(List.of(svc));
-        when(repo.findAllProbes(any())).thenReturn(List.of(probe));
+        when(repo.findAllServiceRows()).thenReturn(List.of(svcRow));
+        when(repo.assembleService(eq(svcRow), any())).thenReturn(svc);
+        when(repo.findAllProbeRows()).thenReturn(List.of(probeRow));
+        when(repo.assembleProbe(eq(probeRow), any())).thenReturn(probe);
 
         loader.load(store);
 
@@ -88,22 +97,25 @@ class DatabaseAssetLoaderTest {
     @DisplayName("Tree hierarchy: Device top-level, probe attached to device")
     void buildsTreeHierarchy() {
         Device device = createTestDevice(10, "deviceA", null);
+        var deviceRow = deviceRow(10, "deviceA", null);
 
-        var svc = new com.systar.monitor.asset.ActiveService() {
-            @Override public void start() {}
-            @Override public void stop() {}
-            @Override public MonitorConnection createConnection() { return null; }
-        };
-        svc.init(new ServiceType("test-svc"), 100, "svc");
+        var svc = service(100, "svc");
+        var svcRow = new AssetRepository.ServiceRow(100, "svc", null, 0, null, 5, "test-svc");
 
         Probe probe = new Probe();
         probe.init(new ProbeType("test-probe"), 200, "temp1");
         probe.setParentId(10);
         probe.setSource(svc);
+        var probeRow = new AssetRepository.ProbeRow(200, "temp1", null, 10, 100, null,
+                "1s", "1m", null, null, (short) 0, "FLOAT", null, null, "test-probe",
+                0, null, null);
 
-        when(repo.findAllDevices()).thenReturn(List.of(device));
-        when(repo.findAllServices(any())).thenReturn(List.of(svc));
-        when(repo.findAllProbes(any())).thenReturn(List.of(probe));
+        when(repo.findAllDeviceRows()).thenReturn(List.of(deviceRow));
+        when(repo.assembleDevice(eq(deviceRow))).thenReturn(device);
+        when(repo.findAllServiceRows()).thenReturn(List.of(svcRow));
+        when(repo.assembleService(eq(svcRow), any())).thenReturn(svc);
+        when(repo.findAllProbeRows()).thenReturn(List.of(probeRow));
+        when(repo.assembleProbe(eq(probeRow), any())).thenReturn(probe);
 
         loader.load(store);
 
@@ -116,7 +128,9 @@ class DatabaseAssetLoaderTest {
     @Test
     @DisplayName("Loads attributes after asset loading")
     void loadsAttributes() {
-        when(repo.findAllDevices()).thenReturn(List.of(createTestDevice(1, "floor1", null)));
+        var row = deviceRow(1, "floor1", null);
+        when(repo.findAllDeviceRows()).thenReturn(List.of(row));
+        when(repo.assembleDevice(eq(row))).thenReturn(createTestDevice(1, "floor1", null));
         loader.load(store);
         verify(repo).loadAllAttributes(any());
     }
@@ -131,7 +145,11 @@ class DatabaseAssetLoaderTest {
         BindingProbe probe = new BindingProbe();
         probe.init(probeType, 300, "p1");
 
-        when(repo.findAllProbes(any())).thenReturn(List.of(probe));
+        var probeRow = new AssetRepository.ProbeRow(300, "p1", null, 0, null, null,
+                "1s", "1m", null, null, (short) 0, "FLOAT", null, null, "temp-probe",
+                0, null, null);
+        when(repo.findAllProbeRows()).thenReturn(List.of(probeRow));
+        when(repo.assembleProbe(eq(probeRow), any())).thenReturn(probe);
         // Simulate loadAllAttributes populating the metadata map (as it does in production
         // from t_asset_attribute rows).
         doAnswer(inv -> {
@@ -145,6 +163,48 @@ class DatabaseAssetLoaderTest {
         // This assertion guards the loader→bindProperties→setter chain.
         // (XML parsing and DB attribute loading are covered by their own tests.)
         assertThat(probe.getAddress()).isEqualTo(1234);
+    }
+
+    @Test
+    @DisplayName("Service row failure WARN-skips the row; probes referencing it cascade-skip")
+    void serviceRowSkippedAndProbesCascade() {
+        var rowA = new AssetRepository.ServiceRow(100, "good", "Good", 0, null, 5, "SvcType");
+        var rowB = new AssetRepository.ServiceRow(101, "broken", "Broken", 0, "com.example.Missing", 5, null);
+        when(repo.findAllServiceRows()).thenReturn(List.of(rowA, rowB));
+        var probeRow = new AssetRepository.ProbeRow(200, "p1", "P1", 0, 101, null,
+                "1s", "1m", null, null, (short) 0, "FLOAT", null, null, "ProbeType",
+                0, null, null);
+        when(repo.findAllProbeRows()).thenReturn(List.of(probeRow));
+
+        when(repo.assembleService(eq(rowA), any())).thenReturn(service(100, "good"));
+        when(repo.assembleService(eq(rowB), any()))
+                .thenThrow(new AssetException("Service 'broken' (id=101) references class 'com.example.Missing' which cannot be loaded."));
+        when(repo.assembleProbe(eq(probeRow), any()))
+                .thenThrow(new AssetException("Probe 'p1' (id=200) references service id 101, but no service with that id was loaded."));
+
+        loader.load(store);
+
+        assertThat(store.findAsset(100)).isNotNull();
+        assertThat(store.findAsset(101)).isNull();
+        assertThat(store.findAsset(200)).isNull();
+    }
+
+    @Test
+    @DisplayName("Device row failure WARN-skips only that row")
+    void deviceRowSkipped() {
+        var ok = new AssetRepository.DeviceRow(1, "d1", "D1", null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, "DevType");
+        var bad = new AssetRepository.DeviceRow(2, "d2", "D2", null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, "MissingType");
+        when(repo.findAllDeviceRows()).thenReturn(List.of(ok, bad));
+        when(repo.assembleDevice(eq(ok))).thenReturn(device(1, "d1"));
+        when(repo.assembleDevice(eq(bad)))
+                .thenThrow(new AssetException("Device 'd2' (id=2) references type 'MissingType' which is not registered."));
+
+        loader.load(store);
+
+        assertThat(store.findAsset(1)).isNotNull();
+        assertThat(store.findAsset(2)).isNull();
     }
 
     /** Probe subclass with a typed setter, used to verify bindProperties wiring.
@@ -162,5 +222,24 @@ class DatabaseAssetLoaderTest {
         device.setParentId(Asset.INVALID_ID);
         if (caption != null) device.setCaption(caption);
         return device;
+    }
+
+    private Device device(int id, String name) {
+        return createTestDevice(id, name, null);
+    }
+
+    private MonitorService service(int id, String name) {
+        var svc = new com.systar.monitor.asset.ActiveService() {
+            @Override public void start() {}
+            @Override public void stop() {}
+            @Override public MonitorConnection createConnection() { return null; }
+        };
+        svc.init(new ServiceType("test-svc"), id, name);
+        return svc;
+    }
+
+    private AssetRepository.DeviceRow deviceRow(int id, String name, String caption) {
+        return new AssetRepository.DeviceRow(id, name, caption, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, "test-device");
     }
 }

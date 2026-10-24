@@ -2,37 +2,36 @@
 
 ## 概述
 
-资产类型定义通过 XML 配置文件加载，由 `XmlAssetTypeLoader` 在应用启动时**扫描**资源路径并解析注册到 `AssetStore`。驱动自带类型定义 XML，放入驱动模块的 resources 即自注册——没有中央索引文件，新增/删除驱动不需要改动任何全局配置。
+资产类型定义通过 XML 配置文件加载，由 `XmlAssetTypeLoader` 在应用启动时解析注册到 `AssetStore`。类型 XML 有**两类来源**：服务器 classpath 的内置扫描，与 `DriverPluginLoader` 从各驱动插件目录发现的自有 XML。驱动自带类型定义 XML，放入驱动插件模块的 resources 即自注册——没有中央索引文件，新增/删除驱动不需要改动任何全局配置。
 
-## 文件位置与扫描路径
+## 文件位置与扫描来源
 
 类型 XML 按归属放置：
 
 ```
-core/systar-monitor-drivers/src/main/resources/com/systar/monitor/drivers/
-  ├── modbus/modbus-services.xml      ← Modbus Service 类型定义
-  ├── modbus/modbus-probes.xml        ← Modbus Probe 类型定义
-  ├── modbus/modbus-controls.xml      ← Modbus Control 类型定义
-  ├── snmp/snmp-services.xml          ← SNMP Service 类型定义
-  └── ...                             ← 其他协议（小写连字符命名 <proto>-{services,probes,controls}.xml）
+drivers/systar-driver-modbus/src/main/resources/com/systar/monitor/drivers/modbus/
+  ├── modbus-services.xml             ← Modbus Service 类型定义
+  ├── modbus-probes.xml               ← Modbus Probe 类型定义
+  └── modbus-controls.xml             ← Modbus Control 类型定义
+drivers/systar-driver-snmp/src/main/resources/com/systar/monitor/drivers/snmp/
+  └── snmp-services.xml               ← SNMP Service 类型定义
+...                                   ← 每协议一个插件模块（小写连字符命名 <proto>-{services,probes,controls}.xml）
 
 extensions/systar-server/src/main/resources/config/assets/
   └── generic-devices.xml             ← Device 类型定义（非驱动关注点）
+
+drivers/<插件名>/                      ← 运行时插件目录（XML-only 插件的 loose XML 放目录根）
+  └── site-hvac.xml
 ```
 
-`XmlAssetTypeLoader` 扫描以下路径模式（`PathMatchingResourcePatternResolver` 语法）：
+`XmlAssetTypeLoader` 从以下来源收集类型 XML：
 
-1. **内置默认（不可关闭）**：
-   - `classpath*:com/systar/monitor/drivers/**/*.xml` — 驱动模块内的全部类型 XML（驱动自注册）
+1. **内置 classpath 扫描（不可关闭，`PathMatchingResourcePatternResolver` 语法）**：
+   - `classpath*:com/systar/monitor/drivers/**/*.xml` — classpath 上的驱动类型 XML（服务器测试与 classpath 形态使用；生产 fat jar 已不含驱动类）
    - `classpath*:config/assets/generic-*.xml` — 服务端的通用 Device 类型
-2. **额外路径（可选）**：配置项 `systar.asset-type.scan-paths`，逗号分隔的资源定位模式列表，
-   典型用法是 `file:` 外置目录（目录不存在时静默解析为空集，不报错）：
+2. **插件贡献（`DriverPluginLoader.typeResources()`）**：每个插件目录的 `driver.jar` 内 `com/systar/monitor/drivers/**` 树下条目 + 插件目录根的 loose XML。加载器只枚举**本插件自有**资源，不会把服务器 classpath 上他插件的 XML 错记到本插件名下。
 
-```yaml
-systar:
-  asset-type:
-    scan-paths: file:./config/drivers/*.xml   # 逗号分隔可配多个
-```
+> 1.1.1 起配置项 `systar.asset-type.scan-paths` 已退役：外置 XML 改用 XML-only 插件目录（见文末"私有驱动部署"）。
 
 ## 根元素分类与加载顺序
 
@@ -52,12 +51,12 @@ systar:
 1. Probe/Control 的 `Source` 引用的 Service 类型先于它们注册
 2. 同一类别内，文件按路径排序加载（确定性），文件内保持文档顺序——`Super` 父类型与子类型写在同一个文件中、父先于子即可
 
-**类型名同类别内唯一**：同一资产类别中，类型名跨所有扫描路径唯一——重名即抛异常（不做覆盖语义，顺序依赖是惊喜源）。不同类别之间同名（如某个 Device 类型与某个 Service 类型同名）不冲突：类型查找、`t_asset_type_config` 同步逻辑键（kind + typeName）、前端查询均按类别隔离。
+**类型名同类别内唯一**：同一资产类别中，类型名跨所有来源（服务器 classpath 与全部插件）唯一——重名即抛异常并点名两个提供方（不做覆盖语义，顺序依赖是惊喜源）。不同类别之间同名（如某个 Device 类型与某个 Service 类型同名）不冲突：类型查找、`t_asset_type_config` 同步逻辑键（kind + typeName）、前端查询均按类别隔离。
 
 ### 扫描注意事项
 
-- **drivers 资源树是类型 XML 的保留区**：内置模式 `com/systar/monitor/drivers/**/*.xml` 会把该包下的**任何** XML 当作类型配置解析，根元素不合法即启动失败。驱动需要的非类型 XML 资源（模板、映射表等）不要放在这个包路径下。
-- **避免扫描路径与内置模式重叠**：同一物理文件若被两个模式以不同 URL 形式命中（如同时匹配 `classpath*:` 与 `file:`），会解析两次并按"类型重名"报错——配置 `scan-paths` 时指向独立目录即可。
+- **drivers 包树是类型 XML 的保留区**：内置 classpath 模式与插件自有 jar 扫描都会把 `com/systar/monitor/drivers/**` 下的**任何** XML 当作类型配置解析，根元素不合法即启动失败。驱动需要的非类型 XML 资源（模板、映射表等）不要放在这个包路径下。
+- **插件目录内 loose XML 只认目录根**：`DriverPluginLoader` 只把插件目录**根**下的 `*.xml` 计为类型 XML；`lib/` 等其他位置的 XML 会被 WARN 提示忽略（jar 内 XML 须在 drivers 包树下）。
 
 ## 元素命名约定（关键规则）
 
@@ -91,13 +90,13 @@ systar:
 
 | 属性/子元素 | 说明 |
 |-------------|------|
-| `Name` | 类型唯一标识，同类别内跨所有扫描路径唯一 |
+| `Name` | 类型唯一标识，同类别内跨所有来源唯一 |
 | `Caption` | 显示名称 |
 | `Abstract` | `true` 表示抽象类型，不可直接实例化 |
 | `Super` | 父类型名称，实现类型继承（属性会从父类型复制；父类型须在同文件中先声明） |
 | `JavaClass` | 驱动实现类的全限定名 |
 | `DataType` | 数据类型（保留字段） |
-| `Source` | Probe/Control 引用的 Service 类型名 |
+| `Source` | Probe/Control 引用的 Service 类型名；引用未注册类型（如目标插件缺失）时该类型 WARN 跳过、不注册 |
 
 ## ViewType 与 DataType
 
@@ -178,20 +177,21 @@ systar:
 
 `XmlAssetTypeLoader` 的两类反馈：
 
-1. **fail-fast 异常**（启动失败）：未知根元素（含文件名与合法根元素清单）、类型重名、`Super`/`Source` 引用不存在、XML 解析失败
-2. **WARN 日志**：文件内 0 个匹配标准元素名的子元素，通常是因为元素名被错误修改（如 `<SnmpService>` 而非 `<Service>`）
+1. **fail-fast 异常**（启动失败）：未知根元素（含文件名与合法根元素清单）、类型重名（点名两个提供方）、`Super` 引用不存在（继承链断裂）、XML 解析失败
+2. **WARN 日志**（跳过、不阻断启动）：
+   - 文件内 0 个匹配标准元素名的子元素，通常是因为元素名被错误修改（如 `<SnmpService>` 而非 `<Service>`）
+   - `Source` 引用未注册的 Service 类型（如目标插件缺失）——仅跳过该类型，其 `t_asset_type_config` 行按 obsolete 清理；1.1.1 前此为启动失败
 
 ## 添加新协议驱动的类型配置
 
-1. 在驱动模块的包 resources 下创建 `<proto>-services.xml`、`<proto>-probes.xml`（如有 Control 则再加 `<proto>-controls.xml`），放入 `com/systar/monitor/drivers/<proto>/` 目录——**放入即自注册，无需任何登记**
+1. 在驱动插件模块的包 resources 下创建 `<proto>-services.xml`、`<proto>-probes.xml`（如有 Control 则再加 `<proto>-controls.xml`），放入 `com/systar/monitor/drivers/<proto>/` 目录——**放入即自注册，无需任何登记**
 2. 在文件中使用标准子元素名（`<Service>`, `<Probe>`, `<Control>`）
-3. 通过 `Name` 属性指定具体类型名（如 `Name="XxxService"`，同类别内跨扫描路径唯一）
-4. 确保 `JavaClass` 指向的驱动类存在
+3. 通过 `Name` 属性指定具体类型名（如 `Name="XxxService"`，同类别内跨所有来源唯一）
+4. 确保 `JavaClass` 指向的驱动类存在（本插件 driver.jar 内，或其他已加载插件/服务器 classpath 上）
 
 ## 私有驱动部署（不公开进仓库）
 
-部分用户扩展驱动后不愿公开私有驱动，可通过额外扫描路径实现代码与配置均不落入仓库：
+部分用户扩展驱动后不愿公开私有驱动，用插件目录即可实现代码与配置均不落入仓库（详见 `docs/driver-development-guide.md` §12）：
 
-- **XML-only 扩展**（零代码）：在外置目录放类型 XML，`<JavaClass>` 指向**内置**驱动类。例如基于 ModbusProbe 定义站点专属类型并预设属性默认值。启动时配置：
-  `systar.asset-type.scan-paths=file:./config/drivers/*.xml`
-- **Java + XML 扩展**：私有驱动打成 JAR，经 Spring Boot `PropertiesLauncher` 的 `loader.path` 挂载，其 resources 内的 XML 经内置 `classpath*:` 模式自动发现；或 XML 放外置 `file:` 目录。私有代码与配置均不进仓库。
+- **XML-only 扩展**（零代码）：建一个 `drivers/<插件名>/` 目录、把类型 XML 放目录根，`<JavaClass>`/`<Source>` 可指向**其他插件**已注册的类/类型。例如基于 ModbusProbe 定义站点专属类型并预设属性默认值；目标插件缺失时该类型 WARN 跳过。重启即生效，连 Maven 都不需要。
+- **Java + XML 扩展**：私有驱动按指南构建为插件目录（`driver.jar` + `lib/`），拷贝进服务器 `drivers/` 即生效；私有代码与配置均不进仓库。

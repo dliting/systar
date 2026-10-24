@@ -13,7 +13,7 @@
 
     <groupId>com.systar</groupId>
     <artifactId>systar</artifactId>
-    <version>1.1.0</version>
+    <version>1.1.1</version>
     <packaging>pom</packaging>
     <name>systar</name>
     <description>Systar IoT Monitoring System</description>
@@ -36,28 +36,13 @@
         <module>core/systar-common</module>
         <module>core/systar-monitor-core</module>
         <module>core/systar-data</module>
-        <module>core/systar-monitor-drivers</module>
+        <module>drivers</module>
         <module>extensions/systar-websocket</module>
         <module>extensions/systar-ops</module>
         <module>extensions/systar-system</module>
         <module>extensions/systar-server</module>
         <module>simulator</module>
     </modules>
-
-    <!--
-        GPL-3.0 protocol drivers (BACnet, IEC 60870-5-104), local-only.
-        Inactive by default so the default build (and the public repository)
-        stays free of GPL code; activate locally via settings.xml
-        activeProfiles or -P gpl-drivers. See gpl/systar-drivers-gpl/README.md.
-    -->
-    <profiles>
-        <profile>
-            <id>gpl-drivers</id>
-            <modules>
-                <module>gpl/systar-drivers-gpl</module>
-            </modules>
-        </profile>
-    </profiles>
 
     <properties>
         <java.version>17</java.version>
@@ -101,12 +86,72 @@
             </dependency>
             <dependency>
                 <groupId>com.systar</groupId>
-                <artifactId>systar-monitor-drivers</artifactId>
+                <artifactId>systar-driver-modbus</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.systar</groupId>
-                <artifactId>systar-drivers-gpl</artifactId>
+                <artifactId>systar-driver-mqtt</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.systar</groupId>
+                <artifactId>systar-driver-opcua</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.systar</groupId>
+                <artifactId>systar-driver-snmp</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.systar</groupId>
+                <artifactId>systar-driver-siemens</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.systar</groupId>
+                <artifactId>systar-driver-websocket</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.systar</groupId>
+                <artifactId>systar-driver-weather</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.systar</groupId>
+                <artifactId>systar-driver-environmental</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.systar</groupId>
+                <artifactId>systar-driver-input</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.systar</groupId>
+                <artifactId>systar-driver-simulate</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.systar</groupId>
+                <artifactId>systar-driver-tcpip</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.systar</groupId>
+                <artifactId>systar-driver-ups</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.systar</groupId>
+                <artifactId>systar-driver-bacnet</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.systar</groupId>
+                <artifactId>systar-driver-iec104</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -192,11 +237,13 @@
     </repositories>
 
     <dependencies>
-        <!-- Lombok -->
+        <!-- Lombok: compile-time annotation processing only; provided scope keeps it
+             off every runtime classpath (fat jar already excluded it; plugin
+             assemblies must not ship it either) -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <optional>true</optional>
+            <scope>provided</scope>
         </dependency>
 
         <!-- Test dependencies (inherited by all modules) -->

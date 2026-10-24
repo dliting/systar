@@ -38,7 +38,7 @@ if netstat -tln 2>/dev/null | grep -q ":$BACKEND_PORT "; then
     fi
 fi
 
-JAR="extensions/systar-server/target/systar-server-1.0.0.jar"
+JAR="extensions/systar-server/target/systar-server-1.1.1.jar"
 if [ ! -f "$JAR" ]; then
     echo "[Backend] JAR not found: $JAR"
     echo "         Run bin/build-backend.sh to build first."
@@ -49,7 +49,7 @@ fi
 echo "[Backend] Starting on http://localhost:$BACKEND_PORT ..."
 echo ""
 
-java -Xms128m -Xmx256m -jar "$JAR" --spring.profiles.active=mysql &
+java -Xms128m -Xmx256m -jar "$JAR" --spring.profiles.active=mysql --systar.drivers.path=./drivers/dist &
 
 # --- Wait for startup ---
 echo -n "[Backend] Waiting for startup..."
