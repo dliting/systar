@@ -20,9 +20,10 @@
 **许可证**
 - 许可证由 GPL-3.0-only 改为 **MIT**。BACnet/IP 与 IEC 60870-5-104 驱动迁至独立的
   GPL-3.0 模块（`gpl/systar-drivers-gpl`，**不在本仓库**）——其底层库 BACnet4J、
-  j60870 均为 GPL-3.0-only；包含该模块的打包物整体遵循 GPL-3.0。已部署实例不受
-  影响；新部署如需这两个协议，需将 GPL 模块加入 classpath——其演示服务种子行由
-  模块自行播种
+  j60870 均为 GPL-3.0-only；包含该模块的打包物整体遵循 GPL-3.0。重新授权前已播种
+  的数据库仍带有 GPL 演示行（服务 103/104、资产 44/45）：改用纯 MIT 构建时，这些
+  行的缺失驱动类会导致启动失败——需删除这些行，或保留 GPL 模块在 classpath。新
+  部署如需这两个协议，需将 GPL 模块加入 classpath——其演示服务种子行由模块自行播种
 - org.json 替换为 Jackson（Apache-2.0）：JSON License（"Good, not Evil"）非 OSI
   认可。有意丢弃 org.json 的两个怪癖——MQTT jsonPath 命中 JSON null 时返回 `null`
   （原来是 `JSONObject.NULL` 哨兵）；路径穿过标量节点继续取值时返回 `null`

@@ -134,6 +134,7 @@ public class WsService extends PassiveService {
         try {
             JsonNode json = JSON_MAPPER.readTree(message);
             if (!json.isObject()) {
+                LOG.warn("Ignoring non-object WebSocket payload: {}", message);
                 return;
             }
             json.fields().forEachRemaining(entry -> {

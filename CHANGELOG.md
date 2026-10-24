@@ -22,9 +22,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   moved to a separate GPL-3.0 module (`gpl/systar-drivers-gpl`, **not part of this
   repository**) because their underlying libraries (BACnet4J, j60870) are
   GPL-3.0-only; binaries built with that module follow GPL-3.0 for the combined work.
-  Already-deployed instances are unaffected; fresh deployments wanting those two
-  protocols need the GPL module on the classpath — its demo service seed rows are
-  applied by the module itself
+  Databases seeded before the split still carry the GPL demo rows (services 103/104,
+  assets 44/45): an MIT-only build fails at startup on their missing driver classes
+  unless those rows are deleted or the GPL module stays on the classpath. Fresh
+  deployments wanting those two protocols need the GPL module on the classpath — its
+  demo service seed rows are applied by the module itself
 - org.json replaced with Jackson (Apache-2.0): the JSON License ("Good, not Evil")
   is not OSI-approved. Two org.json quirks were intentionally dropped — a JSON null
   at an MQTT jsonPath now yields `null` (was the `JSONObject.NULL` sentinel), and a

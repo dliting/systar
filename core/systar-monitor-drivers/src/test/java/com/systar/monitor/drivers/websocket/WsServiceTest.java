@@ -1,5 +1,9 @@
 package com.systar.monitor.drivers.websocket;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.systar.monitor.asset.type.ProbeType;
 import com.systar.monitor.result.ResultDispatcher;
 import org.junit.jupiter.api.BeforeEach;
@@ -7,6 +11,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.TimeUnit;
 
@@ -78,6 +83,26 @@ class WsServiceTest {
         void nonObjectPayloadIsIgnored() {
             assertThatCode(() -> service.parseAndRoute("42")).doesNotThrowAnyException();
             assertThat(probe.getValue()).isNull();
+        }
+
+        @Test
+        @DisplayName("non-object JSON payload logs a warning naming the payload")
+        void nonObjectPayloadLogsWarning() {
+            Logger logger = (Logger) LoggerFactory.getLogger(WsService.class);
+            ListAppender<ILoggingEvent> appender = new ListAppender<>();
+            appender.start();
+            logger.addAppender(appender);
+            try {
+                service.parseAndRoute("42");
+            } finally {
+                logger.detachAppender(appender);
+                appender.stop();
+            }
+            assertThat(appender.list)
+                    .anySatisfy(event -> {
+                        assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                        assertThat(event.getFormattedMessage()).contains("42");
+                    });
         }
     }
 }
