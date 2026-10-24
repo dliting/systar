@@ -2,19 +2,26 @@ package com.systar.server.listener;
 
 import com.systar.monitor.asset.*;
 import com.systar.monitor.asset.type.VirtualProbeType;
-import com.systar.monitor.server.MonitorServer;
+import com.systar.monitor.server.MonitorEngine;
 import com.systar.server.event.AssetChangedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+
 /**
- * Bridges {@link AssetChangedEvent} to {@link MonitorServer} runtime operations.
+ * Bridges {@link AssetChangedEvent} to {@link MonitorEngine} runtime operations.
  * <p>
  * Listens for CRUD and lifecycle events published by
  * {@link com.systar.server.service.AssetOrchestrator} and applies the
- * corresponding in-memory store and scheduler changes.
+ * corresponding in-memory store and scheduler changes. The engine is
+ * optional: with it absent, CRUD events are applied to the
+ * {@link AssetStore} directly (store mode — no scheduler to register
+ * with) and runtime operations are WARN-skipped once.
  * <p>
  * All cascade logic (disable children, smart-enable) lives here so that
  * {@code AssetOrchestrator} remains focused on DB persistence.
@@ -24,15 +31,29 @@ public class AssetCrudListener {
 
     private static final Logger log = LoggerFactory.getLogger(AssetCrudListener.class);
 
-    private final MonitorServer monitorServer;
+    private final ObjectProvider<MonitorEngine> engine;
     private final VirtualProbeEngine virtualProbeEngine;
     private final AssetStore assetStore;
+    private final AtomicBoolean engineWarned = new AtomicBoolean();
 
-    public AssetCrudListener(MonitorServer monitorServer, VirtualProbeEngine virtualProbeEngine,
+    public AssetCrudListener(ObjectProvider<MonitorEngine> engine,
+                             VirtualProbeEngine virtualProbeEngine,
                              AssetStore assetStore) {
-        this.monitorServer    = monitorServer;
+        this.engine             = engine;
         this.virtualProbeEngine = virtualProbeEngine;
-        this.assetStore       = assetStore;
+        this.assetStore         = assetStore;
+    }
+
+    /** Runs a runtime operation on the engine, WARN-skipping once when absent. */
+    private void withEngine(String operation, Consumer<MonitorEngine> op) {
+        MonitorEngine e = engine.getIfAvailable();
+        if (e == null) {
+            if (engineWarned.compareAndSet(false, true)) {
+                log.warn("Monitor engine not present; {} skipped.", operation);
+            }
+            return;
+        }
+        op.accept(e);
     }
 
     @EventListener
@@ -52,7 +73,7 @@ public class AssetCrudListener {
      * Runtime operations (start/stop/disable/enable) are non-transactional.
      * Log failures instead of propagating to avoid misleading error responses.
      */
-    private void handleRuntime(AssetChangedEvent event, java.util.function.Consumer<AssetChangedEvent> handler) {
+    private void handleRuntime(AssetChangedEvent event, Consumer<AssetChangedEvent> handler) {
         try {
             handler.accept(event);
         } catch (Exception e) {
@@ -63,7 +84,12 @@ public class AssetCrudListener {
 
     private void handleCreated(AssetChangedEvent event) {
         if (event.asset() != null) {
-            monitorServer.addAsset(event.asset());
+            MonitorEngine e = engine.getIfAvailable();
+            if (e == null) {
+                assetStore.addAsset(event.asset());
+            } else {
+                e.addAsset(event.asset());
+            }
             if (event.asset() instanceof VirtualProbe vp
                     && vp.getType() instanceof VirtualProbeType) {
                 vp.setAssetStore(assetStore);
@@ -75,7 +101,12 @@ public class AssetCrudListener {
     private void handleUpdated(AssetChangedEvent event) {
         if (event.asset() == null) return;
         Asset<?> asset = event.asset();
-        monitorServer.updateAsset(asset);
+        MonitorEngine e = engine.getIfAvailable();
+        if (e == null) {
+            assetStore.replaceAsset(asset.getId(), asset);
+        } else {
+            e.updateAsset(asset);
+        }
 
         // Always unregister for PROBE updates to handle VP→non-VP type conversion
         if (event.kind() == AssetKind.PROBE) {
@@ -94,25 +125,30 @@ public class AssetCrudListener {
         if (event.kind() == AssetKind.PROBE) {
             virtualProbeEngine.unregister(id);
         }
-        monitorServer.removeAsset(id);
+        MonitorEngine e = engine.getIfAvailable();
+        if (e == null) {
+            assetStore.removeAsset(id);
+        } else {
+            e.removeAsset(id);
+        }
     }
 
     private void handleStarted(AssetChangedEvent event) {
-        monitorServer.startMonitor(event.assetId());
+        withEngine("monitor start", e -> e.startMonitor(event.assetId()));
     }
 
     private void handleStopped(AssetChangedEvent event) {
-        monitorServer.stopMonitor(event.assetId());
+        withEngine("monitor stop", e -> e.stopMonitor(event.assetId()));
     }
 
     private void handleDisabled(AssetChangedEvent event) {
         int id = event.assetId();
-        Asset<?> asset = monitorServer.findAsset(id);
+        Asset<?> asset = assetStore.findAsset(id);
         if (asset == null) return;
 
         // Unschedule if monitor
         if (asset instanceof Monitor<?>) {
-            monitorServer.stopMonitor(id);
+            withEngine("monitor stop", e -> e.stopMonitor(id));
         }
         asset.setEnabled(false);
 
@@ -124,7 +160,7 @@ public class AssetCrudListener {
 
     private void handleEnabled(AssetChangedEvent event) {
         int id = event.assetId();
-        Asset<?> asset = monitorServer.findAsset(id);
+        Asset<?> asset = assetStore.findAsset(id);
         if (asset == null) return;
 
         asset.setEnabled(true);
@@ -136,7 +172,7 @@ public class AssetCrudListener {
 
         // If the asset itself is a monitor, start it
         if (asset instanceof Monitor<?>) {
-            monitorServer.startMonitor(id);
+            withEngine("monitor start", e -> e.startMonitor(id));
         }
     }
 
@@ -146,7 +182,7 @@ public class AssetCrudListener {
             // Parent disable is a runtime operation; individual child
             // enabled/disabled state is a config-level concern.
             if (child instanceof Monitor<?>) {
-                monitorServer.stopMonitor(child.getId());
+                withEngine("monitor stop", e -> e.stopMonitor(child.getId()));
             }
 
             if (child instanceof CompoundAsset<?> childCompound) {
@@ -163,7 +199,7 @@ public class AssetCrudListener {
             }
 
             if (child instanceof Monitor<?>) {
-                monitorServer.startMonitor(child.getId());
+                withEngine("monitor start", e -> e.startMonitor(child.getId()));
             }
 
             if (child instanceof CompoundAsset<?> childCompound) {

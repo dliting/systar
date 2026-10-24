@@ -9,7 +9,7 @@ import com.systar.data.service.AlarmMessageService;
 import com.systar.monitor.asset.Asset;
 import com.systar.monitor.asset.AssetKind;
 import com.systar.monitor.asset.AssetState;
-import com.systar.monitor.server.MonitorServer;
+import com.systar.monitor.asset.AssetStore;
 import com.systar.common.api.Result;
 import com.systar.server.model.DashboardStats;
 import org.junit.jupiter.api.Test;
@@ -22,7 +22,7 @@ class DashboardControllerTest {
     @Test
     @SuppressWarnings("unchecked")
     void shouldReturnDashboardStats() {
-        MonitorServer monitorServer = mock(MonitorServer.class);
+        AssetStore assetStore = mock(AssetStore.class);
         AlarmMessageService alarmService = mock(AlarmMessageService.class);
 
         Asset device1 = createAsset(AssetKind.DEVICE, AssetState.NORMAL, true);
@@ -31,11 +31,11 @@ class DashboardControllerTest {
         Asset probe1 = createAsset(AssetKind.PROBE, AssetState.NORMAL, true);
         Asset probe2 = createAsset(AssetKind.PROBE, AssetState.ERROR, true);
 
-        when(monitorServer.getAssets()).thenReturn(List.of(device1, device2, device3, probe1, probe2));
+        when(assetStore.getAssets()).thenReturn(List.of(device1, device2, device3, probe1, probe2));
         when(alarmService.count()).thenReturn(10L);
         when(alarmService.count(any(LambdaQueryWrapper.class))).thenReturn(3L);
 
-        DashboardController controller = new DashboardController(monitorServer, alarmService);
+        DashboardController controller = new DashboardController(assetStore, alarmService);
         Result<DashboardStats> result = controller.getDashboard();
 
         assertEquals(Result.CODE_SUCCESS, result.getCode());
@@ -56,14 +56,14 @@ class DashboardControllerTest {
 
     @Test
     void shouldHandleEmptyAssets() {
-        MonitorServer monitorServer = mock(MonitorServer.class);
+        AssetStore assetStore = mock(AssetStore.class);
         AlarmMessageService alarmService = mock(AlarmMessageService.class);
 
-        when(monitorServer.getAssets()).thenReturn(List.of());
+        when(assetStore.getAssets()).thenReturn(List.of());
         when(alarmService.count()).thenReturn(0L);
         when(alarmService.count(any(LambdaQueryWrapper.class))).thenReturn(0L);
 
-        DashboardController controller = new DashboardController(monitorServer, alarmService);
+        DashboardController controller = new DashboardController(assetStore, alarmService);
         Result<DashboardStats> result = controller.getDashboard();
 
         assertEquals(Result.CODE_SUCCESS, result.getCode());

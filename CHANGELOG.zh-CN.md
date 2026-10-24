@@ -8,6 +8,25 @@
 
 ---
 
+## [1.2.0] - 2026-10-25
+
+闭源监测引擎——调度 / 告警 / 联动 / 定时控制运行时移入免费二进制的闭源模块；框架保持 MIT。
+
+### 新增
+
+**闭源监测引擎**
+- 新增 `commercial/systar-monitor-engine` 模块（闭源、二进制免费）：资产调度、告警判定、联动执行、定时控制。所有功能完整可用——无功能门控、无运行时许可校验；商业许可提供引擎源码访问与技术支持（`commercial/systar-monitor-engine/LICENSE-ENGINE.txt`；设计见 `docs/design/closed-engine.md`）
+- Releases 新增 `systar-server-<版本>-full.jar`：内嵌引擎，下载即用全功能；不含引擎的构建（公开 MIT 仓库）照常运行——框架启动、资产管理完整可用，仅运行时监控操作告警跳过一次
+- 引擎经 `EngineAutoConfiguration`（`AutoConfiguration.imports`）自动装配；server 代码只依赖 MIT API，经 `ObjectProvider` 可选注入引擎
+- 引擎缺席时由 server 接管运行时存储：`EngineAbsentAssetBootstrap` 启动时加载类型注册表与种子资产，资产 CRUD 事件直接落到 `AssetStore`——开源形态下资产管理完整可用
+
+### 变更
+
+- `systar-monitor-core` 更名为 `systar-monitor-api`——仅含 MIT 契约（资产模型、`AssetStore`、`MonitorEngine` 端口、告警 / 联动 / 定时任务契约）；引擎内部实现移入闭源模块
+- server 控制器、监听器与生命周期只引用 `systar-monitor-api`；引擎缺席时探测 / 控制接口返回冲突结果（"Monitor engine not present; … skipped."）而非报错
+
+---
+
 ## [1.1.1] - 2026-10-24
 
 驱动插件目录架构——驱动从核心构建中拆出、成为拷入即用的自包含插件目录——以及 MIT 重新授权。

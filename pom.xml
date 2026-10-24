@@ -13,7 +13,7 @@
 
     <groupId>com.systar</groupId>
     <artifactId>systar</artifactId>
-    <version>1.1.1</version>
+    <version>1.2.0</version>
     <packaging>pom</packaging>
     <name>systar</name>
     <description>Systar IoT Monitoring System</description>
@@ -34,7 +34,7 @@
 
     <modules>
         <module>core/systar-common</module>
-        <module>core/systar-monitor-core</module>
+        <module>core/systar-monitor-api</module>
         <module>core/systar-data</module>
         <module>drivers</module>
         <module>extensions/systar-websocket</module>
@@ -71,12 +71,17 @@
             </dependency>
             <dependency>
                 <groupId>com.systar</groupId>
-                <artifactId>systar-monitor-core</artifactId>
+                <artifactId>systar-monitor-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.systar</groupId>
                 <artifactId>systar-data</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.systar</groupId>
+                <artifactId>systar-monitor-engine</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

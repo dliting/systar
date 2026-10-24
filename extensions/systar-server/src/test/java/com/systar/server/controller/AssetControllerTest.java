@@ -2,7 +2,7 @@ package com.systar.server.controller;
 
 import com.systar.monitor.asset.*;
 import com.systar.monitor.asset.type.*;
-import com.systar.monitor.server.MonitorServer;
+import com.systar.monitor.server.MonitorEngine;
 import com.systar.common.api.Result;
 import com.systar.server.controller.vo.AssetVO;
 import com.systar.server.controller.vo.MonitorAssetVO;
@@ -11,6 +11,7 @@ import com.systar.server.dto.BatchResult;
 import com.systar.server.repository.AssetRepository;
 import com.systar.server.service.AssetOrchestrator;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.beans.factory.ObjectProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -27,23 +28,32 @@ import static org.mockito.Mockito.*;
 class AssetControllerTest {
 
     private AssetController controller;
-    private MonitorServer monitorServer;
+    private MonitorEngine engine;
     private AssetStore assetStore;
     private AssetOrchestrator orchestrator;
     private AssetRepository repo;
 
     @BeforeEach
     void setUp() {
-        monitorServer = mock(MonitorServer.class);
+        engine = mock(MonitorEngine.class);
         assetStore = new AssetStore();
         orchestrator = mock(AssetOrchestrator.class);
         repo = mock(AssetRepository.class);
-        controller = new AssetController(monitorServer, assetStore, orchestrator, repo);
+        controller = new AssetController(providerWith(engine), assetStore, orchestrator, repo);
     }
 
     @SuppressWarnings("unchecked")
+    private static ObjectProvider<MonitorEngine> providerWith(MonitorEngine engine) {
+        ObjectProvider<MonitorEngine> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(engine);
+        return provider;
+    }
+
+    /** Registers the asset in the real store the controller queries. */
     private void stubFindAsset(int id, Asset<?> asset) {
-        doReturn(asset).when(monitorServer).findAsset(id);
+        if (asset != null) {
+            assetStore.addAsset(asset);
+        }
     }
 
     @Nested
@@ -53,7 +63,6 @@ class AssetControllerTest {
         @Test
         @DisplayName("returns all assets when no kind filter")
         void noKindFilter() {
-            when(monitorServer.getAssets()).thenReturn(List.of());
             Result<List<AssetVO>> result = controller.getAssets(null, null);
             assertThat(result.getCode()).isEqualTo(0);
             assertThat(result.getData()).isEmpty();
@@ -66,7 +75,7 @@ class AssetControllerTest {
                 @Override public void detect(com.systar.monitor.result.IMonitorResult r) {}
             };
             probe.init(new ProbeType("test"), 1, "probe-1");
-            when(monitorServer.getAssetsByKind(AssetKind.PROBE)).thenReturn(List.of(probe));
+            assetStore.addAsset(probe);
             Result<List<AssetVO>> result = controller.getAssets("PROBE", null);
             assertThat(result.getCode()).isEqualTo(0);
             assertThat(result.getData()).hasSize(1);
@@ -84,10 +93,14 @@ class AssetControllerTest {
         @Test
         @DisplayName("blank kind returns all assets")
         void blankKindReturnsAll() {
-            when(monitorServer.getAssets()).thenReturn(List.of());
+            Probe probe = new Probe() {
+                @Override public void detect(com.systar.monitor.result.IMonitorResult r) {}
+            };
+            probe.init(new ProbeType("test"), 1, "probe-1");
+            assetStore.addAsset(probe);
             Result<List<AssetVO>> result = controller.getAssets("   ", null);
             assertThat(result.getCode()).isEqualTo(0);
-            verify(monitorServer).getAssets();
+            assertThat(result.getData()).hasSize(1);
         }
 
         @Test
@@ -101,8 +114,8 @@ class AssetControllerTest {
                 @Override public void detect(com.systar.monitor.result.IMonitorResult r) {}
             };
             probeB.init(new ProbeType("test"), 2, "probe-b");
-            when(monitorServer.getAssetsByKind(AssetKind.PROBE))
-                    .thenReturn(List.of(probeA, probeB));
+            assetStore.addAsset(probeA);
+            assetStore.addAsset(probeB);
 
             Result<List<AssetVO>> result = controller.getAssets("PROBE", "probe-a");
 
@@ -118,8 +131,7 @@ class AssetControllerTest {
                 @Override public void detect(com.systar.monitor.result.IMonitorResult r) {}
             };
             probeA.init(new ProbeType("test"), 1, "probe-a");
-            when(monitorServer.getAssetsByKind(AssetKind.PROBE))
-                    .thenReturn(List.of(probeA));
+            assetStore.addAsset(probeA);
 
             Result<List<AssetVO>> result = controller.getAssets("PROBE", "totally-new-name");
 
@@ -134,7 +146,7 @@ class AssetControllerTest {
                 @Override public void detect(com.systar.monitor.result.IMonitorResult r) {}
             };
             probe.init(new ProbeType("test"), 1, "probe-1");
-            when(monitorServer.getAssetsByKind(AssetKind.PROBE)).thenReturn(List.of(probe));
+            assetStore.addAsset(probe);
 
             Result<List<AssetVO>> result = controller.getAssets("PROBE", "   ");
 
@@ -429,6 +441,21 @@ class AssetControllerTest {
             stubFindAsset(1, probe);
             Result<Map<String, Object>> result = controller.detectAsset(1);
             assertThat(result.getCode()).isEqualTo(0);
+            verify(engine).detectImmediately(1);
+        }
+
+        @Test
+        @DisplayName("returns conflict when engine absent")
+        @SuppressWarnings("unchecked")
+        void engineAbsent() {
+            Probe probe = new Probe() {};
+            probe.init(new ProbeType("pt"), 1, "p");
+            assetStore.addAsset(probe);
+            ObjectProvider<MonitorEngine> absent = mock(ObjectProvider.class);
+            Result<Map<String, Object>> result =
+                    new AssetController(absent, assetStore, orchestrator, repo).detectAsset(1);
+            assertThat(result.getCode()).isEqualTo(Result.CODE_CONFLICT);
+            assertThat(result.getMessage()).contains("Monitor engine not present");
         }
 
         @Test

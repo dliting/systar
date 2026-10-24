@@ -8,6 +8,26 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.2.0] - 2026-10-25
+
+Closed-source monitor engine — the scheduling / alarm / linkage / time-control
+runtime moves to a free-binary closed module; the framework stays MIT.
+
+### Added
+
+**Closed-source monitor engine**
+- New `commercial/systar-monitor-engine` module (closed source, free binary): asset scheduling, alarm evaluation, linkage execution, time control. Every feature stays enabled — no feature gating, no runtime license check; commercial licensing covers engine source access and support (`commercial/systar-monitor-engine/LICENSE-ENGINE.txt`; design: `docs/design/closed-engine.md`)
+- `systar-server-<version>-full.jar` release artifact embeds the engine for download-and-run full functionality; plain builds that exclude the engine (the public MIT repository) run fine — the framework starts, asset management stays fully usable, and only runtime monitoring operations WARN-skip once
+- The engine auto-registers via `EngineAutoConfiguration` (`AutoConfiguration.imports`); server code depends only on the MIT API and injects the engine optionally via `ObjectProvider`
+- With the engine absent the server owns the runtime store itself: `EngineAbsentAssetBootstrap` loads the type registries and seeded assets at startup, and asset CRUD events are applied directly to the `AssetStore` — asset management is fully functional in the open-source form
+
+### Changed
+
+- `systar-monitor-core` renamed to `systar-monitor-api` — MIT contracts only (asset model, `AssetStore`, the `MonitorEngine` port, alarm / linkage / scheduled-task contracts); engine internals moved to the closed module
+- Server controllers, listeners and lifecycle reference only `systar-monitor-api`; with the engine absent, detection/control endpoints return a conflict result ("Monitor engine not present; … skipped.") instead of failing
+
+---
+
 ## [1.1.1] - 2026-10-24
 
 Driver plugin directory architecture — drivers split out of the core build into

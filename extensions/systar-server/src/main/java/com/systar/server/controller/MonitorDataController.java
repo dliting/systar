@@ -11,8 +11,8 @@ import com.systar.data.service.SystemSettingService;
 import com.systar.data.service.impl.DataRetentionServiceImpl;
 import com.systar.data.service.retention.RetentionSummary;
 import com.systar.monitor.asset.Asset;
+import com.systar.monitor.asset.AssetStore;
 import com.systar.monitor.asset.Monitor;
-import com.systar.monitor.server.MonitorServer;
 import com.systar.common.api.Result;
 import com.systar.common.security.RequirePermission;
 import com.systar.server.controller.vo.ProbeValueVO;
@@ -32,18 +32,18 @@ public class MonitorDataController {
     private static final int MAX_IDS_LENGTH = 10000;
     private static final int DEFAULT_PAGE_SIZE_MAX = 500;
 
-    private final MonitorServer        monitorServer;
+    private final AssetStore             assetStore;
     private final SampleFloatService   sampleFloatService;
     private final DataRetentionService retentionService;
     private final SystemConfigManager  configManager;
     private final SystemSettingService settingService;
 
-    public MonitorDataController(MonitorServer monitorServer,
+    public MonitorDataController(AssetStore assetStore,
                                  SampleFloatService sampleFloatService,
                                  DataRetentionService retentionService,
                                  SystemConfigManager configManager,
                                  SystemSettingService settingService) {
-        this.monitorServer      = monitorServer;
+        this.assetStore         = assetStore;
         this.sampleFloatService = sampleFloatService;
         this.retentionService   = retentionService;
         this.configManager      = configManager;
@@ -64,7 +64,7 @@ public class MonitorDataController {
         for (String part : parts) {
             try {
                 int id = Integer.parseInt(part.trim());
-                Asset<?> asset = monitorServer.findAsset(id);
+                Asset<?> asset = assetStore.findAsset(id);
                 if (asset instanceof Monitor<?> monitor) {
                     ProbeValueVO vo = new ProbeValueVO();
                     vo.setId(monitor.getId());

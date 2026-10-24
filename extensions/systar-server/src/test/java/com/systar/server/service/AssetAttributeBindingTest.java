@@ -1,8 +1,8 @@
 package com.systar.server.service;
 
 import com.systar.monitor.asset.AssetKind;
+import com.systar.monitor.asset.AssetStore;
 import com.systar.monitor.drivers.modbus.ModbusService;
-import com.systar.monitor.server.MonitorServer;
 import com.systar.server.dto.AssetCreateRequest;
 import com.systar.server.dto.AssetUpdateRequest;
 import com.systar.server.repository.AssetRepository;
@@ -49,7 +49,7 @@ class AssetAttributeBindingTest {
     private AssetOrchestrator orchestrator;
 
     @Autowired
-    private MonitorServer monitorServer;
+    private AssetStore assetStore;
 
     @Autowired
     private AssetRepository repository;
@@ -60,7 +60,7 @@ class AssetAttributeBindingTest {
     @AfterEach
     void removeFromStore() {
         for (int id : createdIds) {
-            monitorServer.removeAsset(id);
+            assetStore.removeAsset(id);
         }
         createdIds.clear();
     }
@@ -81,7 +81,7 @@ class AssetAttributeBindingTest {
                 "Port", "55503",
                 "UnitId", "123"));
 
-        ModbusService runtime = (ModbusService) monitorServer.findAsset(id);
+        ModbusService runtime = (ModbusService) assetStore.findAsset(id);
         assertThat(runtime.getHost()).isEqualTo("192.168.1.50");
         assertThat(runtime.getPort()).isEqualTo(55503);
         assertThat(runtime.getUnitId()).isEqualTo(123);
@@ -97,7 +97,7 @@ class AssetAttributeBindingTest {
     void createServiceBindsTypeDefaults() {
         int id = createService("default_svc", Map.of());
 
-        ModbusService runtime = (ModbusService) monitorServer.findAsset(id);
+        ModbusService runtime = (ModbusService) assetStore.findAsset(id);
         assertThat(runtime.getHost()).isEqualTo("127.0.0.1");
         assertThat(runtime.getPort()).isEqualTo(502);
         assertThat(runtime.getUnitId()).isEqualTo(1);
@@ -115,7 +115,7 @@ class AssetAttributeBindingTest {
                 null, null, null, Map.of(),
                 Map.of("Host", "10.0.0.9", "Port", "502", "UnitId", "77")));
 
-        ModbusService runtime = (ModbusService) monitorServer.findAsset(id);
+        ModbusService runtime = (ModbusService) assetStore.findAsset(id);
         assertThat(runtime.getHost()).isEqualTo("10.0.0.9");
         assertThat(runtime.getPort()).isEqualTo(502);
         assertThat(runtime.getUnitId()).isEqualTo(77);
@@ -141,7 +141,7 @@ class AssetAttributeBindingTest {
                 Map.of("mode", "ACTIVE"), Map.of("Timeout", "8000"))).runtimeId();
         createdIds.add(id);
 
-        ModbusService overridden = (ModbusService) monitorServer.findAsset(id);
+        ModbusService overridden = (ModbusService) assetStore.findAsset(id);
         assertThat(overridden.getTimeout()).isEqualTo(8000);
 
         int plainId = orchestrator.createAsset(new AssetCreateRequest(
@@ -149,7 +149,7 @@ class AssetAttributeBindingTest {
                 "ModbusTcpMaster", Map.of("mode", "ACTIVE"), Map.of())).runtimeId();
         createdIds.add(plainId);
 
-        ModbusService withDefault = (ModbusService) monitorServer.findAsset(plainId);
+        ModbusService withDefault = (ModbusService) assetStore.findAsset(plainId);
         assertThat(withDefault.getTimeout()).isEqualTo(5000);
     }
 
@@ -166,7 +166,7 @@ class AssetAttributeBindingTest {
 
         // ModbusProbe reads RegisterAddr from metadata at detect time — the
         // runtime instance must reflect the updated value without a restart.
-        Object registerAddr = monitorServer.findAsset(id).getMetadata("RegisterAddr");
+        Object registerAddr = assetStore.findAsset(id).getMetadata("RegisterAddr");
         assertThat(registerAddr).isEqualTo("200");
     }
 }

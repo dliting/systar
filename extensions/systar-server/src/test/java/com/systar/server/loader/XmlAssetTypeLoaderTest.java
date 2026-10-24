@@ -102,6 +102,18 @@ class XmlAssetTypeLoaderTest {
     }
 
     @Test
+    @DisplayName("Loading twice replaces type registrations instead of failing on duplicates")
+    void loadTwiceIsIdempotent() {
+        loader.load(store);
+        int serviceCount = store.getServiceTypes().size();
+
+        loader.load(store);
+
+        assertThat(store.getServiceTypes().size()).isEqualTo(serviceCount);
+        assertThat(store.getDeviceTypes().find("GenericDevice")).isNotNull();
+    }
+
+    @Test
     @DisplayName("Previously broken types now have correct JavaClass")
     void brokenTypesHaveJavaClass() {
         loader.load(store);

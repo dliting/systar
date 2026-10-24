@@ -5,7 +5,7 @@ import com.systar.common.security.RequirePermission;
 import com.systar.monitor.asset.*;
 import com.systar.monitor.asset.type.AssetType;
 import com.systar.monitor.asset.type.MonitorType;
-import com.systar.monitor.server.MonitorServer;
+import com.systar.monitor.server.MonitorEngine;
 import com.systar.server.controller.vo.AssetVO;
 import com.systar.server.controller.vo.MonitorAssetVO;
 import com.systar.server.dto.AssetCreateRequest;
@@ -15,28 +15,42 @@ import com.systar.server.dto.BatchResult;
 import com.systar.server.dto.TypePropertyVO;
 import com.systar.server.repository.AssetRepository;
 import com.systar.server.service.AssetOrchestrator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/monitor")
 public class AssetController {
 
-    private final MonitorServer monitorServer;
+    private static final Logger log = LoggerFactory.getLogger(AssetController.class);
+
+    private final ObjectProvider<MonitorEngine> engine;
     private final AssetStore assetStore;
     private final AssetOrchestrator orchestrator;
     private final AssetRepository repo;
+    private final AtomicBoolean engineWarned = new AtomicBoolean();
 
-    public AssetController(MonitorServer monitorServer,
+    public AssetController(ObjectProvider<MonitorEngine> engine,
                            AssetStore assetStore,
                            AssetOrchestrator orchestrator,
                            AssetRepository repo) {
-        this.monitorServer = monitorServer;
+        this.engine = engine;
         this.assetStore = assetStore;
         this.orchestrator = orchestrator;
         this.repo = repo;
+    }
+
+    /** WARN once per injection point when the optional engine is absent. */
+    private void warnEngineAbsent(String operation) {
+        if (engineWarned.compareAndSet(false, true)) {
+            log.warn("Monitor engine not present; {} skipped.", operation);
+        }
     }
 
     // ======================== query ========================
@@ -50,12 +64,12 @@ public class AssetController {
         if (kind != null && !kind.isBlank()) {
             try {
                 AssetKind assetKind = AssetKind.valueOf(kind.toUpperCase());
-                assets = monitorServer.getAssetsByKind(assetKind);
+                assets = assetStore.getAssetsByKind(assetKind);
             } catch (IllegalArgumentException e) {
                 return Result.error("Invalid asset kind: " + kind);
             }
         } else {
-            assets = monitorServer.getAssets();
+            assets = assetStore.getAssets();
         }
         if (name != null && !name.isBlank()) {
             assets = assets.stream()
@@ -71,7 +85,7 @@ public class AssetController {
     @RequirePermission("iot:asset:query")
     @GetMapping("/assets/{id}")
     public Result<AssetVO> getAsset(@PathVariable int id) {
-        Asset<?> asset = monitorServer.findAsset(id);
+        Asset<?> asset = assetStore.findAsset(id);
         if (asset == null) {
             return Result.error(Result.CODE_NOT_FOUND, "Asset not found: " + id);
         }
@@ -167,7 +181,12 @@ public class AssetController {
             if (kind == null) {
                 return Result.error(Result.CODE_NOT_FOUND, "Asset not found: " + id);
             }
-            monitorServer.detectImmediately(id);
+            MonitorEngine e = engine.getIfAvailable();
+            if (e == null) {
+                warnEngineAbsent("detection");
+                return Result.error(Result.CODE_CONFLICT, "Monitor engine not present; detection skipped.");
+            }
+            e.detectImmediately(id);
             return Result.success(Map.of("status", "accepted"));
         } catch (IllegalStateException e) {
             return Result.error(Result.CODE_CONFLICT, e.getMessage());
@@ -325,7 +344,7 @@ public class AssetController {
     // ======================== private helpers ========================
 
     private AssetKind resolveKindFromStore(int id) {
-        Asset<?> asset = monitorServer.findAsset(id);
+        Asset<?> asset = assetStore.findAsset(id);
         return asset != null ? asset.getKind() : null;
     }
 

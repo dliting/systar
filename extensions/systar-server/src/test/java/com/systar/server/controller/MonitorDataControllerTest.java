@@ -13,7 +13,6 @@ import com.systar.monitor.asset.*;
 import com.systar.monitor.asset.type.Device;
 import com.systar.monitor.asset.type.DeviceType;
 import com.systar.monitor.asset.type.ProbeType;
-import com.systar.monitor.server.MonitorServer;
 import com.systar.common.api.Result;
 import com.systar.server.controller.vo.ProbeValueVO;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,25 +33,25 @@ import static org.mockito.Mockito.*;
 class MonitorDataControllerTest {
 
     private MonitorDataController controller;
-    private MonitorServer monitorServer;
+    private AssetStore assetStore;
     private SampleFloatService sampleFloatService;
     private DataRetentionService retentionService;
     private SystemConfigManager configManager;
 
     @BeforeEach
     void setUp() {
-        monitorServer      = mock(MonitorServer.class);
+        assetStore         = mock(AssetStore.class);
         sampleFloatService = mock(SampleFloatService.class);
         retentionService   = mock(DataRetentionService.class);
         configManager      = new SystemConfigManager();
         SystemSettingService settingService = mock(SystemSettingService.class);
-        controller = new MonitorDataController(monitorServer, sampleFloatService,
+        controller = new MonitorDataController(assetStore, sampleFloatService,
                 retentionService, configManager, settingService);
     }
 
     @SuppressWarnings("unchecked")
     private void stubFindAsset(int id, Asset<?> asset) {
-        doReturn(asset).when(monitorServer).findAsset(id);
+        doReturn(asset).when(assetStore).findAsset(id);
     }
 
     @Nested

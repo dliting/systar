@@ -2,7 +2,7 @@ package com.systar.server.service;
 
 import com.systar.monitor.asset.Asset;
 import com.systar.monitor.asset.AssetKind;
-import com.systar.monitor.server.MonitorServer;
+import com.systar.monitor.asset.AssetStore;
 import com.systar.server.dto.AssetCreateRequest;
 import com.systar.server.repository.GroupRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -46,7 +46,7 @@ class AssetViewParentIdTest {
     private AssetOrchestrator orchestrator;
 
     @Autowired
-    private MonitorServer monitorServer;
+    private AssetStore assetStore;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -60,7 +60,7 @@ class AssetViewParentIdTest {
     @AfterEach
     void removeFromStore() {
         for (int id : createdIds) {
-            monitorServer.removeAsset(id);
+            assetStore.removeAsset(id);
         }
         createdIds.clear();
     }
@@ -88,7 +88,7 @@ class AssetViewParentIdTest {
                 "DEVICE", ROOT_PARENT_ID, "bridge_dev", "bridge_dev", null, Map.of(), Map.of()));
         createdIds.add(result.runtimeId());
 
-        assertThat(monitorServer.findAsset(result.runtimeId())).isNotNull();
+        assertThat(assetStore.findAsset(result.runtimeId())).isNotNull();
         assertThat(groupRepo.findAssetRefs(List.of(result.assetRowId())))
                 .containsEntry(result.assetRowId(),
                         new GroupRepository.AssetRef(AssetKind.DEVICE, result.runtimeId()));

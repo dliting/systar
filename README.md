@@ -8,7 +8,8 @@ English | [简体中文](README.zh-CN.md)
 
 Systar is a general-purpose IoT monitoring and operations framework for smart campuses,
 factory lines, energy management, data centers and similar environments. The monitoring
-core is decoupled from the web layer and can be embedded as a standalone library.
+runtime is decoupled from the web layer and engine-optional: the server starts and
+manages assets fully without the closed-source engine.
 
 ## Screenshots
 
@@ -47,10 +48,13 @@ the offending plugin named. See the
 [driver development guide](docs/driver-development-guide.md) and the
 [type XML specification](docs/design/xml-asset-type-config-design.md).
 
-**Embeddable monitoring core.** `systar-monitor-core` has no web dependency.
-It defines its own repository interfaces (samples, alarms, linkages, scheduled
-tasks) which `systar-data` implements, so the engine can run as a library
-inside another application.
+**Engine-optional monitoring runtime.** `systar-monitor-api` defines the
+monitoring contracts (asset model, repository interfaces, result dispatch,
+alarm/linkage/scheduling ports) with no web dependency; `systar-data`
+implements the repositories and the closed-source `systar-monitor-engine`
+implements the runtime. Without the engine the server still starts and asset
+management stays fully usable — only acquisition scheduling, alarms, linkage
+and scheduled control need it.
 
 **One asset model.** Devices, services, probes and controls share a single
 typed-property model with a defined resolution order (instance value → type
@@ -103,10 +107,14 @@ cache is primed; every dependency of this repository resolves from Maven Central
 ```
 core/                          monitoring framework (usable standalone)
 ├── systar-common/             shared utilities (IDs, code dictionaries, config, TimeSpan)
-├── systar-monitor-core/       monitoring engine (asset model, scheduling, result
-│                              dispatch, alarms, linkage, virtual probes)
+├── systar-monitor-api/        monitoring contracts (asset model, repository
+│                              interfaces, result dispatch, alarm/linkage ports)
 └── systar-data/               persistence layer (MyBatis-Plus entities/mappers,
                                repository implementations)
+commercial/
+└── systar-monitor-engine/     closed-source monitoring runtime (acquisition
+                               scheduling, alarm evaluation, linkage, time
+                               control; auto-configured when on the classpath)
 drivers/                       protocol driver plugins (one Maven module per protocol;
                                each builds to a self-contained plugin directory)
 extensions/
@@ -126,12 +134,14 @@ sql/                           MySQL + H2 schemas and seed data
 Module dependency flow:
 
 ```
-systar-server ──→ systar-websocket ──→ systar-monitor-core ──→ systar-common
-systar-server ──→ systar-data ────────→ systar-monitor-core
+systar-server ──→ systar-websocket ──→ systar-monitor-api ──→ systar-common
+systar-server ──→ systar-data ────────→ systar-monitor-api
 systar-server ──→ systar-ops ──→ systar-data, systar-common
 systar-server ──→ systar-system ──→ systar-data, systar-common
+systar-server ──→ systar-monitor-engine ──→ systar-monitor-api
+                  (optional; auto-configured when present, absent in OSS builds)
 
-driver plugins ──→ systar-monitor-core (provided only; loaded at runtime from the
+driver plugins ──→ systar-monitor-api (provided only; loaded at runtime from the
 driver search path, no compile-time dependency on systar-server)
 ```
 
@@ -317,8 +327,22 @@ Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md)
 
 Copyright (c) 2026 Hao Yufei.
 
-Systar is licensed under the **MIT License** — see [LICENSE](LICENSE).
-Full component attribution: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+Systar is licensed under the **MIT License** (framework) — see
+[LICENSE](LICENSE) — plus the **Systar Engine Binary License** for the
+monitor-engine binary (free to use, all features). Full component
+attribution: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+### Closed-source monitor engine
+
+The monitor engine (asset scheduling, alarm evaluation, linkage execution,
+time control) ships as a **free binary with every feature enabled** — no
+feature gating, no runtime license check. For the full experience download
+the `systar-server-<version>-full.jar` release artifact, which embeds the
+engine; engine source and support are available commercially. Builds that
+exclude the engine — the public MIT repository is one — run fine: the
+framework starts, asset management stays fully usable, and only runtime
+monitoring operations WARN-skip. Details:
+[docs/design/closed-engine.md](docs/design/closed-engine.md).
 
 ### Optional GPL driver plugins
 

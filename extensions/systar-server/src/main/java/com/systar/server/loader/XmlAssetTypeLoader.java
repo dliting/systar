@@ -210,6 +210,7 @@ public class XmlAssetTypeLoader implements com.systar.monitor.asset.type.AssetTy
                                                     AssetTypeManager<T> manager,
                                                     Map<AssetKind, List<TypeResource>> resourcesByKind,
                                                     Map<AssetKind, Set<String>> seenByKind) throws Exception {
+        manager.clear();   // reload replaces this kind's registry; load() may run more than once
         Set<String> seenInXml = seenByKind.computeIfAbsent(kind, k -> new LinkedHashSet<>());
         Map<String, String> firstSourceByName = new HashMap<>();
         int count = 0;

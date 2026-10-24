@@ -6,7 +6,8 @@
 > 统计 → 运维 → 看板）已完成，并有自动化测试覆盖。
 
 Systar 是一个通用 IoT 工业监控运维框架，适用于智慧园区、工厂产线、能源管理、数据中心等
-场景。核心监控引擎与 Web 层解耦，可作为独立库嵌入。
+场景。监控运行时与 Web 层解耦且引擎可选：闭源引擎缺席时，服务器照常启动、资产管理
+完整可用。
 
 ## 系统截图
 
@@ -39,9 +40,10 @@ Systar 是一个通用 IoT 工业监控运维框架，适用于智慧园区、�
 在启动时快速失败，并指明问题插件。详见[驱动二次开发指南](docs/driver-development-guide.md)与
 [类型 XML 规范](docs/design/xml-asset-type-config-design.md)。
 
-**可嵌入的监控核心。** `systar-monitor-core` 不依赖 Web 层：它自定义仓储接口
-（采样、告警、联动、定时任务），由 `systar-data` 提供实现，因此引擎可以作为
-库嵌入其他应用运行。
+**引擎可选的监控运行时。** `systar-monitor-api` 定义监控契约（资产模型、
+仓储接口、结果分发、告警/联动/调度端口），不依赖 Web 层；`systar-data`
+实现仓储，闭源 `systar-monitor-engine` 实现运行时。引擎缺席时服务器照常
+启动、资产管理完整可用——只有采集调度、告警、联动、定时控制需要引擎。
 
 **统一资产模型。** 设备、服务、监测点、控制点共享同一套类型化属性模型，取值
 优先级明确（实例值 → 类型默认值 → 内置默认值）。虚拟监测点（SpEL 派生指标）
@@ -84,9 +86,12 @@ Maven Central 解析。
 ```
 core/                          监控框架（可独立使用）
 ├── systar-common/             通用工具（ID 生成、代码字典、系统配置、TimeSpan）
-├── systar-monitor-core/       核心监控引擎（资产模型、调度、结果分发、
-│                              告警、联动、虚拟监测点）
+├── systar-monitor-api/        监控契约（资产模型、仓储接口、结果分发、
+│                              告警/联动端口）
 └── systar-data/               数据访问层（MyBatis-Plus 实体/映射器、仓储实现）
+commercial/
+└── systar-monitor-engine/     闭源监控运行时（采集调度、告警评估、联动、
+                               定时控制；在 classpath 上时自动装配）
 drivers/                       协议驱动插件模块（每协议一个 Maven 模块；
                                各自构建为自包含插件目录）
 extensions/
@@ -103,12 +108,14 @@ sql/                           MySQL + H2 双方言脚本与种子数据
 模块依赖关系：
 
 ```
-systar-server ──→ systar-websocket ──→ systar-monitor-core ──→ systar-common
-systar-server ──→ systar-data ────────→ systar-monitor-core
+systar-server ──→ systar-websocket ──→ systar-monitor-api ──→ systar-common
+systar-server ──→ systar-data ────────→ systar-monitor-api
 systar-server ──→ systar-ops ──→ systar-data, systar-common
 systar-server ──→ systar-system ──→ systar-data, systar-common
+systar-server ──→ systar-monitor-engine ──→ systar-monitor-api
+                  （可选；存在时自动装配，开源构建中缺席）
 
-驱动插件 ──→ systar-monitor-core（仅 provided；运行期经驱动搜索路径加载，
+驱动插件 ──→ systar-monitor-api（仅 provided；运行期经驱动搜索路径加载，
 与 systar-server 无编译期依赖）
 ```
 
@@ -290,8 +297,17 @@ systar/
 
 Copyright (c) 2026 Hao Yufei。
 
-Systar 以 **MIT License** 许可发布——见 [LICENSE](LICENSE)。
-完整组件归因见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+Systar 以 **MIT License**（框架）许可发布——见 [LICENSE](LICENSE)；监测引擎二进制
+另按 **Systar Engine Binary License** 许可（免费使用、功能完整）。完整组件归因见
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+
+### 闭源监测引擎
+
+监测引擎（资产调度、告警判定、联动执行、定时控制）以**免费二进制**发布，所有功能
+完整可用——无功能门控、无运行时许可校验。完整体验请下载 Releases 中内嵌引擎的
+`systar-server-<版本>-full.jar`；引擎源码与技术支持经商业渠道提供。不含引擎的构建
+（公开 MIT 仓库即如此）照常运行：框架启动、资产管理完整可用，仅运行时监控操作告警
+跳过。详见[docs/design/closed-engine.md](docs/design/closed-engine.md)。
 
 ### 可选 GPL 驱动插件
 

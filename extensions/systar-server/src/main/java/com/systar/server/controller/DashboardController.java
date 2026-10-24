@@ -5,8 +5,8 @@ import com.systar.data.entity.AlarmMessageEntity;
 import com.systar.data.service.AlarmMessageService;
 import com.systar.monitor.asset.Asset;
 import com.systar.monitor.asset.AssetKind;
+import com.systar.monitor.asset.AssetStore;
 import com.systar.monitor.asset.AssetState;
-import com.systar.monitor.server.MonitorServer;
 import com.systar.common.api.Result;
 import com.systar.common.security.RequirePermission;
 import com.systar.server.model.DashboardStats;
@@ -21,11 +21,11 @@ import java.util.Map;
 @RequestMapping("/api/monitor")
 public class DashboardController {
 
-    private final MonitorServer monitorServer;
+    private final AssetStore assetStore;
     private final AlarmMessageService alarmMessageService;
 
-    public DashboardController(MonitorServer monitorServer, AlarmMessageService alarmMessageService) {
-        this.monitorServer = monitorServer;
+    public DashboardController(AssetStore assetStore, AlarmMessageService alarmMessageService) {
+        this.assetStore = assetStore;
         this.alarmMessageService = alarmMessageService;
     }
 
@@ -42,7 +42,7 @@ public class DashboardController {
             stateCounts.put(s.name(), 0);
         }
 
-        for (Asset<?> asset : monitorServer.getAssets()) {
+        for (Asset<?> asset : assetStore.getAssets()) {
             AssetState state = asset.getState();
             stateCounts.merge(state.name(), 1, Integer::sum);
 
