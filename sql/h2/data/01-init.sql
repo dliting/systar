@@ -75,7 +75,6 @@ MERGE INTO t_code_dict (id, catalog_id, name, caption, parent) KEY (id)
 MERGE INTO t_code_dict (id, catalog_id, name, caption, parent) KEY (id)
     VALUES (801, 8, 'MODBUS_TCP',  'Modbus TCP',  NULL),
            (802, 8, 'MODBUS_RTU',  'Modbus RTU',  NULL),
-           (803, 8, 'BACNET',      'BACnet',      NULL),
            (804, 8, 'OPC_UA',      'OPC UA',      NULL),
            (805, 8, 'MQTT',        'MQTT',        NULL),
            (806, 8, 'SNMP',        'SNMP',        NULL),
@@ -117,8 +116,6 @@ MERGE INTO t_service (id, name, caption, mode, driver_class, max_connections, ty
     VALUES (100, 'modbus_tcp_svc',  'Modbus TCP服务',  0, 'com.systar.monitor.drivers.modbus.ModbusService',    10, 'ModbusTcpMaster'),
            (101, 'mqtt_svc',        'MQTT服务',        1, 'com.systar.monitor.drivers.mqtt.MqttService',         5,  NULL),
            (102, 'opcua_svc',       'OPC UA服务',      0, 'com.systar.monitor.drivers.opcua.OpcUaService',      8,  NULL),
-           (103, 'iec104_svc',      'IEC 104服务',     0, 'com.systar.monitor.drivers.iec104.Iec104Service',    5,  NULL),
-           (104, 'bacnet_svc',      'BACnet服务',      0, 'com.systar.monitor.drivers.bacnet.BacnetService',    5,  NULL),
            (105, 'sim_svc',         '模拟数据服务',     0, 'com.systar.monitor.drivers.simulate.SimulateService', 0, 'SimulateService');
 
 -- 11.2 设备
@@ -161,8 +158,6 @@ MERGE INTO t_asset (id, name, caption, kind, type_id, parent_id, state, enabled,
     VALUES (10, 'modbus_tcp_svc',   'Modbus TCP服务',  2, 103, 0,    0, 1, 1, NULL, 100,  NULL,   NULL),
            (11, 'mqtt_svc',         'MQTT服务',        2, 103, 0,    0, 1, 2, NULL, 101,  NULL,   NULL),
            (12, 'opcua_svc',        'OPC UA服务',      2, 103, 0,    0, 1, 3, NULL, 102,  NULL,   NULL),
-           (44, 'iec104_svc',       'IEC 104服务',     2, 103, 0,    0, 1, 4, NULL, 103,  NULL,   NULL),
-           (45, 'bacnet_svc',       'BACnet服务',      2, 103, 0,    0, 1, 5, NULL, 104,  NULL,   NULL),
            (46, 'sim_svc',          '模拟数据服务',     2, 103, 0,    0, 1, 6, NULL, 105,  NULL,   NULL),
            (20, 'th_sensor_001',    '温湿度传感器-001',1, 102, 0,    0, 1, 1, 1001, NULL, NULL,   NULL),
            (21, 'th_sensor_002',    '温湿度传感器-002',1, 102, 0,    0, 1, 2, 1002, NULL, NULL,   NULL),
