@@ -78,5 +78,5 @@ environment (JDK version, database type, OS).
 ## License
 
 By contributing to Systar, you agree that your contributions are licensed under the
-GNU General Public License v3.0 only, the same license as the project
+MIT License, the same license as the project
 (see [LICENSE](LICENSE) and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)).

@@ -69,6 +69,6 @@ H2 脚本须避免 MySQL 专有语法（`ENGINE=InnoDB`、`COLLATE`、列级 `CO
 
 ## 许可证
 
-向 Systar 贡献即表示你同意你的贡献以 GNU General Public License v3.0 only 许可——与
+向 Systar 贡献即表示你同意你的贡献以 MIT 许可——与
 项目本身一致（见 [LICENSE](LICENSE) 与
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)）。
