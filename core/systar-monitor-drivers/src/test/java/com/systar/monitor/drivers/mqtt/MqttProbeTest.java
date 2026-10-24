@@ -212,6 +212,31 @@ class MqttProbeTest {
             probe.onMessage("{\"temperature\": 30.0}");
             assertThat(probe.getCachedValue()).isEqualTo(30.0f);
         }
+
+        @Test
+        @DisplayName("path continues past a scalar node → null (treated as missing)")
+        void pathThroughScalarIsNull() {
+            initProbe("device/data:$.a.b");
+            probe.onMessage("{\"a\": 5}");
+            assertThat(probe.getCachedValue()).isNull();
+        }
+
+        @Test
+        @DisplayName("JSON null at path → null, not a null sentinel")
+        void jsonNullAtPathIsNull() {
+            initProbe("device/data:$.temperature");
+            probe.onMessage("{\"temperature\": null}");
+            assertThat(probe.getCachedValue()).isNull();
+        }
+
+        @Test
+        @DisplayName("invalid JSON → cached value preserved, no throw")
+        void invalidJsonKeepsCachedValue() {
+            initProbe("device/data:$.temperature");
+            probe.onMessage("{\"temperature\": 25.5}");
+            probe.onMessage("{\"temperature\": ");
+            assertThat(probe.getCachedValue()).isEqualTo(25.5f);
+        }
     }
 
     @Nested

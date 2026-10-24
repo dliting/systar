@@ -4,7 +4,8 @@ import com.systar.monitor.asset.Probe;
 import com.systar.monitor.asset.type.ProbeType;
 import com.systar.monitor.result.IMonitorResult;
 
-import org.json.JSONObject;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,6 +22,9 @@ import org.slf4j.LoggerFactory;
 public class MqttProbe extends Probe {
 
     private static final Logger LOG = LoggerFactory.getLogger(MqttProbe.class);
+
+    /** Shared, thread-safe JSON parser for payload navigation. */
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
     private String topic;
     private String jsonPath;
@@ -96,8 +100,8 @@ public class MqttProbe extends Probe {
         }
     }
 
-    private Object extractJsonPath(String payload) {
-        JSONObject json = new JSONObject(payload);
+    private Object extractJsonPath(String payload) throws Exception {
+        JsonNode current = JSON_MAPPER.readTree(payload);
         // Support $.key1.key2 syntax
         String path = jsonPath;
         if (path.startsWith("$.")) {
@@ -106,14 +110,27 @@ public class MqttProbe extends Probe {
             path = path.substring(1);
         }
         String[] keys = path.split("\\.");
-        Object current = json;
-        for (int i = 0; i < keys.length && current instanceof JSONObject; i++) {
+        int i = 0;
+        for (; i < keys.length && current.isObject(); i++) {
             String key = keys[i].trim();
             if (key.isEmpty()) continue;
-            current = ((JSONObject) current).opt(key);
+            current = current.path(key);
         }
-        if (current instanceof Number num) {
-            return num.floatValue();
+        if (i < keys.length) {
+            // The path continues past a scalar/array node — treat as missing.
+            return null;
+        }
+        if (current.isNumber()) {
+            return (float) current.asDouble();
+        }
+        if (current.isBoolean()) {
+            return current.asBoolean();
+        }
+        if (current.isTextual()) {
+            return current.asText();
+        }
+        if (current.isMissingNode() || current.isNull()) {
+            return null;
         }
         return current;
     }

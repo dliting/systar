@@ -1,6 +1,7 @@
 package com.systar.monitor.drivers.weather;
 
-import org.json.JSONObject;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -12,6 +13,10 @@ public final class WeatherJsonParser {
 
     private static final Logger LOG = LoggerFactory.getLogger(WeatherJsonParser.class);
     private static final float PLACEHOLDER_VALUE = -999f;
+    private static final int SUCCESS_CODE = 200;
+
+    /** Shared, thread-safe JSON parser. */
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
     private WeatherJsonParser() {
     }
@@ -29,24 +34,32 @@ public final class WeatherJsonParser {
         if (jsonData == null) {
             throw new Exception("Weather data fetch failed: response is null");
         }
+        final JsonNode root;
         try {
-            JSONObject jsonObject = new JSONObject(jsonData);
-            int code = jsonObject.getInt("Code");
-            if (code != 200) {
-                throw new Exception("Weather API error, status code: " + code);
-            }
-            JSONObject content = jsonObject.getJSONObject("Content");
-            float result = (float) content.getDouble(attribute);
-            if (result == PLACEHOLDER_VALUE) {
-                throw new Exception("Weather API returned placeholder value: " + PLACEHOLDER_VALUE);
-            }
-            return result;
+            root = JSON_MAPPER.readTree(jsonData);
         } catch (Exception e) {
-            if (e.getMessage() != null
-                    && (e.getMessage().contains("status code") || e.getMessage().contains("placeholder") || e.getMessage().contains("response is null"))) {
-                throw e;
-            }
-            throw new Exception("Weather JSON parse failed for attribute '" + attribute + "'", e);
+            throw new Exception(parseFailedMessage(attribute), e);
         }
+        JsonNode codeNode = root.path("Code");
+        if (!root.isObject() || !codeNode.isNumber()) {
+            throw new Exception(parseFailedMessage(attribute));
+        }
+        int code = codeNode.asInt();
+        if (code != SUCCESS_CODE) {
+            throw new Exception("Weather API error, status code: " + code);
+        }
+        JsonNode value = root.path("Content").path(attribute);
+        if (!value.isNumber()) {
+            throw new Exception(parseFailedMessage(attribute));
+        }
+        float result = (float) value.asDouble();
+        if (result == PLACEHOLDER_VALUE) {
+            throw new Exception("Weather API returned placeholder value: " + PLACEHOLDER_VALUE);
+        }
+        return result;
+    }
+
+    private static String parseFailedMessage(String attribute) {
+        return "Weather JSON parse failed for attribute '" + attribute + "'";
     }
 }

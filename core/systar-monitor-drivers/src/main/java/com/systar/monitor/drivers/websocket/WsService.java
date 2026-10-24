@@ -3,11 +3,12 @@ package com.systar.monitor.drivers.websocket;
 import com.systar.monitor.asset.PassiveService;
 import com.systar.monitor.result.MonitorResult;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
-import org.json.JSONObject;
 
 import java.net.URI;
 import java.util.concurrent.Executors;
@@ -26,6 +27,9 @@ public class WsService extends PassiveService {
 
     private static final int DEFAULT_RECONNECT_INTERVAL_SECS = 5;
     private static final int DEFAULT_MAX_RECONNECT_ATTEMPTS = 100;
+
+    /** Shared, thread-safe JSON parser for incoming messages. */
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
     private String url;
     private int reconnectInterval = DEFAULT_RECONNECT_INTERVAL_SECS;
@@ -128,20 +132,39 @@ public class WsService extends PassiveService {
         if (dispatcher == null) return;
 
         try {
-            JSONObject json = new JSONObject(message);
-            for (String key : json.keySet()) {
-                var monitor = getMonitor(key);
-                if (monitor != null) {
-                    Object value = json.get(key);
-                    if (value instanceof Number num) {
-                        value = num.floatValue();
-                    }
-                    dispatcher.dispatch(new MonitorResult(monitor, value));
-                }
+            JsonNode json = JSON_MAPPER.readTree(message);
+            if (!json.isObject()) {
+                return;
             }
+            json.fields().forEachRemaining(entry -> {
+                var monitor = getMonitor(entry.getKey());
+                if (monitor == null) return;
+                dispatcher.dispatch(new MonitorResult(monitor, toValue(entry.getValue())));
+            });
         } catch (Exception e) {
             LOG.warn("Failed to parse WebSocket message", e);
         }
+    }
+
+    /**
+     * Converts a JSON node to the value type dispatched to monitors:
+     * numbers as float, booleans and strings as-is, null/missing as null,
+     * anything else (objects, arrays) as the raw node.
+     */
+    private static Object toValue(JsonNode node) {
+        if (node.isNumber()) {
+            return (float) node.asDouble();
+        }
+        if (node.isBoolean()) {
+            return node.asBoolean();
+        }
+        if (node.isTextual()) {
+            return node.asText();
+        }
+        if (node.isNull() || node.isMissingNode()) {
+            return null;
+        }
+        return node;
     }
 
     // ======================== getters / setters ========================

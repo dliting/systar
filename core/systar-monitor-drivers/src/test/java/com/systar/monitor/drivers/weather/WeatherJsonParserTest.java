@@ -64,5 +64,53 @@ class WeatherJsonParserTest {
                     .isInstanceOf(Exception.class)
                     .hasMessageContaining("500");
         }
+
+        @Test
+        @DisplayName("missing Code field reports a parse failure, not a bogus status code")
+        void missingCodeReportsParseFailure() {
+            String json = """
+                {"Content":{"temperature":25.3}}
+                """;
+
+            assertThatThrownBy(() -> WeatherJsonParser.parseAttribute(json, "temperature"))
+                    .isInstanceOf(Exception.class)
+                    .hasMessageContaining("parse failed");
+        }
+
+        @Test
+        @DisplayName("Content not an object reports a parse failure")
+        void contentNotObjectReportsParseFailure() {
+            String json = """
+                {"Code":200,"Content":42}
+                """;
+
+            assertThatThrownBy(() -> WeatherJsonParser.parseAttribute(json, "temperature"))
+                    .isInstanceOf(Exception.class)
+                    .hasMessageContaining("parse failed");
+        }
+
+        @Test
+        @DisplayName("missing attribute in Content reports a parse failure")
+        void missingAttributeReportsParseFailure() {
+            String json = """
+                {"Code":200,"Content":{"humidity":65.0}}
+                """;
+
+            assertThatThrownBy(() -> WeatherJsonParser.parseAttribute(json, "temperature"))
+                    .isInstanceOf(Exception.class)
+                    .hasMessageContaining("parse failed");
+        }
+
+        @Test
+        @DisplayName("non-numeric attribute value reports a parse failure")
+        void nonNumericAttributeReportsParseFailure() {
+            String json = """
+                {"Code":200,"Content":{"temperature":"warm"}}
+                """;
+
+            assertThatThrownBy(() -> WeatherJsonParser.parseAttribute(json, "temperature"))
+                    .isInstanceOf(Exception.class)
+                    .hasMessageContaining("parse failed");
+        }
     }
 }
