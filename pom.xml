@@ -44,6 +44,21 @@
         <module>simulator</module>
     </modules>
 
+    <!--
+        GPL-3.0 protocol drivers (BACnet, IEC 60870-5-104), local-only.
+        Inactive by default so the default build (and the public repository)
+        stays free of GPL code; activate locally via settings.xml
+        activeProfiles or -P gpl-drivers. See gpl/systar-drivers-gpl/README.md.
+    -->
+    <profiles>
+        <profile>
+            <id>gpl-drivers</id>
+            <modules>
+                <module>gpl/systar-drivers-gpl</module>
+            </modules>
+        </profile>
+    </profiles>
+
     <properties>
         <java.version>17</java.version>
         <maven.compiler.source>17</maven.compiler.source>
@@ -87,6 +102,11 @@
             <dependency>
                 <groupId>com.systar</groupId>
                 <artifactId>systar-monitor-drivers</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.systar</groupId>
+                <artifactId>systar-drivers-gpl</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

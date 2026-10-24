@@ -100,6 +100,22 @@
         </dependency>
     </dependencies>
 
+    <!--
+        GPL-3.0 drivers (BACnet, IEC 104), local-only: activated together with
+        the root pom's gpl-drivers profile, which also builds gpl/systar-drivers-gpl.
+    -->
+    <profiles>
+        <profile>
+            <id>gpl-drivers</id>
+            <dependencies>
+                <dependency>
+                    <groupId>com.systar</groupId>
+                    <artifactId>systar-drivers-gpl</artifactId>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
+
     <build>
         <plugins>
             <plugin>

@@ -13,7 +13,7 @@
 
     <artifactId>systar-monitor-drivers</artifactId>
     <name>systar-monitor-drivers</name>
-    <description>Protocol driver implementations (Modbus, BACnet, OPC UA, etc.)</description>
+    <description>Protocol driver implementations (Modbus, OPC UA, SNMP, MQTT, etc.); GPL-licensed drivers (BACnet, IEC 104) live in gpl/systar-drivers-gpl</description>
 
     <dependencies>
         <dependency>
@@ -51,25 +51,11 @@
             <version>1.5.4</version>
         </dependency>
 
-        <!-- IEC 60870-5-104 protocol -->
-        <dependency>
-            <groupId>org.openmuc</groupId>
-            <artifactId>j60870</artifactId>
-            <version>1.2.0</version>
-        </dependency>
-
         <!-- Siemens S7 PLC -->
         <dependency>
             <groupId>com.github.s7connector</groupId>
             <artifactId>s7connector</artifactId>
             <version>2.1</version>
-        </dependency>
-
-        <!-- BACnet protocol -->
-        <dependency>
-            <groupId>com.serotonin</groupId>
-            <artifactId>bacnet4j</artifactId>
-            <version>4.1.6</version>
         </dependency>
 
         <!-- OPC UA client (Eclipse Milo) -->

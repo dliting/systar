@@ -1,7 +1,6 @@
 package com.systar.server.service;
 
 import com.systar.monitor.asset.AssetKind;
-import com.systar.monitor.drivers.bacnet.BacnetService;
 import com.systar.monitor.drivers.modbus.ModbusService;
 import com.systar.monitor.server.MonitorServer;
 import com.systar.server.dto.AssetCreateRequest;
@@ -68,7 +67,7 @@ class AssetAttributeBindingTest {
 
     private int createService(String name, Map<String, String> attributes) {
         int id = orchestrator.createAsset(new AssetCreateRequest(
-                "SERVICE", ROOT_PARENT_ID, name, name, "BACnetService",
+                "SERVICE", ROOT_PARENT_ID, name, name, "ModbusTcpMaster",
                 Map.of("mode", "ACTIVE"), attributes)).runtimeId();
         createdIds.add(id);
         return id;
@@ -78,48 +77,48 @@ class AssetAttributeBindingTest {
     @DisplayName("create binds extension attributes to driver setters (runtime store and repository)")
     void createServiceBindsExtensionAttributes() {
         int id = createService("bind_svc", Map.of(
-                "Remotehost", "192.168.1.50",
-                "Remoteport", "47809",
-                "DeviceId", "123"));
+                "Host", "192.168.1.50",
+                "Port", "55503",
+                "UnitId", "123"));
 
-        BacnetService runtime = (BacnetService) monitorServer.findAsset(id);
-        assertThat(runtime.getRemoteHost()).isEqualTo("192.168.1.50");
-        assertThat(runtime.getRemotePort()).isEqualTo(47809);
-        assertThat(runtime.getDeviceId()).isEqualTo(123);
+        ModbusService runtime = (ModbusService) monitorServer.findAsset(id);
+        assertThat(runtime.getHost()).isEqualTo("192.168.1.50");
+        assertThat(runtime.getPort()).isEqualTo(55503);
+        assertThat(runtime.getUnitId()).isEqualTo(123);
 
-        BacnetService fromRepo = (BacnetService) repository.findServiceById(id);
-        assertThat(fromRepo.getRemoteHost()).isEqualTo("192.168.1.50");
-        assertThat(fromRepo.getRemotePort()).isEqualTo(47809);
-        assertThat(fromRepo.getDeviceId()).isEqualTo(123);
+        ModbusService fromRepo = (ModbusService) repository.findServiceById(id);
+        assertThat(fromRepo.getHost()).isEqualTo("192.168.1.50");
+        assertThat(fromRepo.getPort()).isEqualTo(55503);
+        assertThat(fromRepo.getUnitId()).isEqualTo(123);
     }
 
     @Test
-    @DisplayName("create without attributes falls back to type defaults (Remotehost=127.0.0.1)")
+    @DisplayName("create without attributes falls back to type defaults (Host=127.0.0.1)")
     void createServiceBindsTypeDefaults() {
         int id = createService("default_svc", Map.of());
 
-        BacnetService runtime = (BacnetService) monitorServer.findAsset(id);
-        assertThat(runtime.getRemoteHost()).isEqualTo("127.0.0.1");
-        assertThat(runtime.getRemotePort()).isEqualTo(47808);
-        assertThat(runtime.getDeviceId()).isZero();
+        ModbusService runtime = (ModbusService) monitorServer.findAsset(id);
+        assertThat(runtime.getHost()).isEqualTo("127.0.0.1");
+        assertThat(runtime.getPort()).isEqualTo(502);
+        assertThat(runtime.getUnitId()).isEqualTo(1);
     }
 
     @Test
     @DisplayName("update re-binds changed service attributes into the runtime store")
     void updateServiceRebindsAttributes() {
         int id = createService("update_svc", Map.of(
-                "Remotehost", "192.168.1.50",
-                "Remoteport", "47809",
-                "DeviceId", "123"));
+                "Host", "192.168.1.50",
+                "Port", "55503",
+                "UnitId", "123"));
 
         orchestrator.updateAsset(id, AssetKind.SERVICE, new AssetUpdateRequest(
                 null, null, null, Map.of(),
-                Map.of("Remotehost", "10.0.0.9", "Remoteport", "47808", "DeviceId", "77")));
+                Map.of("Host", "10.0.0.9", "Port", "502", "UnitId", "77")));
 
-        BacnetService runtime = (BacnetService) monitorServer.findAsset(id);
-        assertThat(runtime.getRemoteHost()).isEqualTo("10.0.0.9");
-        assertThat(runtime.getRemotePort()).isEqualTo(47808);
-        assertThat(runtime.getDeviceId()).isEqualTo(77);
+        ModbusService runtime = (ModbusService) monitorServer.findAsset(id);
+        assertThat(runtime.getHost()).isEqualTo("10.0.0.9");
+        assertThat(runtime.getPort()).isEqualTo(502);
+        assertThat(runtime.getUnitId()).isEqualTo(77);
     }
 
     @Test
