@@ -276,7 +276,7 @@ systar/
 
 ## 许可证
 
-Copyright (c) 2026 Alan Dlite。
+Copyright (c) 2026 Hao Yufei。
 
 Systar 以 **MIT License** 许可发布——见 [LICENSE](LICENSE)。
 完整组件归因见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。

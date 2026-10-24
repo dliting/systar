@@ -302,7 +302,7 @@ Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## License
 
-Copyright (c) 2026 Alan Dlite.
+Copyright (c) 2026 Hao Yufei.
 
 Systar is licensed under the **MIT License** — see [LICENSE](LICENSE).
 Full component attribution: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
