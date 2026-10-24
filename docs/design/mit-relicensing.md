@@ -66,6 +66,9 @@ MIT（本仓库）                         GPL-3.0（独立模块，不在本仓
 
 - **构建本仓库**：得到纯 MIT 形态——12 种内置协议驱动，无 GPL 代码、无 vendored
   GPL jar，`./mvnw clean test -o` 仅凭 Maven Central 即可完成。
+- **从拆分前的版本升级**：既有数据库仍带有 GPL 演示行（服务 103/104、资产 44/45），
+  改用纯 MIT 构建前需删除这些行（或保留 GPL 模块在 classpath），否则启动加载这些行
+  时因驱动类缺失而失败。
 - **需要 BACnet 或 IEC 104**：按描述符加载器自行实现驱动（见
   `docs/driver-development-guide.md`）；底层库 BACnet4J 与 j60870 均为 GPL-3.0，
   基于它们构建的驱动会使组合二进制整体变为 GPL-3.0——这是分发层面的决策，不是

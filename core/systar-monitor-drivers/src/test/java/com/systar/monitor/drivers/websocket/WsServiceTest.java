@@ -101,7 +101,31 @@ class WsServiceTest {
             assertThat(appender.list)
                     .anySatisfy(event -> {
                         assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                        assertThat(event.getFormattedMessage()).contains("non-object");
                         assertThat(event.getFormattedMessage()).contains("42");
+                    });
+        }
+
+        @Test
+        @DisplayName("oversized non-object payload is truncated in the warning")
+        void oversizedPayloadIsTruncatedInLog() {
+            Logger logger = (Logger) LoggerFactory.getLogger(WsService.class);
+            ListAppender<ILoggingEvent> appender = new ListAppender<>();
+            appender.start();
+            logger.addAppender(appender);
+            // a valid-JSON but non-object oversized payload: a quoted 500-char string
+            String payload = "\"" + "x".repeat(500) + "\"";
+            try {
+                service.parseAndRoute(payload);
+            } finally {
+                logger.detachAppender(appender);
+                appender.stop();
+            }
+            assertThat(appender.list)
+                    .anySatisfy(event -> {
+                        assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                        assertThat(event.getFormattedMessage()).contains("non-object");
+                        assertThat(event.getFormattedMessage().length()).isLessThan(payload.length());
                     });
         }
     }

@@ -27,6 +27,7 @@ public class WsService extends PassiveService {
 
     private static final int DEFAULT_RECONNECT_INTERVAL_SECS = 5;
     private static final int DEFAULT_MAX_RECONNECT_ATTEMPTS = 100;
+    private static final int MAX_LOGGED_PAYLOAD_CHARS = 200;
 
     /** Shared, thread-safe JSON parser for incoming messages. */
     private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
@@ -134,7 +135,7 @@ public class WsService extends PassiveService {
         try {
             JsonNode json = JSON_MAPPER.readTree(message);
             if (!json.isObject()) {
-                LOG.warn("Ignoring non-object WebSocket payload: {}", message);
+                LOG.warn("Ignoring non-object WebSocket payload: {}", abbreviate(message));
                 return;
             }
             json.fields().forEachRemaining(entry -> {
@@ -145,6 +146,13 @@ public class WsService extends PassiveService {
         } catch (Exception e) {
             LOG.warn("Failed to parse WebSocket message", e);
         }
+    }
+
+    /** Caps a payload snippet for logging so oversized frames cannot flood the log. */
+    private static String abbreviate(String payload) {
+        return payload.length() <= MAX_LOGGED_PAYLOAD_CHARS
+                ? payload
+                : payload.substring(0, MAX_LOGGED_PAYLOAD_CHARS) + "...";
     }
 
     /**
