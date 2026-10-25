@@ -183,6 +183,27 @@ class AssetControllerTest {
         }
 
         @Test
+        @DisplayName("returns pathCaption with captions while path keeps internal names")
+        void pathCaptionPopulated() {
+            Device dev = new Device();
+            dev.init(new DeviceType("dt"), 10, "th_sensor_002");
+            dev.setCaption("温湿度传感器组");
+            stubFindAsset(10, dev);
+
+            Probe probe = new Probe() {
+                @Override public void detect(com.systar.monitor.result.IMonitorResult r) {}
+            };
+            probe.init(new ProbeType("pt"), 11, "humi_102");
+            probe.setCaption("102湿度");
+            probe.setParentId(10);
+            stubFindAsset(11, probe);
+
+            Result<AssetVO> result = controller.getAsset(11);
+            assertThat(result.getData().getPath()).isEqualTo("th_sensor_002->humi_102");
+            assertThat(result.getData().getPathCaption()).isEqualTo("温湿度传感器组->102湿度");
+        }
+
+        @Test
         @DisplayName("returns stateCaption in Chinese")
         void stateCaptionPopulated() {
             Probe probe = new Probe() {

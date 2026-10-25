@@ -221,6 +221,38 @@ class AssetStoreTest {
         assertThat(store.getFullPath(store.getRoot())).isEmpty();
     }
 
+    // ---- getFullCaptionPath ----
+
+    @Test
+    @DisplayName("getFullCaptionPath prefers captions, falling back to names when absent")
+    void getFullCaptionPath() {
+        Device dev = new Device();
+        dev.init(new DeviceType("dt"), 10, "th_sensor_002");
+        dev.setCaption("温湿度传感器组");
+        store.addAsset(dev);
+
+        Probe probe = new Probe();
+        probe.init(new ProbeType("pt"), 11, "humi_102");
+        probe.setCaption("102湿度");
+        probe.setParentId(10);
+        store.addAsset(probe);
+
+        Probe bare = new Probe();
+        bare.init(new ProbeType("pt"), 12, "temp_103");
+        bare.setParentId(10);
+        store.addAsset(bare);
+
+        assertThat(store.getFullCaptionPath(probe)).isEqualTo("温湿度传感器组->102湿度");
+        assertThat(store.getFullCaptionPath(bare)).isEqualTo("温湿度传感器组->temp_103");
+    }
+
+    @Test
+    @DisplayName("getFullCaptionPath returns empty for null and for the anchor itself")
+    void getFullCaptionPathNullAndAnchor() {
+        assertThat(store.getFullCaptionPath(null)).isEmpty();
+        assertThat(store.getFullCaptionPath(store.getRoot())).isEmpty();
+    }
+
     // ---- clear ----
 
     @Test

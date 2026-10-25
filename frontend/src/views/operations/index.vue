@@ -76,7 +76,7 @@
                 <el-descriptions-item label="父级ID">{{ detail.parentId || '-' }}</el-descriptions-item>
                 <el-descriptions-item label="路径" :span="2">{{ displayPath || '-' }}</el-descriptions-item>
                 <el-descriptions-item v-if="detail.kind === 'PROBE' || detail.kind === 'CONTROL'" label="监测值">
-                  {{ (detail.value !== null && detail.value !== undefined ? detail.value : '—') + (detail.unit ? ' ' + detail.unit : '') }}
+                  {{ formatMetricValue(detail.value) + (detail.unit ? ' ' + detail.unit : '') }}
                 </el-descriptions-item>
                 <el-descriptions-item v-if="detail.kind === 'PROBE' || detail.kind === 'CONTROL'" label="单位">
                   <InlineEdit :value="detail.unit || ''" placeholder="如 ℃" @save="v => updateField('unit', v)" />
@@ -182,7 +182,7 @@
                 <span class="monitor-error-text">{{ detail.runtimeDesc }}</span>
               </div>
               <div v-else class="monitor-snapshot">
-                <span class="monitor-value">{{ detail.value !== null && detail.value !== undefined ? detail.value : '—' }}<span class="monitor-unit">{{ detail.unit ? ' ' + detail.unit : '' }}</span></span>
+                <span class="monitor-value">{{ formatMetricValue(detail.value) }}<span class="monitor-unit">{{ detail.unit ? ' ' + detail.unit : '' }}</span></span>
                 <span class="monitor-time" v-if="detail.lastDetectTime">{{ parseTime(detail.lastDetectTime) }}</span>
               </div>
               <TrendChart
@@ -685,7 +685,7 @@ import {
   startAsset, stopAsset, disableAsset, enableAsset,
   batchStart, batchStop, batchEnable, batchDisable, batchDelete
 } from '@/api/iot/asset'
-import { stateTagType, kindLabel, kindTagType, parseTime } from '@/utils/formatters'
+import { stateTagType, kindLabel, kindTagType, parseTime, formatMetricValue, splitPathSegments, formatDisplayPath } from '@/utils/formatters'
 import { showSystarError } from '@/utils/errorHandler'
 import { ElMessage } from 'element-plus'
 
@@ -820,14 +820,15 @@ const showLinkageCard = computed(() =>
 )
 
 const displayPath = computed(() => {
-  const path = detail.value?.path || ''
-  return path.replace(/^->/, '').replaceAll('->', ' → ') || '-'
+  // pathCaption carries human-readable captions (falls back to internal names
+  // server-side); path stays name-based for addressing.
+  const path = detail.value?.pathCaption || detail.value?.path || ''
+  return formatDisplayPath(path) || '-'
 })
 
 const breadcrumbs = computed(() => {
-  const path = detail.value?.path || ''
-  // path format: "root->building_A->machine_room" — asset names joined by '->'
-  return path.split('->').filter(s => s).map(name => ({ name, caption: name }))
+  const path = detail.value?.pathCaption || detail.value?.path || ''
+  return splitPathSegments(path).map(seg => ({ name: seg, caption: seg }))
 })
 
 const filteredChildren = computed(() => childNodes.value)

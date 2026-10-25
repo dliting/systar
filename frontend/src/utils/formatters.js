@@ -26,6 +26,33 @@ export function formatTimestamp(ts) {
   return String(ts).replace('T', ' ').substring(0, 19)
 }
 
+// Operators read whole numbers and a couple of decimals, not raw doubles
+// (12.77434613895595 on a humidity card is developer noise). Two decimals
+// at or above one; four below so small readings do not collapse to 0.
+// Booleans and non-numeric states pass through — their operator labels are
+// mapped at the display site, not here.
+export function formatMetricValue(value) {
+  if (value === null || value === undefined || value === '') return '—'
+  if (typeof value === 'boolean') return String(value)
+  const n = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(n)) return String(value)
+  if (Number.isInteger(n)) return String(n)
+  const decimals = Math.abs(n) >= 1 ? 2 : 4
+  return n.toFixed(decimals).replace(/\.?0+$/, '')
+}
+
+// Asset paths arrive from the backend as '->'-joined segments (caption-aware
+// pathCaption preferred, name-based path as fallback). Breadcrumbs need the
+// segments; the detail panel needs them arrow-joined.
+export function splitPathSegments(path) {
+  if (!path) return []
+  return String(path).split('->').filter(s => s)
+}
+
+export function formatDisplayPath(path) {
+  return splitPathSegments(path).join(' → ')
+}
+
 export function parseTime(time) {
   if (!time) return ''
   const d = new Date(time)

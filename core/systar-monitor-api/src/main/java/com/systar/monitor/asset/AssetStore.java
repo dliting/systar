@@ -258,6 +258,30 @@ public class AssetStore extends AssetContext {
     }
 
     /**
+     * Builds the full path from the root down to the given asset using
+     * human-readable captions, falling back to the internal name when a
+     * segment carries no caption. Unlike {@link #getFullPath(Asset)} this is
+     * a display path for operators — never use it for addressing.
+     *
+     * @param asset the target asset
+     * @return the full caption path, e.g. "温湿度传感器组->102湿度"
+     */
+    public String getFullCaptionPath(Asset<?> asset) {
+        if (asset == null) {
+            return "";
+        }
+        List<String> segments = new ArrayList<>();
+        Asset<?> current = asset;
+        while (current != null && current != root) {
+            String caption = current.getCaption();
+            segments.add(caption != null && !caption.isBlank() ? caption : current.getName());
+            current = current.getParent();
+        }
+        Collections.reverse(segments);
+        return String.join(PATH_SEPARATOR, segments);
+    }
+
+    /**
      * Removes all assets from the store and re-creates a fresh anchor.
      */
     public void clear() {

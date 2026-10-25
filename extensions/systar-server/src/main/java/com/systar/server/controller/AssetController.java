@@ -411,6 +411,7 @@ public class AssetController {
         vo.setParentId(asset.getParentId());
         vo.setEnabled(asset.isEnabled());
         vo.setPath(assetStore.getFullPath(asset));
+        vo.setPathCaption(assetStore.getFullCaptionPath(asset));
 
         if (asset.getType() != null) {
             vo.setTypeName(asset.getType().getName());

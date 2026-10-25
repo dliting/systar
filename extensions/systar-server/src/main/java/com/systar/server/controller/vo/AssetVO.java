@@ -16,7 +16,8 @@ public class AssetVO {
     private String  stateCaption; // Human-readable Chinese state label
     private int     parentId;
     private boolean enabled;
-    private String  path;       // Full path in asset tree
+    private String  path;       // Full path in asset tree (internal names, addressing)
+    private String  pathCaption; // Full path with human-readable captions (display only)
     private String  typeName;   // Asset type internal name (e.g. "SimulateFloat")
     private String  typeCaption; // Asset type display caption (e.g. "模拟浮点数监测")
     private Map<String, String> attributes; // Extended KV attributes
@@ -39,6 +40,8 @@ public class AssetVO {
     public void    setEnabled(boolean enabled)   { this.enabled = enabled; }
     public String  getPath()                     { return path; }
     public void    setPath(String path)          { this.path = path; }
+    public String  getPathCaption()              { return pathCaption; }
+    public void    setPathCaption(String pathCaption) { this.pathCaption = pathCaption; }
     public String  getTypeName()                 { return typeName; }
     public void    setTypeName(String typeName)  { this.typeName = typeName; }
     public String  getTypeCaption()              { return typeCaption; }
