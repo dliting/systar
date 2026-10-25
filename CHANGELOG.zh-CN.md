@@ -25,6 +25,15 @@
 - `systar-monitor-core` 更名为 `systar-monitor-api`——仅含 MIT 契约（资产模型、`AssetStore`、`MonitorEngine` 端口、告警 / 联动 / 定时任务契约）；引擎内部实现移入闭源模块
 - server 控制器、监听器与生命周期只引用 `systar-monitor-api`；引擎缺席时探测 / 控制接口返回冲突结果（"Monitor engine not present; … skipped."）而非报错
 
+### 修复
+
+- 引擎装配：server 组件扫描显式排除 `com.systar.engine.*`，`EngineAutoConfiguration` 成为引擎 Web 层的唯一注册点——定时任务 API 仅在引擎存在时返回 200（引擎缺席构建返回 404）
+- 运维 API 模块（工单 / 巡检 / 台账）缺少 `/api` 前缀，对应仪表盘页面对打包后端渲染为空
+- 工单状态图表与后端状态枚举对齐（CREATED / ASSIGNED / PROCESSING / CLOSED / CANCELLED）
+- 随包提供 SVG favicon——登录页不再产生 `/favicon.ico` 404
+- 巡检计划种子 cron 改为 Spring 6 段格式（H2 与 MySQL 双方言）——两个演示计划恢复生成任务，不再每分钟以 "Invalid inspection cron expression" 跳过
+- `frontend/package.json` 版本对齐 1.2.0 发布
+
 ---
 
 ## [1.1.1] - 2026-10-24

@@ -26,6 +26,15 @@ runtime moves to a free-binary closed module; the framework stays MIT.
 - `systar-monitor-core` renamed to `systar-monitor-api` — MIT contracts only (asset model, `AssetStore`, the `MonitorEngine` port, alarm / linkage / scheduled-task contracts); engine internals moved to the closed module
 - Server controllers, listeners and lifecycle reference only `systar-monitor-api`; with the engine absent, detection/control endpoints return a conflict result ("Monitor engine not present; … skipped.") instead of failing
 
+### Fixed
+
+- Engine registration: the server component scan now explicitly excludes `com.systar.engine.*` and `EngineAutoConfiguration` is the sole registration point for the engine web layer — the scheduled-task API returns 200 exactly when the engine is present (404 in engine-absent builds)
+- Ops API modules (work orders, inspection, ledger) were missing the `/api` prefix, so those dashboard pages rendered empty against the packaged backend
+- Work-order status chart aligned with the backend status enums (CREATED / ASSIGNED / PROCESSING / CLOSED / CANCELLED)
+- Shipped an SVG favicon — the login page no longer logs a `/favicon.ico` 404
+- Inspection plan seed crons switched to Spring's 6-field format (H2 and MySQL seeds) — both demo plans now generate tasks instead of being skipped every minute with "Invalid inspection cron expression"
+- `frontend/package.json` version aligned with the 1.2.0 release
+
 ---
 
 ## [1.1.1] - 2026-10-24
