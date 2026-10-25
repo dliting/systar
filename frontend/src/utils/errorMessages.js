@@ -32,29 +32,3 @@ export function humanizeHttpStatus(status) {
 export function isLoginRequest(url) {
   return typeof url === 'string' && url.includes('/auth/login')
 }
-
-// Probe/control error banners carry raw driver and exception text
-// ("Modbus read failed: Connection refused"). Operators need to know what to
-// check, not the stack — map the common failure signatures to plain Chinese
-// with actionable guidance; unclassifiable text passes through and the raw
-// string stays available as technical detail at the display site.
-const RUNTIME_PATTERNS = [
-  { re: /connection refused/i, msg: '无法连接采集设备（连接被拒绝），请检查设备是否开机、通信线是否连接正常' },
-  { re: /timed?\s*out|timeout/i, msg: '设备响应超时，请检查设备通信是否繁忙或网络是否拥堵' },
-  { re: /no route to host|unknown host|unreachable|connect failed/i, msg: '网络不可达，请检查设备 IP 配置与网络连通性' },
-  { re: /no response/i, msg: '设备未响应，请检查设备是否在线' },
-  { re: /not configured/i, msg: '监测器尚未配置完成，请联系管理员完成配置' },
-  { re: /^unknown error$/i, msg: '采集出现未知错误，请稍后重试' },
-  // DetectTask falls back to the exception class name when the message is
-  // empty (java.net.ConnectException) — meaningless to operators.
-  { re: /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*\.[A-Z]\w*$/, msg: '设备通信异常，请检查设备与网络状态' }
-]
-
-export function humanizeRuntimeDesc(desc) {
-  if (!desc) return ''
-  const text = String(desc)
-  for (const { re, msg } of RUNTIME_PATTERNS) {
-    if (re.test(text)) return msg
-  }
-  return text
-}
