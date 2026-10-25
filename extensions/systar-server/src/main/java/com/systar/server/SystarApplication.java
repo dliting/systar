@@ -7,9 +7,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.AutoConfigurationExcludeFilter;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.TypeExcludeFilter;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
@@ -18,7 +22,19 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-@SpringBootApplication(scanBasePackages = "com.systar")
+@SpringBootApplication
+// Explicit scan (replaces scanBasePackages) so the engine package can be
+// excluded: closed-module beans are registered solely by
+// EngineAutoConfiguration — the scan must never pick up stereotypes from
+// it, or an @Import-ed controller would be registered twice. The first two
+// filters reproduce Spring Boot's own @SpringBootApplication defaults.
+@ComponentScan(
+        basePackages = "com.systar",
+        excludeFilters = {
+                @ComponentScan.Filter(type = FilterType.CUSTOM, classes = TypeExcludeFilter.class),
+                @ComponentScan.Filter(type = FilterType.CUSTOM, classes = AutoConfigurationExcludeFilter.class),
+                @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.systar\\.engine\\..*")
+        })
 @MapperScan({"com.systar.data.mapper", "com.systar.ops.**.mapper", "com.systar.system.**.mapper"})
 @EnableAsync
 @EnableScheduling
