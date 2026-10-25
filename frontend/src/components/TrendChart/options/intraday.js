@@ -30,30 +30,6 @@ export function insertGaps(points, bucketSeconds) {
   return out
 }
 
-/**
- * Observed sample cadence in seconds. The configured detect interval is the
- * collection frequency, but samples may persist at a coarser record interval
- * (detect 10s / record 1m — the sim probes); keying the gap threshold on the
- * configured value alone breaks every segment of a uniform series into dots
- * with no connecting line (reported 2026-10-25). Measure the real cadence
- * from the data instead: the p75 of observed intervals — so a few short
- * intervals from interleaved sources (backfill :00 + collector :00.945)
- * can't drag the threshold down — floored at the configured interval.
- */
-export function observedCadence(points, floorSeconds) {
-  if (points.length < 2) return floorSeconds
-  const gaps = []
-  for (let i = 1; i < points.length; i++) {
-    const a = new Date(String(points[i - 1].t).replace(' ', 'T')).getTime()
-    const b = new Date(String(points[i].t).replace(' ', 'T')).getTime()
-    if (Number.isFinite(a) && Number.isFinite(b) && b > a) gaps.push(b - a)
-  }
-  if (!gaps.length) return floorSeconds
-  gaps.sort((x, y) => x - y)
-  const p75 = gaps[Math.min(gaps.length - 1, Math.floor(gaps.length * 0.75))]
-  return Math.max(p75 / 1000, floorSeconds)
-}
-
 export function intradayOption(points, opts = {}) {
   const {
     unit = '', mode = 'RAW', bucketSeconds = null, showExtremes = false,
@@ -62,7 +38,7 @@ export function intradayOption(points, opts = {}) {
     detectIntervalSeconds = 10,
   } = opts
 
-  const gapSeconds = bucketSeconds ?? (mode === 'RAW' ? observedCadence(points, detectIntervalSeconds) : 60)
+  const gapSeconds = bucketSeconds ?? (mode === 'RAW' ? detectIntervalSeconds : 60)
   const data = insertGaps(points, gapSeconds)
   const labels = data.map((p) => labelFor(p.t, 'HOUR'))
   const perf = perfSwitches(data.length)
@@ -118,11 +94,7 @@ export function intradayOption(points, opts = {}) {
       textStyle: { color: '#8b9dc3', fontSize: 11 } },
     grid: { ...gridStyle(), bottom: compact ? 36 : 56 },
     xAxis: [{ type: 'category', data: labels, boundaryGap: false, ...axisStyle(),
-      // Two samples inside one label-formatted tick (e.g. :00 + :00.945)
-      // repeat the same HH:mm — collapse the repeat so the axis reads as a
-      // monotonic time sequence (reported 2026-10-25).
-      axisLabel: { ...axisStyle().axisLabel, hideOverlap: true,
-        interval: (index, value) => value !== labels[index - 1] } }],
+      axisLabel: { ...axisStyle().axisLabel, hideOverlap: true } }],
     yAxis: [{ type: 'value', scale: true,
       min: range.lo != null ? range.lo - pad : undefined,
       max: range.hi != null ? range.hi + pad : undefined, ...axisStyle(),
