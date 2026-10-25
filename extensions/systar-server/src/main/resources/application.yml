@@ -82,6 +82,9 @@ systar:
   statistics:
     aggregation-interval-ms: 300000
     max-catch-up-hours: 168
+    # 首次启动即为模拟探针回填 24h 原始采样 + 时/日/周/月统计历史，
+    # 使缺省折线视图与聚合视图开箱即有数据（幂等：已有月史则跳过）
+    dev-history-backfill: true
   stats-datasource:
     url: jdbc:h2:file:./temp/data/db_systar_stats;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE
     username: sa

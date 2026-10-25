@@ -96,7 +96,16 @@ public class MonitorStatsAggregator {
     void catchUpOnStartup() {
         // Delay to let DB initialization complete
         try { Thread.sleep(5000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); return; }
+        catchUp();
+    }
 
+    /**
+     * Backfills missed aggregation periods. With an empty stats table this is
+     * a cold start: aggregate from the oldest raw sample instead of skipping,
+     * so first deploys (and stats-DB resets) get populated HOUR/DAY/WEEK/MONTH
+     * views immediately instead of waiting for the server to run for days.
+     */
+    void catchUp() {
         if (!catchUpInProgress.compareAndSet(false, true)) {
             log.debug("Catch-up already running; skipping");
             return;
@@ -105,8 +114,13 @@ public class MonitorStatsAggregator {
             LocalDateTime now   = now();
             LocalDateTime start = getLastAggregatedHour();
             if (start == null) {
-                log.info("No prior aggregation data; skipping catch-up");
-                return;
+                LocalDateTime oldest = getOldestRawSample();
+                if (oldest == null) {
+                    log.info("No prior aggregation and no raw samples; skipping catch-up");
+                    return;
+                }
+                start = oldest;
+                log.info("Stats empty — cold-start backfill from oldest raw sample {}", oldest);
             }
 
             long missingHours = ChronoUnit.HOURS.between(start, now);
@@ -115,8 +129,14 @@ public class MonitorStatsAggregator {
                 return;
             }
 
+            // When the cap does not bind, start exactly at `start` — the
+            // truncation in `between` would make a now−cap floor overshoot it
+            // and drop the oldest partial bucket. When it binds, the floor
+            // bounds startup work and always precedes `start`.
+            LocalDateTime catchUpStart = missingHours <= maxCatchUpHours
+                    ? start
+                    : now.minusHours(maxCatchUpHours);
             long cap = Math.min(missingHours, maxCatchUpHours);
-            LocalDateTime catchUpStart = now.minusHours(cap);
             log.info("Catch-up: {} hours behind (capped at {}). Aggregating [{} → {})...",
                     missingHours, maxCatchUpHours, catchUpStart, now);
 
@@ -348,6 +368,25 @@ public class MonitorStatsAggregator {
             (rs, i) -> rs.getObject(1), HOUR);
         Object val = rows.isEmpty() ? null : rows.get(0);
         return toLocalDateTime(val);
+    }
+
+    /**
+     * Earliest raw-sample timestamp across the three sample tables, or null
+     * when no raw history exists (or none of the tables is present yet).
+     */
+    private LocalDateTime getOldestRawSample() {
+        LocalDateTime oldest = null;
+        for (String table : new String[]{"t_sample_float", "t_sample_int", "t_sample_boolean"}) {
+            try {
+                List<Object> rows = mainJdbc.query(
+                        "SELECT MIN(moment) FROM " + table, (rs, i) -> rs.getObject(1));
+                LocalDateTime ts = rows.isEmpty() ? null : toLocalDateTime(rows.get(0));
+                if (ts != null && (oldest == null || ts.isBefore(oldest))) oldest = ts;
+            } catch (Exception e) {
+                log.debug("Skipping {} for cold-start scan: {}", table, e.getMessage());
+            }
+        }
+        return oldest;
     }
 
     private static LocalDateTime toLocalDateTime(Object val) {

@@ -86,6 +86,11 @@ class MonitorStatsAggregatorTest {
                 monitor, value, java.sql.Timestamp.valueOf(moment));
     }
 
+    private void insertFloatTs(int monitor, double value, LocalDateTime moment) {
+        mainJdbc.update("INSERT INTO t_sample_float (monitor, \"value\", moment) VALUES (?,?,?)",
+                monitor, value, java.sql.Timestamp.valueOf(moment));
+    }
+
     private java.util.Map<String, Object> statsRow(int monitor, int granularity, String bucketStart) {
         return statsJdbc.queryForMap("SELECT * FROM t_monitor_stats"
                         + " WHERE monitor = ? AND granularity = ? AND bucket_start = ?",
@@ -222,6 +227,52 @@ class MonitorStatsAggregatorTest {
         long dayCount = statsJdbc.queryForObject(
                 "SELECT COUNT(*) FROM t_monitor_stats WHERE monitor=1 AND granularity=2", Long.class);
         assertThat(dayCount).isEqualTo(1L);
+    }
+
+    // ======================== cold-start catch-up ========================
+
+    private void setMaxCatchUpHours(int hours) {
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                aggregator, "maxCatchUpHours", hours);
+    }
+
+    @Test
+    void catchUpBackfillsFromOldestRawWhenStatsEmpty() {
+        // Cold start with pre-existing raw history (first deploy, or stats DB
+        // reset): the old path skipped catch-up entirely, leaving every
+        // aggregated trend view empty until the server had run for days.
+        setMaxCatchUpHours(168);
+        var base = LocalDateTime.now().withMinute(0).withSecond(0).withNano(0).minusHours(3);
+        insertFloatTs(1, 10.0, base.plusMinutes(5));
+        insertFloatTs(1, 30.0, base.plusHours(2).plusMinutes(5));
+
+        aggregator.catchUp();
+
+        assertThat(statsJdbc.queryForObject(
+                "SELECT COUNT(*) FROM t_monitor_stats WHERE granularity = 1", Long.class))
+                .isEqualTo(2L);
+    }
+
+    @Test
+    void catchUpSkipsWhenStatsEmptyAndNoRawSamples() {
+        setMaxCatchUpHours(168);
+        aggregator.catchUp();
+        assertThat(statsJdbc.queryForObject(
+                "SELECT COUNT(*) FROM t_monitor_stats", Long.class)).isZero();
+    }
+
+    @Test
+    void coldStartBackfillRespectsMaxCatchUpCap() {
+        // A 5-hour-old raw window with a 1-hour cap: the cap floor wins, the
+        // old sample stays out of reach (bounded startup work).
+        setMaxCatchUpHours(1);
+        var base = LocalDateTime.now().withMinute(0).withSecond(0).withNano(0).minusHours(5);
+        insertFloatTs(1, 10.0, base.plusMinutes(5));
+
+        aggregator.catchUp();
+
+        assertThat(statsJdbc.queryForObject(
+                "SELECT COUNT(*) FROM t_monitor_stats", Long.class)).isZero();
     }
 
     @Test
