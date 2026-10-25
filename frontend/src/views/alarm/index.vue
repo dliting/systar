@@ -15,6 +15,12 @@
           :exportable="true"
           export-file-name="alarm-rules"
         >
+          <template #column-monitorId="{ row }">
+            <span>{{ nameOf(row.monitorId) }}</span>
+          </template>
+          <template #column-eventRankId="{ row }">
+            <el-tag :type="rankTagType(row.eventRankId)" size="small">{{ rankLabel(row.eventRankId) }}</el-tag>
+          </template>
           <template #column-strategy="{ row }">
             <el-tag size="small">{{ strategyLabel(row.strategy) }}</el-tag>
           </template>
@@ -65,7 +71,7 @@
             </el-tag>
           </template>
           <template #column-escalationLevel="{ row }">
-            <span>{{ row.escalationLevel || 0 }}</span>
+            <span>{{ escalationLabel(row.escalationLevel) }}</span>
           </template>
           <template #column-recovered="{ row }">
             <el-tag :type="row.recovered === 1 ? 'success' : 'danger'" size="small">
@@ -105,7 +111,7 @@
           @context-command="handleCorrContextCmd"
         >
           <template #column-deviceId="{ row }">
-            <span>{{ row.deviceId || '全局' }}</span>
+            <span>{{ row.deviceId ? nameOf(row.deviceId) : '全局' }}</span>
           </template>
           <template #column-enabled="{ row }">
             <el-tag :type="row.enabled === 1 ? 'success' : 'info'" size="small">
@@ -145,6 +151,15 @@
           export-file-name="alarm-escalation"
           @context-command="handleEscContextCmd"
         >
+          <template #column-fromLevel="{ row }">
+            <el-tag :type="rankTagType(row.fromLevel)" size="small">{{ rankLabel(row.fromLevel) }}</el-tag>
+          </template>
+          <template #column-toLevel="{ row }">
+            <el-tag :type="rankTagType(row.toLevel)" size="small">{{ rankLabel(row.toLevel) }}</el-tag>
+          </template>
+          <template #column-notifyType="{ row }">
+            <span>{{ notifyTypeLabel(row.notifyType) }}</span>
+          </template>
           <template #column-enabled="{ row }">
             <el-tag :type="row.enabled === 1 ? 'success' : 'info'" size="small">
               {{ row.enabled === 1 ? '启用' : '禁用' }}
@@ -184,10 +199,10 @@
           @context-command="handleSilenceContextCmd"
         >
           <template #column-deviceId="{ row }">
-            <span>{{ row.deviceId || '全部' }}</span>
+            <span>{{ row.deviceId ? nameOf(row.deviceId) : '全部' }}</span>
           </template>
           <template #column-monitorId="{ row }">
-            <span>{{ row.monitorId || '全部' }}</span>
+            <span>{{ row.monitorId ? nameOf(row.monitorId) : '全部' }}</span>
           </template>
           <template #column-startTime="{ row }">
             <span>{{ parseTime(row.startTime) }}</span>
@@ -258,6 +273,7 @@
             <el-option label="站内通知" value="site_notice" />
             <el-option label="邮件" value="email" />
             <el-option label="短信" value="sms" />
+            <el-option label="电话" value="phone" />
           </el-select>
         </el-form-item>
         <el-form-item label="启用" prop="enabled">
@@ -311,15 +327,21 @@ import {
   listEscalationPolicies, addEscalationPolicy, updateEscalationPolicy, deleteEscalationPolicy,
   listSilenceWindows, addSilenceWindow, updateSilenceWindow, deleteSilenceWindow
 } from "@/api/iot/alarm"
-import { parseTime } from "@/utils/formatters"
+import { parseTime, rankLabel, rankTagType, escalationLabel, notifyTypeLabel } from "@/utils/formatters"
 import { showSystarError } from "@/utils/errorHandler"
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { useRoute } from 'vue-router'
 import Breadcrumb from '@/components/Breadcrumb.vue'
 import EnhancedTable from '@/components/EnhancedTable/index.vue'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
+import { useAssetNames } from '@/composables/useAssetNames'
 
 const route    = useRoute()
+
+// Raw device/monitor ids in the rule, correlation and silence tables resolve
+// to asset names through the kind forest.
+const { load: loadAssetNames, nameOf } = useAssetNames()
+loadAssetNames()
 
 const TAB_MAP = {
   messages: 'messages',
@@ -339,13 +361,13 @@ const showSearch = ref(true)
 // --- Column definitions ---
 const rulesColumns = [
   { prop: 'id', label: 'ID', width: 80, align: 'center', sortable: true },
-  { prop: 'monitorId', label: '监测器ID', width: 120, align: 'center' },
+  { prop: 'monitorId', label: '监测器', width: 140, align: 'center', slot: true },
   { prop: 'strategy', label: '策略', width: 120, align: 'center', slot: true,
     filterable: true, filterOptions: [
       { label: '单次', value: 'ONLY_ONCE' }, { label: '持续', value: 'CONTINUOUS' }, { label: '选择', value: 'SELECTIVE' }
     ] },
   { prop: 'way', label: '通知方式', width: 100, align: 'center', slot: true },
-  { prop: 'eventRankId', label: '告警级别', width: 100, align: 'center' },
+  { prop: 'eventRankId', label: '告警级别', width: 100, align: 'center', slot: true },
   { prop: 'start', label: '触发次数', width: 100, align: 'center', slot: true },
   { prop: 'messageTemplate', label: '消息模板', showOverflowTooltip: true },
   { prop: 'enabled', label: '状态', width: 80, align: 'center', slot: true,
@@ -354,7 +376,9 @@ const rulesColumns = [
 
 const messagesColumns = [
   { prop: 'id', label: 'ID', width: 80, align: 'center', sortable: true },
-  { prop: 'monitorId', label: '监测器ID', width: 120, align: 'center' },
+  // t_alarm_message.monitor_id references the error-log row, not an asset —
+  // naming it 监测器ID invites a lookup that cannot resolve.
+  { prop: 'monitorId', label: '日志ID', width: 120, align: 'center' },
   { prop: 'caption', label: '告警标题', showOverflowTooltip: true },
   { prop: 'correlationGroup', label: '关联组', width: 180, showOverflowTooltip: true },
   { prop: 'state', label: '处理状态', width: 100, align: 'center', slot: true,
@@ -368,7 +392,7 @@ const messagesColumns = [
 const corrColumns = [
   { prop: 'id', label: 'ID', width: 80, align: 'center', sortable: true },
   { prop: 'name', label: '名称', showOverflowTooltip: true },
-  { prop: 'deviceId', label: '设备ID', width: 120, align: 'center', slot: true },
+  { prop: 'deviceId', label: '设备', width: 140, align: 'center', slot: true },
   { prop: 'windowSeconds', label: '时间窗口(秒)', width: 140, align: 'center' },
   { prop: 'enabled', label: '状态', width: 80, align: 'center', slot: true,
     filterable: true, filterOptions: [{ label: '启用', value: 1 }, { label: '禁用', value: 0 }] },
@@ -378,10 +402,10 @@ const corrColumns = [
 const escColumns = [
   { prop: 'id', label: 'ID', width: 80, align: 'center', sortable: true },
   { prop: 'name', label: '名称', showOverflowTooltip: true },
-  { prop: 'fromLevel', label: '源级别', width: 100, align: 'center' },
-  { prop: 'toLevel', label: '目标级别', width: 100, align: 'center' },
+  { prop: 'fromLevel', label: '源级别', width: 100, align: 'center', slot: true },
+  { prop: 'toLevel', label: '目标级别', width: 100, align: 'center', slot: true },
   { prop: 'timeoutMinutes', label: '超时(分钟)', width: 120, align: 'center' },
-  { prop: 'notifyType', label: '通知方式', width: 120, align: 'center' },
+  { prop: 'notifyType', label: '通知方式', width: 120, align: 'center', slot: true },
   { prop: 'enabled', label: '状态', width: 80, align: 'center', slot: true,
     filterable: true, filterOptions: [{ label: '启用', value: 1 }, { label: '禁用', value: 0 }] },
   { prop: 'operations', label: '操作', width: 160, align: 'center', fixed: 'right', slot: true },
@@ -390,8 +414,8 @@ const escColumns = [
 const silenceColumns = [
   { prop: 'id', label: 'ID', width: 80, align: 'center', sortable: true },
   { prop: 'name', label: '名称', showOverflowTooltip: true },
-  { prop: 'deviceId', label: '设备ID', width: 120, align: 'center', slot: true },
-  { prop: 'monitorId', label: '监测器ID', width: 120, align: 'center', slot: true },
+  { prop: 'deviceId', label: '设备', width: 140, align: 'center', slot: true },
+  { prop: 'monitorId', label: '监测器', width: 140, align: 'center', slot: true },
   { prop: 'startTime', label: '开始时间', width: 180, align: 'center', slot: true, sortable: 'custom' },
   { prop: 'endTime', label: '结束时间', width: 180, align: 'center', slot: true },
   { prop: 'reason', label: '原因', showOverflowTooltip: true },

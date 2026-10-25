@@ -24,7 +24,17 @@ vi.mock('@/utils/errorHandler', () => ({
 const stubs = {
   'right-toolbar': { template: '<div class="stub-toolbar" />' },
   Breadcrumb: { template: '<div class="stub-breadcrumb" />' },
-  EnhancedTable: { template: '<div class="stub-enhanced-table"><slot /></div>' },
+  // Also renders the expanded-row slot for the first row so cause/effect
+  // tag rendering is observable.
+  EnhancedTable: {
+    name: 'EnhancedTable',
+    props: ['columns', 'data', 'loading', 'exportable', 'exportFileName', 'contextMenu'],
+    template: `
+      <div class="stub-enhanced-table">
+        <slot />
+        <slot v-if="(data || []).length" name="expanded-row" :row="data[0]" />
+      </div>`
+  },
   Monitor: { template: '<span />' },
   Switch: { template: '<span />' },
   Right: { template: '<span />' },
@@ -63,6 +73,30 @@ describe('Linkage', () => {
 
   it('renders without errors', () => {
     expect(() => mountLinkage()).not.toThrow()
+  })
+
+  // Effect commands are engine codes; operators read 开/关/切换.
+  it('translates effect commands to operator words in the expanded row', async () => {
+    const { getAssetTree, listLinkageRules } = await import('@/api/iot/linkage')
+    getAssetTree.mockResolvedValueOnce({ data: [
+      { key: 'KIND:DEVICE', nodeKind: 'ASSET', assetKind: 'DEVICE', id: null, caption: '设备', children: [
+        { key: 'ASSET:35', nodeKind: 'ASSET', assetKind: 'CONTROL', id: 35, name: 'switch_2', caption: '开关2', children: [] }
+      ] }
+    ] })
+    listLinkageRules.mockResolvedValueOnce({ data: [
+      { rule: { id: 9, name: 'r9', causeType: 'MONITOR', caption: '', enabled: true },
+        causes: [],
+        effects: [
+          { id: 1, effectMonitorId: 35, effectCommand: 'ON' },
+          { id: 2, effectMonitorId: 35, effectCommand: '-1' }
+        ] }
+    ] })
+    const wrapper = mountLinkage()
+    await flushPromises()
+    const text = wrapper.text()
+    expect(text).toContain('开关2 → 开')
+    expect(text).toContain('切换')
+    expect(text).not.toContain('→ ON')
   })
 
   it('builds monitor and control trees from the forest', async () => {

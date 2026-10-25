@@ -89,10 +89,10 @@
               <span class="mono-text">{{ row.orderNo }}</span>
             </template>
             <template #column-type="{ row }">
-              <span class="type-badge" :class="'type-' + (row.type || '').toLowerCase()">{{ row.type }}</span>
+              <span class="type-badge" :class="'type-' + (row.type || '').toLowerCase()">{{ workOrderTypeLabel(row.type) }}</span>
             </template>
             <template #column-priority="{ row }">
-              <span class="pri-badge" :class="'pri-' + row.priority">P{{ row.priority }}</span>
+              <span class="pri-badge" :class="'pri-' + row.priority">{{ priorityLabel(row.priority) }}</span>
             </template>
             <template #column-status="{ row }">
               <span class="status-badge" :class="'st-' + (row.status || '').toLowerCase()">{{ statusLabel(row.status) }}</span>
@@ -232,6 +232,7 @@ import {
   listWorkOrders, getWorkOrderStats, createWorkOrder,
   assignWorkOrder, processWorkOrder, closeWorkOrder, cancelWorkOrder
 } from '@/api/iot/workorder'
+import { workOrderTypeLabel, priorityLabel } from '@/utils/formatters'
 
 // --- State ---
 const activeTab = ref('list')

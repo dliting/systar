@@ -3,7 +3,9 @@ import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 
 vi.mock('@/api/iot/workorder', () => ({
-  listWorkOrders: vi.fn().mockResolvedValue({ data: [] }),
+  listWorkOrders: vi.fn().mockResolvedValue({
+    records: [{ id: 1, orderNo: 'WO-1', type: 'REPAIR', priority: 4, status: 'CREATED', dueTime: '2026-01-02 00:00:00' }], total: 1
+  }),
   getWorkOrderStats: vi.fn().mockResolvedValue({ data: { total: 0, created: 0, processing: 0, closed: 0 } }),
   createWorkOrder: vi.fn().mockResolvedValue({ data: 1 }),
 }))
@@ -15,8 +17,23 @@ vi.mock('@/utils/errorHandler', () => ({
 const stubs = {
   'right-toolbar': { template: '<div class="stub-toolbar" />' },
   Breadcrumb: { template: '<div class="stub-breadcrumb" />' },
+  // Renders each column header plus the first data row through the view's
+  // scoped column slots, so slot-based label mapping is observable.
   EnhancedTable: {
-    template: '<div class="stub-enhanced-table"><slot /></div>',
+    name: 'EnhancedTable',
+    props: ['columns', 'data', 'loading', 'theme', 'exportable', 'exportFileName', 'contextMenu', 'rowClassName'],
+    template: `
+      <div class="stub-enhanced-table">
+        <slot />
+        <div v-for="col in (columns || [])" :key="col.prop" class="stub-col">
+          <span class="stub-col-label">{{ col.label }}</span>
+          <template v-if="firstRow && col.slot"><slot :name="'column-' + col.prop" :row="firstRow" /></template>
+          <span v-else-if="firstRow" class="stub-col-raw">{{ firstRow[col.prop] }}</span>
+        </div>
+      </div>`,
+    computed: {
+      firstRow() { return (this.data || [])[0] }
+    }
   },
 }
 
@@ -60,5 +77,14 @@ describe('Workorder', () => {
 
   it('renders without errors', () => {
     expect(() => mountWorkorder()).not.toThrow()
+  })
+
+  // Operators read Chinese type and named priority, not REPAIR / P1 codes.
+  it('labels the work order type and priority', async () => {
+    const wrapper = mountWorkorder()
+    await flushPromises()
+    const text = wrapper.text()
+    expect(text).toContain('维修')
+    expect(text).toContain('P4 紧急')
   })
 })

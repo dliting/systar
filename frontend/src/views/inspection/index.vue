@@ -45,7 +45,7 @@
             @context-command="handlePlanContextCmd"
           >
             <template #column-cronExpression="{ row }">
-              <span class="mono-text">{{ row.cronExpression }}</span>
+              <span>{{ describeCron(row.cronExpression) }}</span>
             </template>
             <template #column-enabled="{ row }">
               <span class="status-badge" :class="row.enabled === 1 ? 'st-closed' : 'st-cancelled'">
@@ -236,6 +236,7 @@ import {
   listPlans, getPlan, createPlan, updatePlan, deletePlan,
   listTasks, startTask, getTask, submitResults, completeTask, cancelTask
 } from '@/api/iot/inspection'
+import { describeCron } from '@/utils/formatters'
 
 const activeTab = ref('plans')
 const showSearch = ref(true)
@@ -261,7 +262,7 @@ const newDeviceId = ref(null)
 const planColumns = [
   { prop: 'id', label: 'ID', width: 60, align: 'center', sortable: true },
   { prop: 'name', label: '名称', minWidth: 140, showOverflowTooltip: true },
-  { prop: 'cronExpression', label: 'Cron', width: 160, slot: true },
+  { prop: 'cronExpression', label: '调度规则', width: 160, slot: true },
   { prop: 'enabled', label: '状态', width: 80, align: 'center', slot: true,
     filterable: true, filterOptions: [{ label: '启用', value: 1 }, { label: '禁用', value: 0 }] },
   { prop: 'defaultAssigneeId', label: '默认负责人', width: 100, align: 'center' },

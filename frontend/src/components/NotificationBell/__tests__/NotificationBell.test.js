@@ -49,6 +49,38 @@ describe('NotificationBell', () => {
     expect(badge.props('value')).toBe(1)
   })
 
+  // The pushed alarm carries the rendered caption as its title; raw ids and
+  // numeric ranks are meaningless to operations staff.
+  it('renders the pushed caption and named rank in the panel', async () => {
+    const { useWebSocketStore } = await import('@/stores/websocket')
+    const store = useWebSocketStore()
+    store._parseMessage(JSON.stringify({
+      type: 'alarm', alarmMessageId: 1, eventRankId: 2, assetId: 42,
+      caption: '102湿度 湿度过高: 85.3'
+    }))
+
+    const wrapper = mount(NotificationBell, {
+      global: { plugins: [pinia, router], stubs: globalStubs }
+    })
+    const item = wrapper.find('.notification-text')
+    expect(item.text()).toContain('102湿度 湿度过高: 85.3')
+    expect(item.text()).toContain('警告')
+    expect(item.text()).not.toContain('资产 #42')
+  })
+
+  it('falls back to the asset id when no caption is present', async () => {
+    const { useWebSocketStore } = await import('@/stores/websocket')
+    const store = useWebSocketStore()
+    store._parseMessage(JSON.stringify({ type: 'alarm', alarmMessageId: 1, eventRankId: 4, assetId: 42 }))
+
+    const wrapper = mount(NotificationBell, {
+      global: { plugins: [pinia, router], stubs: globalStubs }
+    })
+    const item = wrapper.find('.notification-text')
+    expect(item.text()).toContain('资产 #42')
+    expect(item.text()).toContain('紧急')
+  })
+
   it('clears unread on markAllRead', async () => {
     const { useWebSocketStore } = await import('@/stores/websocket')
     const store = useWebSocketStore()

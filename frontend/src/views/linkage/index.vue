@@ -37,7 +37,7 @@
             <span class="expand-title">执行动作：</span>
             <div class="expand-tags">
               <el-tag v-for="e in row.effects" :key="e.id" size="small" type="success" class="condition-tag">
-                {{ assetNameMap[e.effectMonitorId] || ('#' + e.effectMonitorId) }} → {{ e.effectCommand === '-1' ? '切换' : e.effectCommand }}
+                {{ assetNameMap[e.effectMonitorId] || ('#' + e.effectMonitorId) }} → {{ commandLabel(e.effectCommand) }}
               </el-tag>
               <el-empty v-if="!row.effects || row.effects.length === 0" description="无动作" :image-size="30" />
             </div>
@@ -288,6 +288,7 @@ import {
   deleteLinkageRule, toggleLinkageRule, getAssetTree
 } from '@/api/iot/linkage'
 import { showSystarError, showSystarSuccess } from '@/utils/errorHandler'
+import { commandLabel } from '@/utils/formatters'
 import { Monitor, Switch, Right, WarningFilled, FolderOpened, Coin } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import Breadcrumb from '@/components/Breadcrumb.vue'

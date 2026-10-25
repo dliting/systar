@@ -27,6 +27,7 @@
           :context-menu="scheduleContextMenu"
           @context-command="handleScheduleContextCmd"
         >
+          <template #column-cronExpression="{ row }">{{ describeCron(row.cronExpression) }}</template>
           <template #column-controlId="{ row }">
             <span v-if="row.targetName" style="color:#409eff">{{ row.targetName }} <span style="color:#999">#{{ row.controlId }}</span></span>
             <span v-else>#{{ row.controlId }}</span>
@@ -102,6 +103,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { listTasks, createTask, updateTask, deleteTask, enableTask, disableTask, getTaskLogs, previewCron } from '@/api/iot/scheduledTask'
 import { getAssetTree } from '@/api/iot/asset'
 import { showSystarError } from '@/utils/errorHandler'
+import { describeCron } from '@/utils/formatters'
 import CronWizard from '@/components/CronWizard/index.vue'
 import AssetTreePanel from '@/components/AssetTreePanel/index.vue'
 import Breadcrumb from '@/components/Breadcrumb.vue'
@@ -117,7 +119,7 @@ const taskColumns = [
   { prop: 'name', label: '任务名称', minWidth: 120, showOverflowTooltip: true },
   { prop: 'controlId', label: '目标', minWidth: 140, slot: true },
   { prop: 'command', label: '命令', width: 100 },
-  { prop: 'cronExpression', label: 'Cron 表达式', width: 140 },
+  { prop: 'cronExpression', label: '调度规则', width: 140, slot: true },
   { prop: 'enabled', label: '状态', width: 80, align: 'center', slot: true,
     filterable: true, filterOptions: [{ label: '启用', value: true }, { label: '禁用', value: false }] },
   { prop: 'nextFireTime', label: '下次执行', width: 170, slot: true },

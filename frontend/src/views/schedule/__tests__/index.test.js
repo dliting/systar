@@ -3,7 +3,9 @@ import { shallowMount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 
 vi.mock('@/api/iot/scheduledTask', () => ({
-  listTasks: vi.fn().mockResolvedValue({ data: [] }),
+  listTasks: vi.fn().mockResolvedValue({ data: [
+    { id: 1, name: '早班启动', controlId: 10, command: 'ON', cronExpression: '0 0 8 * * ?', enabled: true, nextFireTime: null }
+  ] }),
   createTask: vi.fn().mockResolvedValue({ data: 1 }),
   updateTask: vi.fn().mockResolvedValue({}),
   deleteTask: vi.fn().mockResolvedValue({}),
@@ -42,7 +44,24 @@ function mountSchedule() {
     global: {
       plugins: [ElementPlus],
       stubs: {
-        EnhancedTable: { template: '<div class="stub-enhanced-table"><slot /></div>' },
+        // Renders each column header plus the first data row through the
+        // view's scoped column slots, so slot-based rendering is observable.
+        EnhancedTable: {
+          name: 'EnhancedTable',
+          props: ['columns', 'data', 'loading', 'exportable', 'exportFileName', 'contextMenu'],
+          template: `
+            <div class="stub-enhanced-table">
+              <slot />
+              <div v-for="col in (columns || [])" :key="col.prop" class="stub-col">
+                <span class="stub-col-label">{{ col.label }}</span>
+                <template v-if="firstRow && col.slot"><slot :name="'column-' + col.prop" :row="firstRow" /></template>
+                <span v-else-if="firstRow" class="stub-col-raw">{{ firstRow[col.prop] }}</span>
+              </div>
+            </div>`,
+          computed: {
+            firstRow() { return (this.data || [])[0] }
+          }
+        },
       }
     }
   })
@@ -113,5 +132,16 @@ describe('Schedule', () => {
 
   it('renders without errors', () => {
     expect(() => mountSchedule()).not.toThrow()
+  })
+
+  // Operators read "每天 08:00" in the task table, not the raw cron string.
+  it('humanizes the cron expression in the task table', async () => {
+    const wrapper = mountSchedule()
+    await flushPromises()
+    const text = wrapper.text()
+    expect(text).toContain('每天 08:00')
+    expect(text).not.toContain('0 0 8 * * ?')
+    const labels = wrapper.findAll('.stub-col-label').map(n => n.text())
+    expect(labels).toContain('调度规则')
   })
 })

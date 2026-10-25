@@ -14,7 +14,7 @@
         <div v-for="msg in displayMessages" :key="msg.alarmMessageId" class="notification-item" @click="goToAlarmPage">
           <el-icon color="#f56c6c"><WarningFilled /></el-icon>
           <div class="notification-content">
-            <span class="notification-text">资产 #{{ msg.assetId }} 告警 (级别 {{ msg.eventRankId }})</span>
+            <span class="notification-text">{{ msg.caption || ('资产 #' + msg.assetId) }}（{{ rankLabel(msg.eventRankId) }}）</span>
           </div>
         </div>
       </div>
@@ -32,6 +32,7 @@ import { useRouter } from 'vue-router'
 import { useWebSocketStore } from '@/stores/websocket'
 import { Bell, WarningFilled } from '@element-plus/icons-vue'
 import { ElNotification } from 'element-plus'
+import { rankLabel } from '@/utils/formatters'
 
 const router  = useRouter()
 const wsStore = useWebSocketStore()
@@ -50,7 +51,7 @@ watch(alarmMessages, (msgs) => {
       notifiedIds.add(msg.alarmMessageId)
       ElNotification({
         title: '新告警',
-        message: `资产 #${msg.assetId} 告警 (级别 ${msg.eventRankId})`,
+        message: `${msg.caption || ('资产 #' + msg.assetId)}（${rankLabel(msg.eventRankId)}）`,
         type: 'warning',
         duration: 5000,
       })
@@ -68,7 +69,7 @@ function startPolling() {
         getAlarmMessages({ state: 1, size: 20 }).then(res => {
           const msgs = res.data?.records || []
           for (const msg of msgs) {
-            wsStore._parseMessage(JSON.stringify({ type: 'alarm', alarmMessageId: msg.id, eventRankId: msg.warnId, assetId: msg.monitorId }))
+            wsStore._parseMessage(JSON.stringify({ type: 'alarm', alarmMessageId: msg.id, eventRankId: msg.warnId, assetId: msg.monitorId, caption: msg.caption }))
           }
         }).catch(() => {})
       })

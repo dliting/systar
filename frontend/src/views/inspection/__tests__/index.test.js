@@ -3,7 +3,9 @@ import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 
 vi.mock('@/api/iot/inspection', () => ({
-  listPlans: vi.fn().mockResolvedValue({ data: [] }),
+  listPlans: vi.fn().mockResolvedValue({
+    records: [{ id: 1, name: '周检计划', cronExpression: '0 0 9 ? * MON', enabled: 1, autoCreateWorkorder: 0 }], total: 1
+  }),
   getPlan: vi.fn().mockResolvedValue({ data: {} }),
   createPlan: vi.fn().mockResolvedValue({ data: 1 }),
   updatePlan: vi.fn().mockResolvedValue({}),
@@ -23,8 +25,23 @@ vi.mock('@/utils/errorHandler', () => ({
 const stubs = {
   'right-toolbar': { template: '<div class="stub-toolbar" />' },
   Breadcrumb: { template: '<div class="stub-breadcrumb" />' },
+  // Renders each column header plus the first data row through the view's
+  // scoped column slots, so slot-based rendering is observable.
   EnhancedTable: {
-    template: '<div class="stub-enhanced-table"><slot /></div>',
+    name: 'EnhancedTable',
+    props: ['columns', 'data', 'loading', 'theme', 'exportable', 'exportFileName', 'contextMenu'],
+    template: `
+      <div class="stub-enhanced-table">
+        <slot />
+        <div v-for="col in (columns || [])" :key="col.prop" class="stub-col">
+          <span class="stub-col-label">{{ col.label }}</span>
+          <template v-if="firstRow && col.slot"><slot :name="'column-' + col.prop" :row="firstRow" /></template>
+          <span v-else-if="firstRow" class="stub-col-raw">{{ firstRow[col.prop] }}</span>
+        </div>
+      </div>`,
+    computed: {
+      firstRow() { return (this.data || [])[0] }
+    }
   },
 }
 
@@ -65,5 +82,14 @@ describe('Inspection', () => {
 
   it('renders without errors', () => {
     expect(() => mountInspection()).not.toThrow()
+  })
+
+  // Operators read "每周一 09:00" in the plan table, not the raw cron string.
+  it('humanizes the cron expression in the plan table', async () => {
+    const wrapper = mountInspection()
+    await flushPromises()
+    const text = wrapper.text()
+    expect(text).toContain('每周一 09:00')
+    expect(text).not.toContain('0 0 9 ? * MON')
   })
 })
