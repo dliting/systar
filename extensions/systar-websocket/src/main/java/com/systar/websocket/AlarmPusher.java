@@ -47,6 +47,7 @@ public class AlarmPusher {
             payload.put("alarmMessageId", event.getAlarmMessageId());
             payload.put("eventRankId",    event.getEventRankId());
             payload.put("assetId",        event.getAssetId());
+            payload.put("caption",        event.getCaption());
 
             // Alarms are broadcast to all sessions — no subscription filtering
             // (unlike monitor results which support per-session monitor ID filters)

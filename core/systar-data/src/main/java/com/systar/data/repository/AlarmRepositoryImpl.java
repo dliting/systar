@@ -53,6 +53,9 @@ public class AlarmRepositoryImpl implements AlarmRepository {
 
         AlarmMessageEntity alarmMsg = new AlarmMessageEntity();
         alarmMsg.setMonitorId(entity.getId());
+        // The rendered message (template with ${caption}/${value} substituted) is
+        // the alarm title shown in the alarm center and the notification bell.
+        alarmMsg.setCaption(message.getError());
         alarmMsg.setWarnId(message.getEventRankId());
         alarmMsg.setState(AlarmMessageEntity.STATE_PENDING);
         alarmMsg.setAlarmTime(entity.getLogTime());
@@ -68,7 +71,8 @@ public class AlarmRepositoryImpl implements AlarmRepository {
 
         message.setId(entity.getId());
         eventPublisher.publishEvent(
-            new AlarmPersistedEvent(this, alarmMsg.getId(), message.getEventRankId(), message.getMonitorId()));
+            new AlarmPersistedEvent(this, alarmMsg.getId(), message.getEventRankId(),
+                    message.getMonitorId(), message.getError()));
 
         if (message.getCorrelationGroup() != null) {
             eventPublisher.publishEvent(new CorrelationGroupEvent(

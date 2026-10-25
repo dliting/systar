@@ -59,7 +59,7 @@ class AlarmToWorkOrderListenerTest {
         addProbeAsset(4101, 3101);
         insertDeviceRow(3101);
 
-        listener.onAlarmPersisted(new AlarmPersistedEvent(this, 5101, 3, 4101));
+        listener.onAlarmPersisted(new AlarmPersistedEvent(this, 5101, 3, 4101, "告警"));
 
         List<WorkOrderEntity> orders = workOrderMapper.selectList(null);
         assertThat(orders).hasSize(1);
@@ -72,7 +72,7 @@ class AlarmToWorkOrderListenerTest {
         addDeviceAsset(3102);
         insertDeviceRow(3102);
 
-        listener.onAlarmPersisted(new AlarmPersistedEvent(this, 5102, 2, 3102));
+        listener.onAlarmPersisted(new AlarmPersistedEvent(this, 5102, 2, 3102, "告警"));
 
         List<WorkOrderEntity> orders = workOrderMapper.selectList(null);
         assertThat(orders).hasSize(1);
@@ -84,7 +84,7 @@ class AlarmToWorkOrderListenerTest {
         addDeviceAsset(3103);
         insertDeviceRow(3103);
 
-        listener.onAlarmPersisted(new AlarmPersistedEvent(this, 5103, 1, 3103));
+        listener.onAlarmPersisted(new AlarmPersistedEvent(this, 5103, 1, 3103, "告警"));
 
         assertThat(workOrderMapper.selectCount(null)).isZero();
     }
@@ -94,8 +94,8 @@ class AlarmToWorkOrderListenerTest {
         addDeviceAsset(3104);
         insertDeviceRow(3104);
 
-        listener.onAlarmPersisted(new AlarmPersistedEvent(this, 5104, 3, 3104));
-        listener.onAlarmPersisted(new AlarmPersistedEvent(this, 5104, 3, 3104));
+        listener.onAlarmPersisted(new AlarmPersistedEvent(this, 5104, 3, 3104, "告警"));
+        listener.onAlarmPersisted(new AlarmPersistedEvent(this, 5104, 3, 3104, "告警"));
 
         assertThat(workOrderMapper.selectCount(new LambdaQueryWrapper<WorkOrderEntity>()
                 .eq(WorkOrderEntity::getAlarmMessageId, 5104))).isEqualTo(1);
@@ -103,7 +103,7 @@ class AlarmToWorkOrderListenerTest {
 
     @Test
     void onAlarmPersisted_skipsUnresolvedAsset() {
-        listener.onAlarmPersisted(new AlarmPersistedEvent(this, 5105, 3, 9999));
+        listener.onAlarmPersisted(new AlarmPersistedEvent(this, 5105, 3, 9999, "告警"));
 
         assertThat(workOrderMapper.selectCount(null)).isZero();
     }

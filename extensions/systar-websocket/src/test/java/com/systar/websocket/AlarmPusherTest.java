@@ -24,9 +24,9 @@ class AlarmPusherTest {
     }
 
     @Test
-    @DisplayName("onAlarmPersisted broadcasts JSON with alarm fields")
+    @DisplayName("onAlarmPersisted broadcasts JSON with alarm fields including caption")
     void onAlarmPersistedBroadcastsCorrectJson() {
-        AlarmPersistedEvent event = new AlarmPersistedEvent(this, 100, 200, 42);
+        AlarmPersistedEvent event = new AlarmPersistedEvent(this, 100, 200, 42, "102湿度 湿度过高: 85.3");
 
         pusher.onAlarmPersisted(event);
 
@@ -34,14 +34,15 @@ class AlarmPusherTest {
             return json.contains("\"type\":\"alarm\"")
                     && json.contains("\"alarmMessageId\":100")
                     && json.contains("\"eventRankId\":200")
-                    && json.contains("\"assetId\":42");
+                    && json.contains("\"assetId\":42")
+                    && json.contains("\"caption\":\"102湿度 湿度过高: 85.3\"");
         }));
     }
 
     @Test
     @DisplayName("onAlarmPersisted handles broadcast exception gracefully")
     void onAlarmPersistedHandlesException() {
-        AlarmPersistedEvent event = new AlarmPersistedEvent(this, 1, 2, 3);
+        AlarmPersistedEvent event = new AlarmPersistedEvent(this, 1, 2, 3, "告警");
 
         doThrow(new RuntimeException("broadcast failed")).when(handler).broadcast(anyString());
 
