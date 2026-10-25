@@ -1,6 +1,6 @@
 import { systarApi } from '@/api/request'
 
-const BASE = '/ops/work-orders'
+const BASE = '/api/ops/work-orders'
 
 export function listWorkOrders(query) {
   return systarApi({ url: BASE, method: 'get', params: query })

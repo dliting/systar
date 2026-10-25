@@ -1,6 +1,6 @@
 import { systarApi } from '@/api/request'
 
-const BASE = '/ops/inspection'
+const BASE = '/api/ops/inspection'
 
 // Plans
 export function listPlans(query) {

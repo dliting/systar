@@ -1,6 +1,6 @@
 import { systarApi } from '@/api/request'
 
-const BASE = '/ops/device-ledger'
+const BASE = '/api/ops/device-ledger'
 
 export function listDevices(query) {
   return systarApi({ url: BASE, method: 'get', params: query })
