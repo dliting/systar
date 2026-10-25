@@ -44,10 +44,10 @@ public class AuthController {
 
         SysUserEntity user = sysUserService.getByUsername(username);
         if (user == null || user.getStatus() != 0) {
-            return Result.error(Result.CODE_UNAUTHORIZED, "Invalid username or password");
+            return Result.error(Result.CODE_UNAUTHORIZED, "用户名或密码错误");
         }
         if (!passwordEncoder.matches(password, user.getPassword())) {
-            return Result.error(Result.CODE_UNAUTHORIZED, "Invalid username or password");
+            return Result.error(Result.CODE_UNAUTHORIZED, "用户名或密码错误");
         }
 
         List<Long> roleIds = sysRoleService.getRoleIdsByUserId(user.getId());
@@ -73,7 +73,7 @@ public class AuthController {
     public Result<Map<String, Object>> getInfo() {
         SystarUser current = SystarSecurityContext.get();
         if (current == null) {
-            return Result.error(Result.CODE_UNAUTHORIZED, "Not authenticated");
+            return Result.error(Result.CODE_UNAUTHORIZED, "登录已失效，请重新登录");
         }
 
         SysUserEntity user = sysUserService.getUserById(current.getUserId());
