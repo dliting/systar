@@ -66,7 +66,7 @@ public class AssetController {
                 AssetKind assetKind = AssetKind.valueOf(kind.toUpperCase());
                 assets = assetStore.getAssetsByKind(assetKind);
             } catch (IllegalArgumentException e) {
-                return Result.error("Invalid asset kind: " + kind);
+                return Result.error("无效的资产类型：" + kind);
             }
         } else {
             assets = assetStore.getAssets();
@@ -87,7 +87,7 @@ public class AssetController {
     public Result<AssetVO> getAsset(@PathVariable int id) {
         Asset<?> asset = assetStore.findAsset(id);
         if (asset == null) {
-            return Result.error(Result.CODE_NOT_FOUND, "Asset not found: " + id);
+            return Result.error(Result.CODE_NOT_FOUND, "资产不存在：" + id);
         }
         return Result.success(toAssetVO(asset));
     }
@@ -113,7 +113,7 @@ public class AssetController {
         try {
             AssetKind kind = resolveKindFromStore(id);
             if (kind == null) {
-                return Result.error(Result.CODE_NOT_FOUND, "Asset not found: " + id);
+                return Result.error(Result.CODE_NOT_FOUND, "资产不存在：" + id);
             }
             orchestrator.updateAsset(id, kind, request);
             return Result.success();
@@ -128,7 +128,7 @@ public class AssetController {
         try {
             AssetKind kind = resolveKindFromStore(id);
             if (kind == null) {
-                return Result.error(Result.CODE_NOT_FOUND, "Asset not found: " + id);
+                return Result.error(Result.CODE_NOT_FOUND, "资产不存在：" + id);
             }
             orchestrator.deleteAsset(id, kind);
             return Result.success();
@@ -145,7 +145,7 @@ public class AssetController {
         try {
             AssetKind kind = resolveKindFromStore(id);
             if (kind == null) {
-                return Result.error(Result.CODE_NOT_FOUND, "Asset not found: " + id);
+                return Result.error(Result.CODE_NOT_FOUND, "资产不存在：" + id);
             }
             orchestrator.startAsset(id, kind);
             return Result.success();
@@ -160,7 +160,7 @@ public class AssetController {
         try {
             AssetKind kind = resolveKindFromStore(id);
             if (kind == null) {
-                return Result.error(Result.CODE_NOT_FOUND, "Asset not found: " + id);
+                return Result.error(Result.CODE_NOT_FOUND, "资产不存在：" + id);
             }
             orchestrator.stopAsset(id, kind);
             return Result.success();
@@ -179,12 +179,12 @@ public class AssetController {
         try {
             AssetKind kind = resolveKindFromStore(id);
             if (kind == null) {
-                return Result.error(Result.CODE_NOT_FOUND, "Asset not found: " + id);
+                return Result.error(Result.CODE_NOT_FOUND, "资产不存在：" + id);
             }
             MonitorEngine e = engine.getIfAvailable();
             if (e == null) {
                 warnEngineAbsent("detection");
-                return Result.error(Result.CODE_CONFLICT, "Monitor engine not present; detection skipped.");
+                return Result.error(Result.CODE_CONFLICT, "监测引擎未加载，已跳过检测。");
             }
             e.detectImmediately(id);
             return Result.success(Map.of("status", "accepted"));
@@ -201,7 +201,7 @@ public class AssetController {
         try {
             AssetKind kind = resolveKindFromStore(id);
             if (kind == null) {
-                return Result.error(Result.CODE_NOT_FOUND, "Asset not found: " + id);
+                return Result.error(Result.CODE_NOT_FOUND, "资产不存在：" + id);
             }
             orchestrator.disableAsset(id, kind);
             return Result.success();
@@ -216,7 +216,7 @@ public class AssetController {
         try {
             AssetKind kind = resolveKindFromStore(id);
             if (kind == null) {
-                return Result.error(Result.CODE_NOT_FOUND, "Asset not found: " + id);
+                return Result.error(Result.CODE_NOT_FOUND, "资产不存在：" + id);
             }
             orchestrator.enableAsset(id, kind);
             return Result.success();
@@ -231,7 +231,7 @@ public class AssetController {
     @PutMapping("/assets/batch/start")
     public Result<BatchResult> batchStart(@RequestBody BatchAssetRequest request) {
         if (request.ids() == null || request.ids().isEmpty()) {
-            return Result.error(Result.CODE_BAD_REQUEST, "ids must not be empty");
+            return Result.error(Result.CODE_BAD_REQUEST, "ids 不能为空");
         }
         return Result.success(orchestrator.batchStart(request.ids()));
     }
@@ -240,7 +240,7 @@ public class AssetController {
     @PutMapping("/assets/batch/stop")
     public Result<BatchResult> batchStop(@RequestBody BatchAssetRequest request) {
         if (request.ids() == null || request.ids().isEmpty()) {
-            return Result.error(Result.CODE_BAD_REQUEST, "ids must not be empty");
+            return Result.error(Result.CODE_BAD_REQUEST, "ids 不能为空");
         }
         return Result.success(orchestrator.batchStop(request.ids()));
     }
@@ -249,7 +249,7 @@ public class AssetController {
     @PutMapping("/assets/batch/enable")
     public Result<BatchResult> batchEnable(@RequestBody BatchAssetRequest request) {
         if (request.ids() == null || request.ids().isEmpty()) {
-            return Result.error(Result.CODE_BAD_REQUEST, "ids must not be empty");
+            return Result.error(Result.CODE_BAD_REQUEST, "ids 不能为空");
         }
         return Result.success(orchestrator.batchEnable(request.ids()));
     }
@@ -258,7 +258,7 @@ public class AssetController {
     @PutMapping("/assets/batch/disable")
     public Result<BatchResult> batchDisable(@RequestBody BatchAssetRequest request) {
         if (request.ids() == null || request.ids().isEmpty()) {
-            return Result.error(Result.CODE_BAD_REQUEST, "ids must not be empty");
+            return Result.error(Result.CODE_BAD_REQUEST, "ids 不能为空");
         }
         return Result.success(orchestrator.batchDisable(request.ids()));
     }
@@ -267,7 +267,7 @@ public class AssetController {
     @DeleteMapping("/assets/batch")
     public Result<BatchResult> batchDelete(@RequestBody BatchAssetRequest request) {
         if (request.ids() == null || request.ids().isEmpty()) {
-            return Result.error(Result.CODE_BAD_REQUEST, "ids must not be empty");
+            return Result.error(Result.CODE_BAD_REQUEST, "ids 不能为空");
         }
         return Result.success(orchestrator.batchDelete(request.ids()));
     }
@@ -298,7 +298,7 @@ public class AssetController {
             };
             return Result.success(names);
         } catch (IllegalArgumentException e) {
-            return Result.error("Invalid asset kind: " + kind);
+            return Result.error("无效的资产类型：" + kind);
         }
     }
 
@@ -337,7 +337,7 @@ public class AssetController {
             }
             return Result.success(result);
         } catch (IllegalArgumentException e) {
-            return Result.error("Invalid asset kind: " + kind);
+            return Result.error("无效的资产类型：" + kind);
         }
     }
 
