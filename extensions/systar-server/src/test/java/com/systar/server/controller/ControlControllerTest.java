@@ -43,7 +43,7 @@ class ControlControllerTest {
             req.setCommand(null);
             Result<Map<String, Object>> result = controller.executeControl(1, req);
             assertThat(result.getCode()).isEqualTo(Result.CODE_BAD_REQUEST);
-            assertThat(result.getMessage()).contains("Command is required");
+            assertThat(result.getMessage()).contains("缺少命令参数");
         }
 
         @Test
@@ -97,7 +97,7 @@ class ControlControllerTest {
             Result<Map<String, Object>> result =
                     new ControlController(mock(ObjectProvider.class)).executeControl(1, req);
             assertThat(result.getCode()).isEqualTo(Result.CODE_CONFLICT);
-            assertThat(result.getMessage()).contains("Monitor engine not present");
+            assertThat(result.getMessage()).contains("监测引擎未加载");
         }
 
         @Test

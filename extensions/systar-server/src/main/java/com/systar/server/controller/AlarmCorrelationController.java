@@ -152,10 +152,10 @@ public class AlarmCorrelationController {
             com.baomidou.mybatisplus.extension.service.IService<T> service,
             int page, int size, QueryWrapper<T> qw) {
         if (page < 1) {
-            return Result.error("Page number must be >= 1");
+            return Result.error("页码必须大于等于 1");
         }
         if (size < 1 || size > DEFAULT_PAGE_SIZE_MAX) {
-            return Result.error("Page size must be between 1 and " + DEFAULT_PAGE_SIZE_MAX);
+            return Result.error("每页条数必须在 1 到 " + DEFAULT_PAGE_SIZE_MAX + " 之间");
         }
         Page<T> pageResult = service.page(new Page<>(page, size), qw);
         Map<String, Object> data = new HashMap<>();

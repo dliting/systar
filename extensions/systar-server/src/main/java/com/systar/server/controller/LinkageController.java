@@ -63,7 +63,7 @@ public class LinkageController {
     public Result<Map<String, Object>> getRuleDetail(@PathVariable int id) {
         LinkageRuleEntity rule = linkageRuleService.getById(id);
         if (rule == null) {
-            return Result.error(Result.CODE_NOT_FOUND, "Linkage rule not found: " + id);
+            return Result.error(Result.CODE_NOT_FOUND, "联动规则不存在：" + id);
         }
 
         List<LinkageRuleCauseEntity> causes = linkageRuleCauseService.list(
@@ -85,10 +85,10 @@ public class LinkageController {
     @Transactional
     public Result<Integer> createRule(@RequestBody LinkageRuleCreateDTO dto) {
         if (dto.getName() == null || dto.getName().isBlank()) {
-            return Result.error("Rule name is required");
+            return Result.error("规则名称不能为空");
         }
         if (dto.getCauseType() == null || dto.getCauseType().isBlank()) {
-            return Result.error("Cause type is required");
+            return Result.error("触发类型不能为空");
         }
 
         LinkageRuleEntity rule = new LinkageRuleEntity();
@@ -111,7 +111,7 @@ public class LinkageController {
     public Result<Void> updateRule(@PathVariable int id, @RequestBody LinkageRuleCreateDTO dto) {
         LinkageRuleEntity rule = linkageRuleService.getById(id);
         if (rule == null) {
-            return Result.error(Result.CODE_NOT_FOUND, "Linkage rule not found: " + id);
+            return Result.error(Result.CODE_NOT_FOUND, "联动规则不存在：" + id);
         }
 
         if (dto.getName() != null)      rule.setName(dto.getName());
@@ -152,7 +152,7 @@ public class LinkageController {
     public Result<Void> toggleEnabled(@PathVariable int id) {
         LinkageRuleEntity rule = linkageRuleService.getById(id);
         if (rule == null) {
-            return Result.error(Result.CODE_NOT_FOUND, "Linkage rule not found: " + id);
+            return Result.error(Result.CODE_NOT_FOUND, "联动规则不存在：" + id);
         }
         rule.setEnabled(!rule.getEnabled());
         linkageRuleService.updateById(rule);

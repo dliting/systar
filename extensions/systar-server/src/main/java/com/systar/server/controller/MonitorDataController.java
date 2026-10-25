@@ -54,10 +54,10 @@ public class MonitorDataController {
     @GetMapping("/probe-values")
     public Result<List<ProbeValueVO>> getProbeValues(@RequestParam String ids) {
         if (ids == null || ids.isBlank()) {
-            return Result.error("Parameter 'ids' is required.");
+            return Result.error("缺少 ids 参数。");
         }
         if (ids.length() > MAX_IDS_LENGTH) {
-            return Result.error("Parameter 'ids' exceeds maximum allowed length of " + MAX_IDS_LENGTH + " characters.");
+            return Result.error("ids 参数超过最大长度 " + MAX_IDS_LENGTH + " 字符。");
         }
         String[] parts = ids.split(",");
         List<ProbeValueVO> values = new ArrayList<>();
@@ -92,10 +92,10 @@ public class MonitorDataController {
             @RequestParam(defaultValue = "50") Integer size) {
 
         if (page < 1) {
-            return Result.error("Page number must be >= 1");
+            return Result.error("页码必须大于等于 1");
         }
         if (size < 1 || size > DEFAULT_PAGE_SIZE_MAX) {
-            return Result.error("Page size must be between 1 and " + DEFAULT_PAGE_SIZE_MAX);
+            return Result.error("每页条数必须在 1 到 " + DEFAULT_PAGE_SIZE_MAX + " 之间");
         }
 
         QueryWrapper<SampleFloatEntity> wrapper = new QueryWrapper<>();
@@ -159,7 +159,7 @@ public class MonitorDataController {
         if (config.containsKey("enabled")) {
             Object val = config.get("enabled");
             if (!(val instanceof Boolean) && !(val instanceof String)) {
-                throw new IllegalArgumentException("enabled must be a boolean");
+                throw new IllegalArgumentException("enabled 必须是布尔值");
             }
             updates.put("data_retention.enabled", String.valueOf(val));
         }
@@ -176,18 +176,18 @@ public class MonitorDataController {
 
     private int validateRetentionDays(Object value, String fieldName) {
         if (!(value instanceof Number)) {
-            throw new IllegalArgumentException(fieldName + " must be a number");
+            throw new IllegalArgumentException(fieldName + " 必须是数字");
         }
         Number num = (Number) value;
         if (num.doubleValue() != num.intValue()) {
-            throw new IllegalArgumentException(fieldName + " must be a whole number");
+            throw new IllegalArgumentException(fieldName + " 必须是整数");
         }
         int days = num.intValue();
         if (days < DataRetentionServiceImpl.MIN_RETENTION_DAYS
                 || days > DataRetentionServiceImpl.MAX_RETENTION_DAYS) {
             throw new IllegalArgumentException(
-                    fieldName + " must be between " + DataRetentionServiceImpl.MIN_RETENTION_DAYS
-                    + " and " + DataRetentionServiceImpl.MAX_RETENTION_DAYS);
+                    fieldName + " 必须在 " + DataRetentionServiceImpl.MIN_RETENTION_DAYS
+                    + " 到 " + DataRetentionServiceImpl.MAX_RETENTION_DAYS + " 之间");
         }
         return days;
     }

@@ -216,7 +216,7 @@ class GroupServiceTreeShapeTest {
         when(repo.findTreeById(99L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.buildAssetTree("99"))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Tree not found");
+                .hasMessageContaining("分组树不存在");
     }
 
     @Test
@@ -224,6 +224,6 @@ class GroupServiceTreeShapeTest {
     void invalidTreeSelector() {
         assertThatThrownBy(() -> service.buildAssetTree("abc"))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Invalid tree selector");
+                .hasMessageContaining("无效的分组树选择器");
     }
 }

@@ -53,7 +53,7 @@ class GlobalExceptionHandlerTest {
             Result<Void> result = handler.handleUnexpected(new RuntimeException("boom"));
 
             assertThat(result.getCode()).isEqualTo(Result.CODE_INTERNAL_ERROR);
-            assertThat(result.getMessage()).isEqualTo("Internal server error");
+            assertThat(result.getMessage()).isEqualTo("服务器内部错误");
         }
     }
 }

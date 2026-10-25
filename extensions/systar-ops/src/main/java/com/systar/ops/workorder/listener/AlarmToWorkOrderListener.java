@@ -53,7 +53,7 @@ public class AlarmToWorkOrderListener {
         }
 
         WorkOrderEntity order = new WorkOrderEntity();
-        order.setTitle("Alarm-triggered work order");
+        order.setTitle("告警自动生成的工单");
         order.setType("REPAIR");
         order.setSource("ALARM_AUTO");
         order.setAlarmMessageId(event.getAlarmMessageId());

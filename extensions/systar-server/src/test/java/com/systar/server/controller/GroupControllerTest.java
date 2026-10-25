@@ -267,13 +267,13 @@ class GroupControllerTest {
         @DisplayName("a rejected reorder propagates the service's error to the shared exception mapper")
         void rejectionPropagates() {
             doThrow(new IllegalArgumentException(
-                    "Reorder list must contain every child group of parent 0; missing: [2]."))
+                    "重排序列表必须包含父分组 0 的全部子分组；缺少：[2]。"))
                     .when(groupService).reorderSiblings(1L, GroupRepository.TOP_LEVEL_PARENT, List.of(1L));
 
             assertThatThrownBy(() -> controller.reorderGroups(
                     1L, new GroupReorderRequest(null, List.of(1L))))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("missing");
+                    .hasMessageContaining("缺少");
         }
 
         @Test

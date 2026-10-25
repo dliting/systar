@@ -60,14 +60,14 @@ class GroupServiceTest {
     void createTreeValidation() {
         assertThatThrownBy(() -> service.createTree("  ", "x", 1))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("name");
+                .hasMessageContaining("不能为空");
         service.createTree("region2", "树2", 2);
         verify(repo).insertTree("region2", "树2", 2);
         when(repo.findTreeByName("region2")).thenReturn(Optional.of(
                 new GroupRepository.GroupTreeRow(9L, "region2", "树2", 2)));
         assertThatThrownBy(() -> service.createTree("region2", "树2b", 2))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("already exists");
+                .hasMessageContaining("已存在");
     }
 
     @Test
@@ -76,7 +76,7 @@ class GroupServiceTest {
         when(repo.countGroupsInTree(1L)).thenReturn(2);
         assertThatThrownBy(() -> service.deleteTree(1L))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("still contains 2 group");
+                .hasMessageContaining("还包含 2 个分组");
         verify(repo, never()).deleteTree(anyLong());
 
         when(repo.countGroupsInTree(1L)).thenReturn(0);
@@ -96,7 +96,7 @@ class GroupServiceTest {
                 new GroupRepository.GroupTreeRow(9L, "region2", "树2", 2)));
         assertThatThrownBy(() -> service.updateTree(1L, "region2", "x", 1))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("already exists");
+                .hasMessageContaining("已存在");
 
         // rename to its OWN name is allowed (self-exclusion)
         when(repo.findTreeByName("region")).thenReturn(Optional.of(TREE));
@@ -106,7 +106,7 @@ class GroupServiceTest {
         // unknown id rejected
         assertThatThrownBy(() -> service.updateTree(2L, "x", "x", 1))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Tree not found");
+                .hasMessageContaining("分组树不存在");
     }
 
     // ---- group CRUD ----
@@ -130,7 +130,7 @@ class GroupServiceTest {
 
         assertThatThrownBy(() -> service.createGroup(1L, "child", "子", 6L, 1))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("does not belong to tree");
+                .hasMessageContaining("不属于分组树");
         verify(repo, never()).insertGroup(anyLong(), anyString(), anyString(), anyLong(), anyInt(), anyInt());
     }
 
@@ -149,7 +149,7 @@ class GroupServiceTest {
                 new GroupRepository.GroupRow(8L, 1L, "taken", "T", 0L, 1, 1)));
         assertThatThrownBy(() -> service.renameGroup(7L, "taken", "x", 1))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("already exists");
+                .hasMessageContaining("已存在");
 
         // rename to its OWN name is allowed (self-exclusion)
         when(repo.findGroupByName(1L, "g2")).thenReturn(Optional.of(
@@ -189,7 +189,7 @@ class GroupServiceTest {
 
         assertThatThrownBy(() -> service.moveGroup(1L, 1L, 2L))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("subtree");
+                .hasMessageContaining("自身子树");
 
         // legit move: b to top-level → level 1
         service.moveGroup(1L, 2L, GroupRepository.TOP_LEVEL_PARENT);
@@ -201,7 +201,7 @@ class GroupServiceTest {
     void updateGroupNothingToUpdate() {
         assertThatThrownBy(() -> service.updateGroup(7L, null, null, null, null, null))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Nothing to update");
+                .hasMessageContaining("没有可更新内容");
         verify(repo, never()).updateGroup(anyLong(), anyString(), anyString(), anyLong(), anyInt(), anyInt());
     }
 
@@ -210,7 +210,7 @@ class GroupServiceTest {
     void updateGroupRejectsTreeIdWithoutParent() {
         assertThatThrownBy(() -> service.updateGroup(7L, 1L, null, "g2", null, null))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Incomplete move");
+                .hasMessageContaining("移动参数不完整");
         verifyNoInteractions(repo);
     }
 
@@ -219,7 +219,7 @@ class GroupServiceTest {
     void updateGroupRejectsParentWithoutTreeId() {
         assertThatThrownBy(() -> service.updateGroup(7L, null, 5L, null, null, null))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Incomplete move");
+                .hasMessageContaining("移动参数不完整");
         verifyNoInteractions(repo);
     }
 
@@ -234,7 +234,7 @@ class GroupServiceTest {
 
         assertThatThrownBy(() -> service.updateGroup(7L, 1L, GroupRepository.TOP_LEVEL_PARENT, "taken", null, null))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("already exists");
+                .hasMessageContaining("已存在");
 
         // The move write happened; the rename write must not — the transactional
         // boundary around updateGroup undoes the move on the propagated exception.
@@ -289,14 +289,14 @@ class GroupServiceTest {
                 new GroupRepository.GroupRow(8L, 1L, "sub", "S", 7L, 2, 1)));
         assertThatThrownBy(() -> service.deleteGroup(7L))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("child group");
+                .hasMessageContaining("子分组");
 
         when(repo.findAllGroups(1L)).thenReturn(List.of(
                 new GroupRepository.GroupRow(7L, 1L, "g", "G", 0L, 1, 1)));
         when(repo.findMembersByTree(1L)).thenReturn(Map.of(7L, List.of(22L)));
         assertThatThrownBy(() -> service.deleteGroup(7L))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("attached");
+                .hasMessageContaining("挂载");
 
         when(repo.findMembersByTree(1L)).thenReturn(Map.of());
         service.deleteGroup(7L);
@@ -343,7 +343,7 @@ class GroupServiceTest {
 
         assertThatThrownBy(() -> service.replaceGroupAssets(7L, Arrays.asList(null, 22L)))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("must not be null");
+                .hasMessageContaining("不能为空");
         verify(repo, never()).deleteRelsByGroup(anyLong());
     }
 
@@ -356,7 +356,7 @@ class GroupServiceTest {
 
         assertThatThrownBy(() -> service.replaceGroupAssets(7L, List.of(22L, 22L)))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Duplicate asset")
+                .hasMessageContaining("资产行 ID 重复")
                 .hasMessageContaining("22");
         verify(repo, never()).deleteRelsByGroup(anyLong());
         verify(repo, never()).insertRel(anyLong(), anyLong());
@@ -424,7 +424,7 @@ class GroupServiceTest {
         assertThatThrownBy(() -> service.reorderSiblings(
                 1L, GroupRepository.TOP_LEVEL_PARENT, List.of(1L)))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("missing")
+                .hasMessageContaining("缺少")
                 .hasMessageContaining("2");
         verify(repo, never()).updateGroupSequence(anyLong(), anyInt());
     }
@@ -440,7 +440,7 @@ class GroupServiceTest {
         assertThatThrownBy(() -> service.reorderSiblings(
                 1L, GroupRepository.TOP_LEVEL_PARENT, List.of(1L, 2L)))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("parent")
+                .hasMessageContaining("父分组")
                 .hasMessageContaining("2");
         verify(repo, never()).updateGroupSequence(anyLong(), anyInt());
     }
@@ -455,7 +455,7 @@ class GroupServiceTest {
                 1L, GroupRepository.TOP_LEVEL_PARENT, List.of(1L, 77L)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("77")
-                .hasMessageContaining("tree");
+                .hasMessageContaining("分组树");
         verify(repo, never()).updateGroupSequence(anyLong(), anyInt());
     }
 
@@ -467,7 +467,7 @@ class GroupServiceTest {
 
         assertThatThrownBy(() -> service.reorderSiblings(1L, 99L, List.of(1L)))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Group not found")
+                .hasMessageContaining("分组不存在")
                 .hasMessageContaining("99");
         verify(repo, never()).updateGroupSequence(anyLong(), anyInt());
     }
@@ -482,7 +482,7 @@ class GroupServiceTest {
         assertThatThrownBy(() -> service.reorderSiblings(
                 1L, GroupRepository.TOP_LEVEL_PARENT, List.of(1L, 2L, 1L)))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Duplicate")
+                .hasMessageContaining("重复")
                 .hasMessageContaining("1");
         verify(repo, never()).updateGroupSequence(anyLong(), anyInt());
     }
@@ -493,7 +493,7 @@ class GroupServiceTest {
         assertThatThrownBy(() -> service.reorderSiblings(
                 1L, GroupRepository.TOP_LEVEL_PARENT, Arrays.asList(1L, null)))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("must not be null");
+                .hasMessageContaining("不能为空");
         verify(repo, never()).updateGroupSequence(anyLong(), anyInt());
     }
 
@@ -512,7 +512,7 @@ class GroupServiceTest {
     void reorderSiblingsUnknownTree() {
         assertThatThrownBy(() -> service.reorderSiblings(2L, GroupRepository.TOP_LEVEL_PARENT, List.of()))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Tree not found");
+                .hasMessageContaining("分组树不存在");
         verify(repo, never()).updateGroupSequence(anyLong(), anyInt());
     }
 
@@ -565,7 +565,7 @@ class GroupServiceTest {
     void invalidTreeSelectorFailsFastWithoutReverseScan() {
         assertThatThrownBy(() -> service.buildAssetTree("abc"))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Invalid tree selector");
+                .hasMessageContaining("无效的分组树选择器");
         verify(repo, never()).findRowIdsByRuntimeId();
     }
 
@@ -576,7 +576,7 @@ class GroupServiceTest {
 
         assertThatThrownBy(() -> service.buildAssetTree("42"))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Tree not found");
+                .hasMessageContaining("分组树不存在");
         verify(repo, never()).findRowIdsByRuntimeId();
     }
 
@@ -585,7 +585,7 @@ class GroupServiceTest {
     void overlongNumericTreeSelectorFailsFastWithoutReverseScan() {
         assertThatThrownBy(() -> service.buildAssetTree("99999999999999999999"))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Invalid tree selector");
+                .hasMessageContaining("无效的分组树选择器");
         verify(repo, never()).findRowIdsByRuntimeId();
     }
 }

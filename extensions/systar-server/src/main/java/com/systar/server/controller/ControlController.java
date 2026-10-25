@@ -39,13 +39,13 @@ public class ControlController {
             @PathVariable int id,
             @RequestBody ControlRequest request) {
         if (request == null || request.getCommand() == null || request.getCommand().isBlank()) {
-            return Result.error(Result.CODE_BAD_REQUEST, "Command is required.");
+            return Result.error(Result.CODE_BAD_REQUEST, "缺少命令参数。");
         }
         try {
             MonitorEngine e = engine.getIfAvailable();
             if (e == null) {
                 warnEngineAbsent("control execution");
-                return Result.error(Result.CODE_CONFLICT, "Monitor engine not present; control execution skipped.");
+                return Result.error(Result.CODE_CONFLICT, "监测引擎未加载，已跳过控制执行。");
             }
             e.controlImmediately(id, request.getCommand());
             return Result.success(Map.of("status", "accepted"));

@@ -87,7 +87,7 @@ class AssetControllerTest {
         void invalidKind() {
             Result<List<AssetVO>> result = controller.getAssets("INVALID_KIND", null);
             assertThat(result.getCode()).isEqualTo(1);
-            assertThat(result.getMessage()).contains("Invalid asset kind");
+            assertThat(result.getMessage()).contains("无效的资产类型");
         }
 
         @Test
@@ -165,7 +165,7 @@ class AssetControllerTest {
             stubFindAsset(999, null);
             Result<AssetVO> result = controller.getAsset(999);
             assertThat(result.getCode()).isEqualTo(Result.CODE_NOT_FOUND);
-            assertThat(result.getMessage()).contains("Asset not found");
+            assertThat(result.getMessage()).contains("资产不存在");
         }
 
         @Test
@@ -476,7 +476,7 @@ class AssetControllerTest {
             Result<Map<String, Object>> result =
                     new AssetController(absent, assetStore, orchestrator, repo).detectAsset(1);
             assertThat(result.getCode()).isEqualTo(Result.CODE_CONFLICT);
-            assertThat(result.getMessage()).contains("Monitor engine not present");
+            assertThat(result.getMessage()).contains("监测引擎未加载");
         }
 
         @Test

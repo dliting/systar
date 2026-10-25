@@ -25,14 +25,14 @@ public class PermissionAspect {
             log.warn("No authenticated user for permission check: {}",
                     requirePermission.value());
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Result.error(Result.CODE_FORBIDDEN, "Access denied"));
+                    .body(Result.error(Result.CODE_FORBIDDEN, "拒绝访问"));
         }
 
         if (!user.hasPermission(requirePermission.value())) {
             log.warn("User {} lacks permission: {}",
                     user.getUsername(), requirePermission.value());
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Result.error(Result.CODE_FORBIDDEN, "Insufficient permissions"));
+                    .body(Result.error(Result.CODE_FORBIDDEN, "权限不足，无法执行此操作"));
         }
 
         return joinPoint.proceed();

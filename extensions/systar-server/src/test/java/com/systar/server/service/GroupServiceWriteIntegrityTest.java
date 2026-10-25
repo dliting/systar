@@ -112,7 +112,7 @@ class GroupServiceWriteIntegrityTest {
                 String result = outcome.get(30, TimeUnit.SECONDS);
                 if ("OK".equals(result)) {
                     ok++;
-                } else if (result.startsWith("IAE:") && result.contains("already exists in this tree")) {
+                } else if (result.startsWith("IAE:") && result.contains("已存在同名分组")) {
                     rejected++;
                 } else {
                     unexpected.add(result);
@@ -168,7 +168,7 @@ class GroupServiceWriteIntegrityTest {
         assertThatThrownBy(() -> controller.reorderGroups(treeId,
                 new GroupReorderRequest(null, List.of(aId))))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("missing")
+                .hasMessageContaining("缺少")
                 .hasMessageContaining(String.valueOf(bId));
 
         assertThat(siblingOrder()).containsExactly("a", "b");

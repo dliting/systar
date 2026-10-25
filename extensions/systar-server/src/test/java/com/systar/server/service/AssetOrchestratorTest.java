@@ -90,8 +90,8 @@ class AssetOrchestratorTest {
                     null, Map.of(), Map.of());
             assertThatThrownBy(() -> orchestrator.createAsset(req))
                     .isInstanceOf(AssetException.class)
-                    .hasMessageContaining("top-level")
-                    .hasMessageContaining("parentId must be 0");
+                    .hasMessageContaining("必须位于顶层")
+                    .hasMessageContaining("parentId 必须为 0");
         }
 
         @Test
@@ -101,7 +101,7 @@ class AssetOrchestratorTest {
                     null, Map.of(), Map.of());
             assertThatThrownBy(() -> orchestrator.createAsset(req))
                     .isInstanceOf(AssetException.class)
-                    .hasMessageContaining("top-level");
+                    .hasMessageContaining("必须位于顶层");
         }
 
         @Test
@@ -113,8 +113,8 @@ class AssetOrchestratorTest {
                     "ModbusTcpMaster", Map.of("mode", "ACTIVE"), Map.of());
             assertThatThrownBy(() -> orchestrator.createAsset(req))
                     .isInstanceOf(AssetException.class)
-                    .hasMessageContaining("top-level")
-                    .hasMessageContaining("parentId must be 0");
+                    .hasMessageContaining("必须位于顶层")
+                    .hasMessageContaining("parentId 必须为 0");
         }
 
         @Test
@@ -323,7 +323,7 @@ class AssetOrchestratorTest {
                     null, Map.of(), Map.of());
             assertThatThrownBy(() -> orchestrator.createAsset(req))
                     .isInstanceOf(AssetException.class)
-                    .hasMessageContaining("Invalid asset kind");
+                    .hasMessageContaining("无效的资产类型");
         }
 
         @Test
@@ -334,7 +334,7 @@ class AssetOrchestratorTest {
                     null, Map.of("isVirtual", 1, "dependsOn", "101"), Map.of());
             assertThatThrownBy(() -> orchestrator.createAsset(req))
                     .isInstanceOf(AssetException.class)
-                    .hasMessageContaining("requires a non-blank expression");
+                    .hasMessageContaining("必须填写表达式");
         }
 
         @Test
@@ -345,7 +345,7 @@ class AssetOrchestratorTest {
                     null, Map.of("isVirtual", 1, "expression", "#probe[101].value * 2"), Map.of());
             assertThatThrownBy(() -> orchestrator.createAsset(req))
                     .isInstanceOf(AssetException.class)
-                    .hasMessageContaining("requires at least one dependency");
+                    .hasMessageContaining("必须至少提供一个依赖测点");
         }
 
         @Test
@@ -356,7 +356,7 @@ class AssetOrchestratorTest {
                     null, Map.of("isVirtual", 1, "expression", "#probe[101].value", "dependsOn", "abc"), Map.of());
             assertThatThrownBy(() -> orchestrator.createAsset(req))
                     .isInstanceOf(AssetException.class)
-                    .hasMessageContaining("Invalid probe ID in dependsOn");
+                    .hasMessageContaining("dependsOn 中的测点 ID 无效");
         }
 
         @Test
@@ -367,7 +367,7 @@ class AssetOrchestratorTest {
                     null, Map.of("isVirtual", 1, "expression", "#probe[999].value", "dependsOn", "999"), Map.of());
             assertThatThrownBy(() -> orchestrator.createAsset(req))
                     .isInstanceOf(AssetException.class)
-                    .hasMessageContaining("Dependency probe not found");
+                    .hasMessageContaining("依赖的测点不存在");
         }
 
         @Test
@@ -382,7 +382,7 @@ class AssetOrchestratorTest {
                     null, Map.of("isVirtual", 1, "expression", "#probe[50].value", "dependsOn", "50"), Map.of());
             assertThatThrownBy(() -> orchestrator.createAsset(req))
                     .isInstanceOf(AssetException.class)
-                    .hasMessageContaining("Dependency must be a probe");
+                    .hasMessageContaining("依赖对象必须是测点");
         }
     }
 
@@ -450,7 +450,7 @@ class AssetOrchestratorTest {
 
             assertThatThrownBy(() -> orchestrator.deleteAsset(10, AssetKind.PROBE))
                     .isInstanceOf(AssetException.class)
-                    .hasMessageContaining("alarm rule");
+                    .hasMessageContaining("告警规则");
             verify(repo, never()).deleteProbe(anyInt());
         }
 
@@ -467,7 +467,7 @@ class AssetOrchestratorTest {
 
             assertThatThrownBy(() -> orchestrator.deleteAsset(20, AssetKind.PROBE))
                     .isInstanceOf(AssetException.class)
-                    .hasMessageContaining("linkage cause");
+                    .hasMessageContaining("联动触发规则");
         }
 
         @Test
@@ -485,7 +485,7 @@ class AssetOrchestratorTest {
 
             assertThatThrownBy(() -> orchestrator.deleteAsset(30, AssetKind.CONTROL))
                     .isInstanceOf(AssetException.class)
-                    .hasMessageContaining("linkage effect");
+                    .hasMessageContaining("联动执行规则");
         }
 
         @Test
@@ -504,7 +504,7 @@ class AssetOrchestratorTest {
 
             assertThatThrownBy(() -> orchestrator.deleteAsset(1, AssetKind.DEVICE))
                     .isInstanceOf(AssetException.class)
-                    .hasMessageContaining("children");
+                    .hasMessageContaining("子节点");
         }
     }
 
@@ -550,7 +550,7 @@ class AssetOrchestratorTest {
 
             assertThatThrownBy(() -> orchestrator.startAsset(1, AssetKind.DEVICE))
                     .isInstanceOf(AssetException.class)
-                    .hasMessageContaining("not a monitor");
+                    .hasMessageContaining("不是监测器");
         }
 
         @Test
@@ -558,7 +558,7 @@ class AssetOrchestratorTest {
         void stopNonExistent() {
             assertThatThrownBy(() -> orchestrator.stopAsset(999, AssetKind.PROBE))
                     .isInstanceOf(AssetException.class)
-                    .hasMessageContaining("not found");
+                    .hasMessageContaining("不存在");
         }
 
         @Test

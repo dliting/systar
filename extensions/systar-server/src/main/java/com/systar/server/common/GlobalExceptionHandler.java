@@ -50,6 +50,6 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public Result<Void> handleUnexpected(Exception ex) {
         log.error("Unhandled exception", ex);
-        return Result.error(Result.CODE_INTERNAL_ERROR, "Internal server error");
+        return Result.error(Result.CODE_INTERNAL_ERROR, "服务器内部错误");
     }
 }

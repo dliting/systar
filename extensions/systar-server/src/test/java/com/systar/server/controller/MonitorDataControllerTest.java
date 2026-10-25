@@ -63,7 +63,7 @@ class MonitorDataControllerTest {
         void blankIds() {
             Result<?> result = controller.getProbeValues("  ");
             assertThat(result.getCode()).isEqualTo(1);
-            assertThat(result.getMessage()).contains("Parameter 'ids' is required");
+            assertThat(result.getMessage()).contains("缺少 ids 参数");
         }
 
         @Test
@@ -132,7 +132,7 @@ class MonitorDataControllerTest {
             String longIds = "1".repeat(10001);
             Result<?> result = controller.getProbeValues(longIds);
             assertThat(result.getCode()).isEqualTo(1);
-            assertThat(result.getMessage()).contains("exceeds maximum allowed length");
+            assertThat(result.getMessage()).contains("超过最大长度");
         }
     }
 
@@ -215,7 +215,7 @@ class MonitorDataControllerTest {
             Map<String, Object> config = Map.of("sampleDays", 0);
             assertThatThrownBy(() -> controller.updateRetentionConfig(config))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("must be between");
+                    .hasMessageContaining("必须在");
         }
 
         @Test
@@ -224,7 +224,7 @@ class MonitorDataControllerTest {
             Map<String, Object> config = Map.of("sampleDays", "not-a-number");
             assertThatThrownBy(() -> controller.updateRetentionConfig(config))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("must be a number");
+                    .hasMessageContaining("必须是数字");
         }
 
         @Test
@@ -233,7 +233,7 @@ class MonitorDataControllerTest {
             Map<String, Object> config = Map.of("alarmLogDays", 5000);
             assertThatThrownBy(() -> controller.updateRetentionConfig(config))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("must be between");
+                    .hasMessageContaining("必须在");
         }
 
         @Test
@@ -242,7 +242,7 @@ class MonitorDataControllerTest {
             Map<String, Object> config = Map.of("sampleDays", 90.5);
             assertThatThrownBy(() -> controller.updateRetentionConfig(config))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("must be a whole number");
+                    .hasMessageContaining("必须是整数");
         }
 
         @Test
@@ -251,7 +251,7 @@ class MonitorDataControllerTest {
             Map<String, Object> config = Map.of("enabled", 42);
             assertThatThrownBy(() -> controller.updateRetentionConfig(config))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("enabled must be a boolean");
+                    .hasMessageContaining("必须是布尔值");
         }
     }
 }

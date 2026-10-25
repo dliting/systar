@@ -85,9 +85,9 @@ public class GroupService {
     }
 
     public void createTree(String name, String caption, int sequence) {
-        String trimmed = requireText(name, "Tree name");
+        String trimmed = requireText(name, "分组树名称");
         if (repo.findTreeByName(trimmed).isPresent()) {
-            throw new IllegalArgumentException("Tree name already exists: " + trimmed);
+            throw new IllegalArgumentException("分组树名称已存在：" + trimmed);
         }
         repo.insertTree(trimmed, caption == null ? trimmed : caption, sequence);
     }
@@ -95,12 +95,12 @@ public class GroupService {
     /** Updates a tree; an omitted {@code sequence} keeps the stored sibling order. */
     public void updateTree(long id, String name, String caption, Integer sequence) {
         GroupTreeRow tree = repo.findTreeById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Tree not found: " + id));
-        String trimmed = requireText(name, "Tree name");
+                .orElseThrow(() -> new IllegalArgumentException("分组树不存在：" + id));
+        String trimmed = requireText(name, "分组树名称");
         repo.findTreeByName(trimmed)
                 .filter(other -> other.id() != id)
                 .ifPresent(other -> {
-                    throw new IllegalArgumentException("Tree name already exists: " + trimmed);
+                    throw new IllegalArgumentException("分组树名称已存在：" + trimmed);
                 });
         repo.updateTree(id, trimmed, caption, sequence != null ? sequence : tree.sequence());
     }
@@ -110,12 +110,12 @@ public class GroupService {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public void deleteTree(long id) {
         GroupTreeRow tree = repo.findTreeById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Tree not found: " + id));
+                .orElseThrow(() -> new IllegalArgumentException("分组树不存在：" + id));
         lockTreeOrThrow(id);
         int groups = repo.countGroupsInTree(id);
         if (groups > 0) {
             throw new IllegalArgumentException(
-                    "Tree '%s' still contains %d group(s); delete them first."
+                    "分组树「%s」还包含 %d 个分组，请先删除这些分组。"
                             .formatted(tree.name(), groups));
         }
         repo.deleteTree(id);
@@ -138,7 +138,7 @@ public class GroupService {
     public void createGroup(long treeId, String name, String caption, long parentGroupId, int sequence) {
         requireTree(treeId);
         lockTreeOrThrow(treeId);
-        String trimmed = requireText(name, "Group name");
+        String trimmed = requireText(name, "分组名称");
         requireUniqueGroupName(treeId, trimmed, NO_GROUP_ID);
 
         long parent = GroupRepository.TOP_LEVEL_PARENT;
@@ -160,7 +160,7 @@ public class GroupService {
     public void renameGroup(long groupId, String name, String caption, Integer sequence) {
         GroupRow group = requireGroup(groupId);
         lockTreeOrThrow(group.treeId());
-        String trimmed = requireText(name, "Group name");
+        String trimmed = requireText(name, "分组名称");
         requireUniqueGroupName(group.treeId(), trimmed, groupId);
         repo.updateGroup(groupId, trimmed, caption, group.parent(), group.level(),
                 sequence != null ? sequence : group.sequence());
@@ -188,7 +188,7 @@ public class GroupService {
             GroupRow parentRow = requireGroupIn(all, newParentGroupId);
             if (isInSubtree(parentRow.id(), group.id(), all)) {
                 throw new IllegalArgumentException(
-                        "Cannot move group '%s' under its own subtree.".formatted(group.name()));
+                        "不能将分组「%s」移动到其自身子树下。".formatted(group.name()));
             }
             newParent = parentRow.id();
             newLevel  = parentRow.level() + 1;
@@ -218,10 +218,10 @@ public class GroupService {
         boolean hasParent  = parent != null;
         boolean hasRename  = name != null;
         if (!hasTreeId && !hasParent && !hasRename) {
-            throw new IllegalArgumentException("Nothing to update: provide name and/or parent+treeId.");
+            throw new IllegalArgumentException("没有可更新内容：请提供名称，或同时提供父分组与分组树。");
         }
         if (hasTreeId != hasParent) {
-            throw new IllegalArgumentException("Incomplete move: provide both treeId and parent.");
+            throw new IllegalArgumentException("移动参数不完整：请同时提供分组树与父分组。");
         }
         if (hasTreeId) {
             moveGroup(treeId, groupId, parent);
@@ -239,14 +239,14 @@ public class GroupService {
         for (GroupRow row : repo.findAllGroups(group.treeId())) {
             if (row.parent() == groupId) {
                 throw new IllegalArgumentException(
-                        "Group '%s' still has child group '%s'; delete it first."
+                        "分组「%s」下还有子分组「%s」，请先删除子分组。"
                                 .formatted(group.name(), row.name()));
             }
         }
         List<Long> members = repo.findMembersByTree(group.treeId()).get(groupId);
         if (members != null && !members.isEmpty()) {
             throw new IllegalArgumentException(
-                    "Group '%s' still has %d attached asset(s); detach them first."
+                    "分组「%s」还挂载着 %d 个资产，请先解除挂载。"
                             .formatted(group.name(), members.size()));
         }
         repo.deleteGroup(groupId);
@@ -260,21 +260,21 @@ public class GroupService {
             Set<Long> seen = new HashSet<>();
             for (Long assetRowId : assetRowIds) {
                 if (assetRowId == null) {
-                    throw new IllegalArgumentException("Asset row id must not be null.");
+                    throw new IllegalArgumentException("资产行 ID 不能为空。");
                 }
                 if (!seen.add(assetRowId)) {
-                    throw new IllegalArgumentException("Duplicate asset row id: " + assetRowId);
+                    throw new IllegalArgumentException("资产行 ID 重复：" + assetRowId);
                 }
             }
             Map<Long, AssetRef> refsById = repo.findAssetRefs(assetRowIds);
             for (Long assetRowId : assetRowIds) {
                 AssetRef ref = refsById.get(assetRowId);
                 if (ref == null) {
-                    throw new IllegalArgumentException("Asset row not found: " + assetRowId);
+                    throw new IllegalArgumentException("资产行不存在：" + assetRowId);
                 }
                 if (!GROUP_MEMBER_KINDS.contains(ref.kind())) {
                     throw new IllegalArgumentException(
-                            ("Asset row %d is a %s; only %s assets may join groups.")
+                            ("资产行 %d 是 %s，只有 %s 资产可以加入分组。")
                                     .formatted(assetRowId, ref.kind(), GROUP_MEMBER_KIND_LIST));
                 }
             }
@@ -305,10 +305,10 @@ public class GroupService {
         Set<Long> seen = new HashSet<>();
         for (Long id : ordered) {
             if (id == null) {
-                throw new IllegalArgumentException("Group id must not be null.");
+                throw new IllegalArgumentException("分组 ID 不能为空。");
             }
             if (!seen.add(id)) {
-                throw new IllegalArgumentException("Duplicate group id: " + id);
+                throw new IllegalArgumentException("分组 ID 重复：" + id);
             }
         }
 
@@ -324,11 +324,11 @@ public class GroupService {
             GroupRow row = byId.get(id);
             if (row == null) {
                 throw new IllegalArgumentException(
-                        "Group %d does not exist in tree %d.".formatted(id, treeId));
+                        "分组 %d 不存在于分组树 %d。".formatted(id, treeId));
             }
             if (row.parent() != parentGroupId) {
                 throw new IllegalArgumentException(
-                        "Group %d has parent %d, not %d.".formatted(id, row.parent(), parentGroupId));
+                        "分组 %d 的父分组是 %d，不是 %d。".formatted(id, row.parent(), parentGroupId));
             }
         }
 
@@ -339,7 +339,7 @@ public class GroupService {
                 .toList();
         if (!missing.isEmpty()) {
             throw new IllegalArgumentException(
-                    "Reorder list must contain every child group of parent %d; missing: %s."
+                    "重排序列表必须包含父分组 %d 的全部子分组；缺少：%s。"
                             .formatted(parentGroupId, missing));
         }
 
@@ -372,10 +372,10 @@ public class GroupService {
         try {
             treeId = Long.parseLong(tree);
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Invalid tree selector: " + tree);
+            throw new IllegalArgumentException("无效的分组树选择器：" + tree);
         }
         repo.findTreeById(treeId)
-                .orElseThrow(() -> new IllegalArgumentException("Tree not found: " + treeId));
+                .orElseThrow(() -> new IllegalArgumentException("分组树不存在：" + treeId));
         return buildGroupTree(treeId, repo.findRowIdsByRuntimeId());
     }
 
@@ -514,14 +514,14 @@ public class GroupService {
 
     private static String requireText(String value, String what) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(what + " must not be blank.");
+            throw new IllegalArgumentException(what + " 不能为空。");
         }
         return value.trim();
     }
 
     private void requireTree(long treeId) {
         repo.findTreeById(treeId)
-                .orElseThrow(() -> new IllegalArgumentException("Tree not found: " + treeId));
+                .orElseThrow(() -> new IllegalArgumentException("分组树不存在：" + treeId));
     }
 
     /**
@@ -531,19 +531,19 @@ public class GroupService {
      */
     private GroupTreeRow lockTreeOrThrow(long treeId) {
         return repo.lockTree(treeId)
-                .orElseThrow(() -> new IllegalArgumentException("Tree not found: " + treeId));
+                .orElseThrow(() -> new IllegalArgumentException("分组树不存在：" + treeId));
     }
 
     private GroupRow requireGroup(long groupId) {
         return repo.findGroupById(groupId)
-                .orElseThrow(() -> new IllegalArgumentException("Group not found: " + groupId));
+                .orElseThrow(() -> new IllegalArgumentException("分组不存在：" + groupId));
     }
 
     private GroupRow requireGroupInTree(long treeId, long groupId) {
         GroupRow row = requireGroup(groupId);
         if (row.treeId() != treeId) {
             throw new IllegalArgumentException(
-                    "Group %d does not belong to tree %d.".formatted(groupId, treeId));
+                    "分组 %d 不属于分组树 %d。".formatted(groupId, treeId));
         }
         return row;
     }
@@ -553,7 +553,7 @@ public class GroupService {
                 .filter(existing -> existing.id() != selfId)
                 .ifPresent(existing -> {
                     throw new IllegalArgumentException(
-                            "Group name already exists in this tree: " + name);
+                            "该分组树中已存在同名分组：" + name);
                 });
     }
 
@@ -562,7 +562,7 @@ public class GroupService {
         return all.stream()
                 .filter(row -> row.id() == groupId)
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Group not found: " + groupId));
+                .orElseThrow(() -> new IllegalArgumentException("分组不存在：" + groupId));
     }
 
     /**

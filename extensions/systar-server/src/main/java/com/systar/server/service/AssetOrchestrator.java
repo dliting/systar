@@ -157,7 +157,7 @@ public class AssetOrchestrator {
             throw e;
         } catch (Exception e) {
             throw new AssetException(e,
-                    "Cannot instantiate driver class '%s' to derive mode for service '%s'.",
+                    "无法实例化驱动类 '%s' 来推导服务 '%s' 的模式。",
                     driverClass, serviceName);
         }
     }
@@ -308,12 +308,12 @@ public class AssetOrchestrator {
     // ======================== runtime start / stop ========================
 
     public void startAsset(int id, AssetKind kind) {
-        validateIsMonitor(id, "start");
+        validateIsMonitor(id, "启动");
         eventPublisher.publishEvent(new AssetChangedEvent(Action.STARTED, id, kind, null));
     }
 
     public void stopAsset(int id, AssetKind kind) {
-        validateIsMonitor(id, "stop");
+        validateIsMonitor(id, "停止");
         eventPublisher.publishEvent(new AssetChangedEvent(Action.STOPPED, id, kind, null));
     }
 
@@ -423,7 +423,7 @@ public class AssetOrchestrator {
         try {
             return AssetKind.valueOf(kind.toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new AssetException("Invalid asset kind: " + kind);
+            throw new AssetException("无效的资产类型：" + kind);
         }
     }
 
@@ -437,7 +437,7 @@ public class AssetOrchestrator {
         };
         if (manager.find(typeName) == null) {
             throw new AssetException(String.format(
-                    "Unknown type '%s' for kind %s. Registered types: %s",
+                    "类型 '%s' 在 %s 下未注册。已注册类型：%s",
                     typeName, kind, manager.getAll().stream().map(AssetType::getName).toList()));
         }
     }
@@ -445,7 +445,7 @@ public class AssetOrchestrator {
     private void validateParentExists(int parentId) {
         if (parentId <= 0) return;
         if (assetStore.findAsset(parentId) == null) {
-            throw new AssetException("Parent asset not found: " + parentId);
+            throw new AssetException("父资产不存在：" + parentId);
         }
     }
 
@@ -456,42 +456,42 @@ public class AssetOrchestrator {
      */
     private static void validateTopLevel(AssetKind kind, int parentId) {
         if ((kind == AssetKind.DEVICE || kind == AssetKind.SERVICE) && parentId != Asset.INVALID_ID) {
-            throw new AssetException(kind + " assets are top-level; parentId must be 0.");
+            throw new AssetException(kind + " 资产必须位于顶层，parentId 必须为 0。");
         }
     }
 
     private void validateIsMonitor(int id, String action) {
         Asset<?> asset = assetStore.findAsset(id);
         if (asset == null) {
-            throw new AssetException("Asset %d not found; cannot %s.".formatted(id, action));
+            throw new AssetException("资产 %d 不存在，无法执行%s操作。".formatted(id, action));
         }
         if (!(asset instanceof Monitor<?>)) {
-            throw new AssetException("Asset %d is not a monitor; cannot %s.".formatted(id, action));
+            throw new AssetException("资产 %d 不是监测器，无法执行%s操作。".formatted(id, action));
         }
     }
 
     private void validateDeleteConstraints(int id, AssetKind kind) {
         Asset<?> asset = assetStore.findAsset(id);
         if (asset instanceof CompoundAsset<?> compound && compound.children().iterator().hasNext()) {
-            throw new AssetException("Cannot delete asset with children. Remove or move children first.");
+            throw new AssetException("该资产下仍有子节点，请先移除或移动子节点。");
         }
 
         long alarmCount = repo.countAlarmRulesForMonitor(id);
         if (alarmCount > 0) {
             throw new AssetException(String.format(
-                    "Cannot delete asset: %d alarm rule(s) are associated. Remove them first.", alarmCount));
+                    "无法删除：该资产关联 %d 条告警规则，请先删除这些规则。", alarmCount));
         }
 
         long linkageCauseCount = repo.countLinkageCausesForMonitor(id);
         if (linkageCauseCount > 0) {
             throw new AssetException(String.format(
-                    "Cannot delete asset: %d linkage cause rule(s) are associated. Remove them first.", linkageCauseCount));
+                    "无法删除：该资产关联 %d 条联动触发规则，请先删除这些规则。", linkageCauseCount));
         }
 
         long linkageEffectCount = repo.countLinkageEffectsForMonitor(id);
         if (linkageEffectCount > 0) {
             throw new AssetException(String.format(
-                    "Cannot delete asset: %d linkage effect rule(s) are associated. Remove them first.", linkageEffectCount));
+                    "无法删除：该资产关联 %d 条联动执行规则，请先删除这些规则。", linkageEffectCount));
         }
     }
 
@@ -540,7 +540,7 @@ public class AssetOrchestrator {
                 return MonitorMode.valueOf(s.toUpperCase()).getCode();
             } catch (IllegalArgumentException e) {
                 throw new AssetException(e,
-                        "Invalid mode '%s' for service: must be ACTIVE or PASSIVE.", s);
+                        "服务的模式 '%s' 无效：必须为 ACTIVE 或 PASSIVE。", s);
             }
         }
         if (val instanceof Number n) return n.intValue();
@@ -553,11 +553,11 @@ public class AssetOrchestrator {
         if (isVirtual == null || isVirtual != 1) return;
         String expression = getStrProp(properties, "expression");
         if (expression == null || expression.isBlank()) {
-            throw new AssetException("Virtual probe requires a non-blank expression");
+            throw new AssetException("虚拟测点必须填写表达式");
         }
         String dependsOn = getStrProp(properties, "dependsOn");
         if (dependsOn == null || dependsOn.isBlank()) {
-            throw new AssetException("Virtual probe requires at least one dependency probe ID");
+            throw new AssetException("虚拟测点必须至少提供一个依赖测点 ID");
         }
         for (String segment : dependsOn.split(",")) {
             String trimmed = segment.trim();
@@ -566,14 +566,14 @@ public class AssetOrchestrator {
                 try {
                     depId = Integer.parseInt(trimmed);
                 } catch (NumberFormatException e) {
-                    throw new AssetException("Invalid probe ID in dependsOn: '" + trimmed + "'");
+                    throw new AssetException("dependsOn 中的测点 ID 无效：'" + trimmed + "'");
                 }
                 Asset<?> dep = assetStore.findAsset(depId);
                 if (dep == null) {
-                    throw new AssetException("Dependency probe not found: id=" + depId);
+                    throw new AssetException("依赖的测点不存在：id=" + depId);
                 }
                 if (!(dep instanceof Probe)) {
-                    throw new AssetException("Dependency must be a probe, but id=" + depId + " is a " + dep.getKind());
+                    throw new AssetException("依赖对象必须是测点，但 id=" + depId + " 是 " + dep.getKind());
                 }
             }
         }

@@ -90,7 +90,7 @@ class GroupUpdateAtomicityTest {
         assertThatThrownBy(() -> controller.updateGroup(groupBId,
                 new GroupRequest(treeId, "D", null, GroupRepository.TOP_LEVEL_PARENT, null)))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("already exists");
+                .hasMessageContaining("已存在");
 
         assertThat(repo.findGroupById(groupBId).orElseThrow().parent())
                 .as("the move must roll back together with the failed rename")
