@@ -21,13 +21,14 @@ let chart = null
 
 const mttrHours = computed(() => props.workOrders.mttrHours || 0)
 
+// Keys must match com.systar.ops.workorder.WorkOrderStatus exactly.
 const STATUS_COLORS = {
-  PENDING: '#ffab00', ASSIGNED: '#42a5f5', IN_PROGRESS: '#7c4dff',
-  COMPLETED: '#00e676', CLOSED: '#546e7a', CANCELLED: '#78909c'
+  CREATED: '#ffab00', ASSIGNED: '#42a5f5', PROCESSING: '#7c4dff',
+  CLOSED: '#00e676', CANCELLED: '#78909c'
 }
 const STATUS_LABELS = {
-  PENDING: '待派发', ASSIGNED: '已派发', IN_PROGRESS: '处理中',
-  COMPLETED: '已完成', CLOSED: '已关闭', CANCELLED: '已取消'
+  CREATED: '已创建', ASSIGNED: '已派发', PROCESSING: '处理中',
+  CLOSED: '已关闭', CANCELLED: '已取消'
 }
 
 const EMPTY_OPTION = {
@@ -48,7 +49,7 @@ function render() {
       backgroundColor: 'rgba(10,14,23,0.95)', borderColor: '#1e3a5f',
       textStyle: { color: '#e6f1ff', fontSize: 13 }
     },
-    grid: { top: 8, right: 24, bottom: 8, left: 72, containLabel: false },
+    grid: { top: 8, right: 24, bottom: 8, left: 12, containLabel: true },
     xAxis: {
       type: 'value',
       splitLine: { lineStyle: { color: 'rgba(0,240,255,0.06)', type: 'dashed' } },
