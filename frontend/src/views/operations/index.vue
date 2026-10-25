@@ -54,16 +54,12 @@
               <!-- Error state alert -->
               <el-alert
                 v-if="detail.state === 'ERROR'"
-                :title="runtimeErrorText || '未知错误'"
+                :title="detail.runtimeDesc || '未知错误'"
                 type="error"
                 show-icon
                 :closable="false"
                 style="margin-bottom:12px"
-              >
-                <el-tooltip v-if="runtimeTechDetail" :content="runtimeTechDetail" placement="top">
-                  <span class="tech-detail">技术详情</span>
-                </el-tooltip>
-              </el-alert>
+              />
               <el-descriptions :column="2" border size="small">
                 <el-descriptions-item label="ID">{{ detail.id }}</el-descriptions-item>
                 <el-descriptions-item label="名称">
@@ -102,10 +98,7 @@
               <!-- Error/Warning banner -->
               <div v-if="detail.runtimeDesc && (detail.state === 'ERROR' || detail.state === 'WARNING')" class="runtime-error-banner" :class="detail.state === 'ERROR' ? 'error' : 'warning'">
                 <el-icon><WarningFilled /></el-icon>
-                <span>{{ runtimeErrorText }}</span>
-                <el-tooltip v-if="runtimeTechDetail" :content="runtimeTechDetail" placement="top">
-                  <span class="tech-detail">技术详情</span>
-                </el-tooltip>
+                <span>{{ detail.runtimeDesc }}</span>
               </div>
             </el-card>
 
@@ -186,10 +179,7 @@
               </template>
               <div v-if="detail.state === 'ERROR' && detail.runtimeDesc" class="monitor-error-display">
                 <el-icon :size="28" color="#ff5252"><WarningFilled /></el-icon>
-                <span class="monitor-error-text">{{ runtimeErrorText }}</span>
-                <el-tooltip v-if="runtimeTechDetail" :content="runtimeTechDetail" placement="top">
-                  <span class="tech-detail">技术详情</span>
-                </el-tooltip>
+                <span class="monitor-error-text">{{ detail.runtimeDesc }}</span>
               </div>
               <div v-else class="monitor-snapshot">
                 <span class="monitor-value">{{ formatMetricValue(detail.value) }}<span class="monitor-unit">{{ detail.unit ? ' ' + detail.unit : '' }}</span></span>
@@ -696,7 +686,6 @@ import {
   batchStart, batchStop, batchEnable, batchDisable, batchDelete
 } from '@/api/iot/asset'
 import { stateTagType, kindLabel, kindTagType, parseTime, formatMetricValue, splitPathSegments, formatDisplayPath } from '@/utils/formatters'
-import { humanizeRuntimeDesc } from '@/utils/errorMessages'
 import { showSystarError } from '@/utils/errorHandler'
 import { ElMessage } from 'element-plus'
 
@@ -829,15 +818,6 @@ const showAlarmCard = computed(() =>
 const showLinkageCard = computed(() =>
   ['PROBE', 'CONTROL'].includes(detail.value?.kind)
 )
-
-// Operator-facing error text: humanized headline + raw driver string kept
-// one tooltip away for developers.
-const runtimeErrorText = computed(() => humanizeRuntimeDesc(detail.value?.runtimeDesc || ''))
-const runtimeTechDetail = computed(() => {
-  const raw = detail.value?.runtimeDesc || ''
-  const human = humanizeRuntimeDesc(raw)
-  return human !== raw ? raw : ''
-})
 
 const displayPath = computed(() => {
   // pathCaption carries human-readable captions (falls back to internal names
@@ -1178,7 +1158,7 @@ function openHistoryDialog() {
   // Reset the toolbar to the adaptive default; the actual load fires on
   // @opened so the chart is mounted before data arrives.
   detailGranularityChoice.value = 'AUTO'
-  detailRangeChoice.value = '1h' // keeps the default view on RAW actual samples
+  detailRangeChoice.value = '24h'
   detailCustomRange.value = null
   historyDialogVisible.value = true
 }
@@ -1658,13 +1638,5 @@ async function updateField(field, value) {
   font-size: 14px;
   color: #f56c6c;
   line-height: 1.4;
-}
-/* Developer-facing raw error string, one tooltip away from the operator text */
-.tech-detail {
-  font-size: 12px;
-  color: #909399;
-  text-decoration: underline dotted;
-  cursor: help;
-  white-space: nowrap;
 }
 </style>
