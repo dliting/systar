@@ -65,7 +65,7 @@ vi.mock('@/api/iot/asset', () => ({
 
 vi.mock('@/api/iot/trend', () => ({
   getTrendDefault: vi.fn().mockResolvedValue({ data: {} }),
-  getTrendData: vi.fn().mockResolvedValue({ data: { dataPoints: [] } }),
+  getTrendData: vi.fn().mockResolvedValue({ data: { points: [], mode: 'RAW', bucketSeconds: null } }),
 }))
 
 vi.mock('@/stores/websocket', () => ({

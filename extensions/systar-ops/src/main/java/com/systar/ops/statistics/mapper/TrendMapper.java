@@ -25,6 +25,11 @@ public interface TrendMapper {
             @Param("end") LocalDateTime end,
             @Param("limit") int limit);
 
+    @Select("SELECT COUNT(*) FROM ${tableName} WHERE monitor = #{monitorId}"
+            + " AND moment BETWEEN #{start} AND #{end}")
+    Long countSamples(@Param("tableName") String tableName, @Param("monitorId") int monitorId,
+                      @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
     @SelectProvider(type = TrendSqlProvider.class, method = "aggregateOHLC")
     List<Map<String, Object>> aggregateOHLC(
             @Param("tableName") String tableName,

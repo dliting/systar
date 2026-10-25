@@ -42,24 +42,25 @@
           :value="m.id"
         />
       </el-select>
-      <div class="period-tabs">
-        <el-button
-          v-for="p in periods"
-          :key="p.key"
-          size="small"
-          :type="granularity === p.key ? 'primary' : ''"
-          @click="switchGranularity(p.key)"
-        >{{ p.label }}</el-button>
-      </div>
+      <!-- Granularity direct-select (D6) + relative presets + custom window -->
+      <el-select v-model="granularityChoice" size="small" style="width: 96px" @change="onGranularityChoice">
+        <el-option v-for="c in GRANULARITY_CHOICES" :key="c.value" :value="c.value" :label="c.label" />
+      </el-select>
+      <el-radio-group v-model="rangeChoice" size="small" @change="onPreset">
+        <el-radio-button v-for="p in PRESETS" :key="p.key" :value="p.key">{{ p.label }}</el-radio-button>
+      </el-radio-group>
       <el-date-picker
-        v-model="dateRange"
+        v-model="customRange"
         type="datetimerange"
         size="small"
-        start-placeholder="开始时间"
-        end-placeholder="结束时间"
         value-format="YYYY-MM-DD HH:mm:ss"
-        @change="onDateRangeChange"
+        start-placeholder="开始"
+        end-placeholder="结束"
+        style="width: 320px"
+        @change="onCustomRange"
       />
+      <el-button size="small" @click="refresh">刷新</el-button>
+      <el-button size="small" @click="resetView">重置视图</el-button>
       <div class="display-toggles">
         <el-switch v-model="showThresholds" active-text="阈值" size="small" />
         <el-switch v-model="showAnomalies" active-text="异常" size="small" />
@@ -71,16 +72,15 @@
       ref="trendChartRef"
       :infinite-mode="true"
       :title="selectedCaption"
-      :data-points="infiniteTrend.dataPoints.value"
-      :intraday-points="infiniteTrend.intradayPoints.value"
-      :avg5="infiniteTrend.avg5.value"
-      :avg10="infiniteTrend.avg10.value"
-      :avg20="infiniteTrend.avg20.value"
+      :points="infiniteTrend.points.value"
+      :mode="infiniteTrend.mode.value"
+      :bucket-seconds="infiniteTrend.bucketSeconds.value"
       :summary="infiniteTrend.summary.value"
       :granularity="infiniteTrend.granularity.value"
       :unit="unit"
       :detect-interval-seconds="detectIntervalSeconds"
       :loading="infiniteTrend.loading.value"
+      :error="loadError"
       :date-range="dateRange"
       :thresholds="thresholds"
       :anomaly-points="anomalyPoints"
@@ -89,6 +89,7 @@
       @data-point-click="onCandleClick"
       @popout="onPopout"
       @data-zoom="onDataZoom"
+      @retry="refresh"
     />
     <!-- Compare mode: ComparisonChart -->
     <ComparisonChart
@@ -112,11 +113,16 @@ import { detectAnomalies } from '@/api/iot/analysis'
 import { listAssets } from '@/api/iot/asset'
 import { useWebSocketStore } from '@/stores/websocket'
 import { formatMonitorDateTime, computeRangeDays } from '@/config/monitor'
-import TrendChart from '../components/TrendChart.vue'
+import TrendChart from '@/components/TrendChart/index.vue'
 import ComparisonChart from '../components/ComparisonChart.vue'
-import { getDrillDownRange } from '../composables/useTrendDrillDown'
+import { getDrillDownRange } from '@/components/TrendChart/composables/useTrendDrillDown'
 import { useTrendSeriesLoader } from '../composables/useTrendSeriesLoader'
-import { useInfiniteTrend } from '../composables/useInfiniteTrend'
+import { useInfiniteTrend } from '@/components/TrendChart/composables/useInfiniteTrend'
+import {
+  GRANULARITY_CHOICES,
+  PRESETS,
+  windowForChoice,
+} from '@/components/TrendChart/composables/useTrendView'
 
 const DEFAULT_GRANULARITY = 'HOUR'
 
@@ -125,14 +131,6 @@ const props = defineProps({
   defaultGranularity: { type: String, default: '' },
   pageKey: { type: String, default: '' }
 })
-
-const periods = [
-  { key: 'INTRADAY', label: '分时' },
-  { key: 'HOUR', label: '时' },
-  { key: 'DAY', label: '日' },
-  { key: 'WEEK', label: '周' },
-  { key: 'MONTH', label: '月' }
-]
 
 const monitorId = ref(null)
 const monitorIds = ref([])   // compare mode — kept separate from monitorId to avoid type confusion
@@ -146,6 +144,12 @@ const thresholds = ref(null)
 const anomalyPoints = ref([])
 const showThresholds = ref(true)
 const showAnomalies = ref(true)
+
+// Toolbar state (D6 direct-select + relative presets + custom absolute window)
+const granularityChoice = ref('AUTO')
+const rangeChoice = ref('24h')
+const customRange = ref(null)
+const loadError = ref('')
 
 const trendChartRef = ref(null)
 
@@ -181,6 +185,94 @@ const selectedCaption = computed(() => {
   const m = monitorList.value.find(item => item.id === monitorId.value)
   return m ? (m.caption || m.name || '') : ''
 })
+
+// ---- Toolbar window helpers ----
+
+function windowSeconds(win) {
+  return (new Date(win.end.replace(' ', 'T')) - new Date(win.start.replace(' ', 'T'))) / 1000
+}
+
+/** AUTO resolves through the same ladder the backend uses for the window. */
+function resolveGranularity(win) {
+  return granularityChoice.value === 'AUTO'
+    ? infiniteTrend._granularityForSeconds(windowSeconds(win))
+    : granularityChoice.value
+}
+
+/**
+ * Single-mode load for an explicit window. Sets granularity up-front so
+ * loadInitial's onGranularityChange callback stays silent (avoids a second
+ * anomaly fetch) and dateRange is authoritative for loadAnomalies.
+ */
+function loadSingleWindow(start, end, gran) {
+  try {
+    loadError.value = ''
+    dateRange.value = [start, end]
+    granularity.value = gran
+    infiniteTrend.loadInitial(start, end, gran)
+    loadAnomalies()
+  } catch (e) {
+    console.error('Failed to load trend', e)
+    loadError.value = '加载失败，请重试'
+  }
+}
+
+function onGranularityChoice(c) {
+  if (mode.value === 'compare') {
+    if (c !== 'AUTO') granularity.value = c
+    loadCompare()
+    return
+  }
+  if (c === 'AUTO') {
+    loadDefaultView()
+    return
+  }
+  const win = customRange.value
+    ? { start: customRange.value[0], end: customRange.value[1] }
+    : windowForChoice(c, rangeChoice.value)
+  loadSingleWindow(win.start, win.end, c)
+}
+
+function onPreset(k) {
+  customRange.value = null
+  const win = windowForChoice(granularityChoice.value, k)
+  if (mode.value === 'compare') {
+    dateRange.value = [win.start, win.end]
+    loadCompare()
+    return
+  }
+  loadSingleWindow(win.start, win.end, resolveGranularity(win))
+}
+
+function onCustomRange(v) {
+  if (!v || v.length !== 2) return
+  customRange.value = v
+  if (mode.value === 'compare') {
+    dateRange.value = [v[0], v[1]]
+    loadCompare()
+    return
+  }
+  const win = { start: v[0], end: v[1] }
+  loadSingleWindow(win.start, win.end, resolveGranularity(win))
+}
+
+function refresh() {
+  if (mode.value === 'compare') {
+    loadCompare()
+    return
+  }
+  if (!monitorId.value) return
+  if (dateRange.value && dateRange.value.length === 2) {
+    const win = { start: dateRange.value[0], end: dateRange.value[1] }
+    loadSingleWindow(win.start, win.end, resolveGranularity(win))
+  } else {
+    loadDefaultView()
+  }
+}
+
+function resetView() {
+  trendChartRef.value?.getChartInstance()?.dispatchAction({ type: 'dataZoom', start: 0, end: 100 })
+}
 
 /**
  * Load the list of monitors (probes or controls) for the dropdown.
@@ -255,54 +347,28 @@ async function loadAnomalies() {
 }
 
 /**
- * Load adaptive default view for the selected monitor.
+ * Load adaptive default view for the selected monitor (AUTO granularity).
  * Only called in single mode — compare mode uses loadCompare().
  */
 async function loadDefaultView() {
   if (!monitorId.value) return
-  await infiniteTrend.loadDefault(props.monitorKind)
-  if (infiniteTrend.granularity.value) {
-    granularity.value = infiniteTrend.granularity.value
-  }
-  loadAnomalies()
-}
-
-/**
- * Load trend data for single mode — delegates to infiniteTrend.
- */
-async function loadTrendData() {
-  if (!monitorId.value) return
-  if (!dateRange.value || dateRange.value.length !== 2) {
-    const now = new Date()
-    const start = new Date(now)
-    switch (granularity.value) {
-      case 'INTRADAY': start.setDate(start.getDate() - 1); break
-      case 'HOUR': start.setDate(start.getDate() - 7); break
-      case 'DAY': start.setDate(start.getDate() - 30); break
-      case 'WEEK': start.setMonth(start.getMonth() - 6); break
-      case 'MONTH': start.setFullYear(start.getFullYear() - 2); break
+  try {
+    loadError.value = ''
+    await infiniteTrend.loadDefault(props.monitorKind)
+    if (infiniteTrend.granularity.value) {
+      granularity.value = infiniteTrend.granularity.value
     }
-    dateRange.value = [formatMonitorDateTime(start), formatMonitorDateTime(now)]
+    loadAnomalies()
+  } catch (e) {
+    console.error('Failed to load trend', e)
+    loadError.value = '加载失败，请重试'
   }
-  const [startTime, endTime] = dateRange.value
-  infiniteTrend.loadInitial(startTime, endTime, granularity.value)
-  loadAnomalies()
 }
 
 function clearChartData() {
   anomalyPoints.value = []
   if (mode.value === 'single') {
     infiniteTrend.clearBuffer()
-  }
-}
-
-function switchGranularity(key) {
-  granularity.value = key
-  if (mode.value === 'single') {
-    loadTrendData()
-    loadAnomalies()
-  } else {
-    loadCompare()
   }
 }
 
@@ -330,15 +396,6 @@ function onModeChange() {
   thresholds.value = null
 }
 
-function onDateRangeChange() {
-  if (mode.value === 'single') {
-    loadTrendData()
-    loadAnomalies()
-  } else {
-    loadCompare()
-  }
-}
-
 /**
  * Compare-mode data loader — wraps useTrendSeriesLoader with current selection.
  * Silently no-ops if monitorIds is empty or dateRange missing.
@@ -352,16 +409,8 @@ async function loadCompare() {
   if (!dateRange.value || dateRange.value.length !== 2) {
     // Synthesize a default range matching single-mode logic so compare mode
     // works out-of-the-box without forcing user to pick a range first.
-    const now = new Date()
-    const start = new Date(now)
-    switch (granularity.value) {
-      case 'INTRADAY': start.setDate(start.getDate() - 1); break
-      case 'HOUR': start.setDate(start.getDate() - 7); break
-      case 'DAY': start.setDate(start.getDate() - 30); break
-      case 'WEEK': start.setMonth(start.getMonth() - 6); break
-      case 'MONTH': start.setFullYear(start.getFullYear() - 2); break
-    }
-    dateRange.value = [formatMonitorDateTime(start), formatMonitorDateTime(now)]
+    const win = windowForChoice(granularity.value, rangeChoice.value)
+    dateRange.value = [win.start, win.end]
   }
   await loadCompareSeries(
     monitorIds.value,
@@ -449,7 +498,5 @@ onUnmounted(() => {
   border: 1px solid rgba(0,212,255,0.08);
   border-radius: 6px; flex-wrap: wrap;
 }
-.period-tabs { display: flex; gap: 4px; }
-.period-tabs .el-button { padding: 5px 10px; font-size: 12px; }
 .display-toggles { display: flex; gap: 12px; align-items: center; margin-left: auto; }
 </style>

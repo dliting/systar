@@ -166,14 +166,21 @@ public class MonitorStatsAggregator {
             "SELECT monitor,"
             + " CAST(bucket AS DATETIME) AS bucket_start,"
             + " " + HOUR + " AS granularity,"
-            + " AVG(" + v + ") AS avg_val,"
-            + " MAX(" + v + ") AS max_val,"
-            + " MIN(" + v + ") AS min_val,"
-            + " COUNT(*) AS sample_count"
+            + " AVG(v) AS avg_val,"
+            + " MAX(v) AS max_val,"
+            + " MIN(v) AS min_val,"
+            + " COUNT(*) AS sample_count,"
+            + " MAX(CASE WHEN rn = 1 THEN v END) AS open_val,"
+            + " MAX(CASE WHEN rdn = 1 THEN v END) AS close_val"
             + " FROM ("
-            + " SELECT monitor, " + v + ", " + bucketExpr + " AS bucket"
-            + " FROM " + tableName
-            + " WHERE moment >= ? AND moment < ?"
+            + " SELECT monitor, v, bucket,"
+            + "   ROW_NUMBER() OVER (PARTITION BY monitor, bucket ORDER BY moment ASC) AS rn,"
+            + "   ROW_NUMBER() OVER (PARTITION BY monitor, bucket ORDER BY moment DESC) AS rdn"
+            + "   FROM ("
+            + "     SELECT monitor, " + v + " AS v, moment, " + bucketExpr + " AS bucket"
+            + "     FROM " + tableName
+            + "     WHERE moment >= ? AND moment < ?"
+            + "   ) b"
             + ") raw"
             + " GROUP BY monitor, bucket"
         );
@@ -193,8 +200,12 @@ public class MonitorStatsAggregator {
             double maxVal   = ((Number) row.get("max_val")).doubleValue();
             double minVal   = ((Number) row.get("min_val")).doubleValue();
             long   samples  = ((Number) row.get("sample_count")).longValue();
+            // nullable first/last per bucket — SQL NULL arrives as null in the row map
+            Object openVal  = row.get("open_val");
+            Object closeVal = row.get("close_val");
 
-            upsertStat(monitor, bucketStart, bucketEnd, HOUR, avgVal, maxVal, minVal, samples);
+            upsertStat(monitor, bucketStart, bucketEnd, HOUR, avgVal, maxVal, minVal, samples,
+                    openVal, closeVal);
             count++;
         }
         return count;
@@ -202,25 +213,26 @@ public class MonitorStatsAggregator {
 
     private void upsertStat(int monitor, LocalDateTime bucketStart, LocalDateTime bucketEnd,
                              int granCode, double avgVal, double maxVal, double minVal,
-                             long sampleCount) {
+                             long sampleCount, Object openVal, Object closeVal) {
         if ("h2".equals(dialect.getDatabaseType())) {
             statsJdbc.update(
                 "MERGE INTO t_monitor_stats (monitor, bucket_start, bucket_end, granularity, "
-                + "avg_val, max_val, min_val, sample_count, updated_at) "
+                + "avg_val, max_val, min_val, sample_count, open_val, close_val, updated_at) "
                 + "KEY (monitor, granularity, bucket_start) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())",
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())",
                 monitor, bucketStart, bucketEnd, granCode,
-                avgVal, maxVal, minVal, sampleCount);
+                avgVal, maxVal, minVal, sampleCount, openVal, closeVal);
         } else {
             statsJdbc.update(
                 "INSERT INTO t_monitor_stats (monitor, bucket_start, bucket_end, granularity, "
-                + "avg_val, max_val, min_val, sample_count, updated_at) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW()) "
+                + "avg_val, max_val, min_val, sample_count, open_val, close_val, updated_at) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW()) "
                 + "ON DUPLICATE KEY UPDATE avg_val = VALUES(avg_val), "
                 + "max_val = VALUES(max_val), min_val = VALUES(min_val), "
-                + "sample_count = VALUES(sample_count), updated_at = NOW()",
+                + "sample_count = VALUES(sample_count), "
+                + "open_val = VALUES(open_val), close_val = VALUES(close_val), updated_at = NOW()",
                 monitor, bucketStart, bucketEnd, granCode,
-                avgVal, maxVal, minVal, sampleCount);
+                avgVal, maxVal, minVal, sampleCount, openVal, closeVal);
         }
     }
 
@@ -264,60 +276,55 @@ public class MonitorStatsAggregator {
     }
 
     private String buildCascadeUpsert(int toGran, String bucketExpr) {
+        // inner: window rows + parent bucket expression; numbered: rank sub-buckets
+        // by time so the parent can take open from the earliest and close from the
+        // latest sub-bucket (NULL when sub-buckets carry no open/close).
+        String inner = "SELECT s.monitor, s.avg_val, s.max_val, s.min_val, s.sample_count,"
+                + " s.open_val, s.close_val, s.bucket_start,"
+                + " " + bucketExpr + " AS bucket"
+                + " FROM t_monitor_stats s"
+                + " WHERE s.granularity = ? AND s.bucket_start >= ? AND s.bucket_start < ?";
+        String numbered = "SELECT monitor, avg_val, max_val, min_val, sample_count,"
+                + " open_val, close_val, bucket,"
+                + " ROW_NUMBER() OVER (PARTITION BY monitor, bucket ORDER BY bucket_start ASC) AS rn,"
+                + " ROW_NUMBER() OVER (PARTITION BY monitor, bucket ORDER BY bucket_start DESC) AS rdn"
+                + " FROM (" + inner + ") s0";
+        String agg = "SELECT monitor, bucket AS bucket_start, bucket AS bucket_end,"
+                + " " + toGran + " AS granularity,"
+                + " SUM(avg_val * sample_count) / NULLIF(SUM(sample_count), 0) AS avg_val,"
+                + " MAX(max_val) AS max_val, MIN(min_val) AS min_val, SUM(sample_count) AS sample_count,"
+                + " MAX(CASE WHEN rn = 1 THEN open_val END) AS open_val,"
+                + " MAX(CASE WHEN rdn = 1 THEN close_val END) AS close_val"
+                + " FROM (" + numbered + ") t GROUP BY monitor, bucket";
+
         if ("h2".equals(dialect.getDatabaseType())) {
-            return """
-                MERGE INTO t_monitor_stats
-                USING (
-                    SELECT monitor,
-                           %s AS bucket_start,
-                           %s AS bucket_end,
-                           %d AS granularity,
-                           SUM(avg_val * sample_count) / NULLIF(SUM(sample_count), 0) AS avg_val,
-                           MAX(max_val) AS max_val,
-                           MIN(min_val) AS min_val,
-                           SUM(sample_count) AS sample_count,
-                           NOW() AS updated_at
-                    FROM t_monitor_stats
-                    WHERE granularity = ? AND bucket_start >= ? AND bucket_start < ?
-                    GROUP BY monitor, %s
-                ) src
-                ON (t_monitor_stats.monitor = src.monitor
-                    AND t_monitor_stats.granularity = src.granularity
-                    AND t_monitor_stats.bucket_start = src.bucket_start)
-                WHEN MATCHED THEN UPDATE SET
-                    avg_val = src.avg_val, max_val = src.max_val,
-                    min_val = src.min_val, sample_count = src.sample_count,
-                    updated_at = src.updated_at
-                WHEN NOT MATCHED THEN INSERT
-                    (monitor, bucket_start, bucket_end, granularity,
-                     avg_val, max_val, min_val, sample_count, updated_at)
-                VALUES (src.monitor, src.bucket_start, src.bucket_end, src.granularity,
-                        src.avg_val, src.max_val, src.min_val, src.sample_count, src.updated_at)
-                """.formatted(bucketExpr, bucketExpr, toGran, bucketExpr);
+            return "MERGE INTO t_monitor_stats USING (" + agg + ") src"
+                    + " ON (t_monitor_stats.monitor = src.monitor"
+                    + " AND t_monitor_stats.granularity = src.granularity"
+                    + " AND t_monitor_stats.bucket_start = src.bucket_start)"
+                    + " WHEN MATCHED THEN UPDATE SET"
+                    + " avg_val = src.avg_val, max_val = src.max_val,"
+                    + " min_val = src.min_val, sample_count = src.sample_count,"
+                    + " open_val = src.open_val, close_val = src.close_val,"
+                    + " updated_at = NOW()"
+                    + " WHEN NOT MATCHED THEN INSERT"
+                    + " (monitor, bucket_start, bucket_end, granularity,"
+                    + "  avg_val, max_val, min_val, sample_count, open_val, close_val, updated_at)"
+                    + " VALUES (src.monitor, src.bucket_start, src.bucket_end, src.granularity,"
+                    + "  src.avg_val, src.max_val, src.min_val, src.sample_count,"
+                    + "  src.open_val, src.close_val, NOW())";
         } else {
-            return """
-                INSERT INTO t_monitor_stats
-                    (monitor, bucket_start, bucket_end, granularity,
-                     avg_val, max_val, min_val, sample_count, updated_at)
-                SELECT monitor,
-                       %s AS bucket_start,
-                       %s AS bucket_end,
-                       %d AS granularity,
-                       SUM(avg_val * sample_count) / NULLIF(SUM(sample_count), 0) AS avg_val,
-                       MAX(max_val) AS max_val,
-                       MIN(min_val) AS min_val,
-                       SUM(sample_count) AS sample_count,
-                       NOW() AS updated_at
-                FROM t_monitor_stats
-                WHERE granularity = ? AND bucket_start >= ? AND bucket_start < ?
-                GROUP BY monitor, %s
-                ON DUPLICATE KEY UPDATE
-                    avg_val = VALUES(avg_val),
-                    max_val = VALUES(max_val),
-                    min_val = VALUES(min_val),
-                    sample_count = VALUES(sample_count),
-                    updated_at = VALUES(updated_at)
-                """.formatted(bucketExpr, bucketExpr, toGran, bucketExpr);
+            return "INSERT INTO t_monitor_stats"
+                    + " (monitor, bucket_start, bucket_end, granularity,"
+                    + "  avg_val, max_val, min_val, sample_count, open_val, close_val, updated_at)"
+                    + " SELECT monitor, bucket_start, bucket_end, granularity,"
+                    + "        avg_val, max_val, min_val, sample_count, open_val, close_val, NOW()"
+                    + " FROM (" + agg + ") t"
+                    + " ON DUPLICATE KEY UPDATE"
+                    + "  avg_val = VALUES(avg_val), max_val = VALUES(max_val),"
+                    + "  min_val = VALUES(min_val), sample_count = VALUES(sample_count),"
+                    + "  open_val = VALUES(open_val), close_val = VALUES(close_val),"
+                    + "  updated_at = NOW()";
         }
     }
 

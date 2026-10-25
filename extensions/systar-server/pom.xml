@@ -23,7 +23,7 @@
         <dependency>
             <groupId>com.systar</groupId>
             <artifactId>systar-monitor-api</artifactId>
-        </dependency>
+        </dependency>
         <dependency>
             <groupId>com.systar</groupId>
             <artifactId>systar-data</artifactId>

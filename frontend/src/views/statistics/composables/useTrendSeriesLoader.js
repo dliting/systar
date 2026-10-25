@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { getTrendData, getTrendMetadata } from '@/api/iot/trend'
 import { detectAnomalies } from '@/api/iot/analysis'
 import { pickColor } from './palette'
+import { movingAverage } from '@/components/TrendChart/composables/useMovingAverage'
 
 /**
  * Shared data loader for comparison-chart series.
@@ -115,15 +116,20 @@ export function useTrendSeriesLoader() {
       }
     }
 
+    // Unified TrendResponseVO contract: points carry { t, avg, max, min,
+    // open, close, count }; moving averages are computed client-side from
+    // avg (the server no longer ships precomputed moving-average series).
+    const points = data.points || []
+    const avgData = points.map(p => p.avg)
     return {
-      id        : monitorId,
-      caption   : meta.caption || meta.name || `monitor-${monitorId}`,
+      monitorId,
+      name      : meta.caption || meta.name || `monitor-${monitorId}`,
       unit      : meta.unit || '',
       color     : null,  // assigned by caller after aggregation
-      dataPoints: data.dataPoints || [],
-      avg5      : data.avg5 || [],
-      avg10     : data.avg10 || [],
-      avg20     : data.avg20 || [],
+      points,
+      ma5       : movingAverage(avgData, 5),
+      ma10      : movingAverage(avgData, 10),
+      ma20      : movingAverage(avgData, 20),
       summary   : data.summary || null,
       thresholds: {
         min     : meta.minValue ?? null,

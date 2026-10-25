@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -109,12 +110,11 @@ class TrendControllerTest {
     void getTrendData_withValidParams_returns200() throws Exception {
         TrendResponseVO response = new TrendResponseVO();
         response.setGranularity("HOUR");
-        response.setDataPoints(List.of(
-                new TrendBarVO(LocalDateTime.of(2026, 1, 15, 10, 0), 22.0, 30.0, 15.0, 100)
+        response.setMode(TrendService.MODE_OHLC);
+        response.setBucketSeconds(3600L);
+        response.setPoints(List.of(
+                new TrendPointVO(LocalDateTime.of(2026, 1, 15, 10, 0), 22.0, 30.0, 15.0, 20.0, 25.0, 100)
         ));
-        response.setAvg5(Collections.singletonList(null));
-        response.setAvg10(Collections.singletonList(null));
-        response.setAvg20(Collections.singletonList(null));
         response.setSummary(new TrendSummaryVO(22.0, 25.0, 18.0, 100));
 
         when(trendService.getTrendData(any(TrendQuery.class))).thenReturn(response);
@@ -128,21 +128,22 @@ class TrendControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.granularity").value("HOUR"))
-                .andExpect(jsonPath("$.data.dataPoints").isArray())
-                .andExpect(jsonPath("$.data.dataPoints[0].avg").value(22.0))
-                .andExpect(jsonPath("$.data.dataPoints[0].max").value(30.0))
-                .andExpect(jsonPath("$.data.dataPoints[0].min").value(15.0))
-                .andExpect(jsonPath("$.data.dataPoints[0].sampleCount").value(100));
+                .andExpect(jsonPath("$.data.mode").value("OHLC"))
+                .andExpect(jsonPath("$.data.points").isArray())
+                .andExpect(jsonPath("$.data.points[0].avg").value(22.0))
+                .andExpect(jsonPath("$.data.points[0].max").value(30.0))
+                .andExpect(jsonPath("$.data.points[0].min").value(15.0))
+                .andExpect(jsonPath("$.data.points[0].count").value(100));
     }
 
     @Test
-    void getTrendData_withDefaultGranularity_returnsHourlyData() throws Exception {
+    void getTrendData_withoutGranularityParam_passesNullGranularity() throws Exception {
+        // D6: omitting granularity means AUTO — the service (not the
+        // controller) resolves it from the window span
         TrendResponseVO response = new TrendResponseVO();
         response.setGranularity("HOUR");
-        response.setDataPoints(Collections.emptyList());
-        response.setAvg5(Collections.emptyList());
-        response.setAvg10(Collections.emptyList());
-        response.setAvg20(Collections.emptyList());
+        response.setMode(TrendService.MODE_OHLC);
+        response.setPoints(Collections.emptyList());
         response.setSummary(new TrendSummaryVO(0, 0, 0, 0));
 
         when(trendService.getTrendData(any(TrendQuery.class))).thenReturn(response);
@@ -155,19 +156,18 @@ class TrendControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.granularity").value("HOUR"));
+
+        verify(trendService).getTrendData(argThat(q -> q.granularity() == null));
     }
 
     @Test
-    void getTrendData_withIntradayGranularity_returnsIntradayData() throws Exception {
+    void getTrendData_withIntradayGranularity_returnsRawPoints() throws Exception {
         TrendResponseVO response = new TrendResponseVO();
         response.setGranularity("INTRADAY");
-        response.setIntradayPoints(List.of(
-                new IntradayPointVO(LocalDateTime.of(2026, 1, 15, 10, 0, 0), 22.5)
+        response.setMode(TrendService.MODE_RAW);
+        response.setPoints(List.of(
+                new TrendPointVO(LocalDateTime.of(2026, 1, 15, 10, 0, 0), 22.5, 22.5, 22.5, 22.5, 22.5, 1)
         ));
-        response.setDataPoints(Collections.emptyList());
-        response.setAvg5(Collections.emptyList());
-        response.setAvg10(Collections.emptyList());
-        response.setAvg20(Collections.emptyList());
 
         when(trendService.getTrendData(any(TrendQuery.class))).thenReturn(response);
 
@@ -180,8 +180,9 @@ class TrendControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.granularity").value("INTRADAY"))
-                .andExpect(jsonPath("$.data.intradayPoints").isArray())
-                .andExpect(jsonPath("$.data.intradayPoints[0].value").value(22.5));
+                .andExpect(jsonPath("$.data.mode").value("RAW"))
+                .andExpect(jsonPath("$.data.points").isArray())
+                .andExpect(jsonPath("$.data.points[0].avg").value(22.5));
     }
 
     @Test
@@ -197,11 +198,8 @@ class TrendControllerTest {
     void getDefaultView_withProbe_returnsAdaptiveDefault() throws Exception {
         TrendResponseVO response = new TrendResponseVO();
         response.setGranularity("INTRADAY");
-        response.setIntradayPoints(Collections.emptyList());
-        response.setDataPoints(Collections.emptyList());
-        response.setAvg5(Collections.emptyList());
-        response.setAvg10(Collections.emptyList());
-        response.setAvg20(Collections.emptyList());
+        response.setMode(TrendService.MODE_RAW);
+        response.setPoints(Collections.emptyList());
         response.setSummary(new TrendSummaryVO(0, 0, 0, 0));
 
         when(trendService.getDefaultView(1, "PROBE")).thenReturn(response);
@@ -215,16 +213,13 @@ class TrendControllerTest {
     }
 
     @Test
-    void getDefaultView_withHourGranularity_returnsDataPoints() throws Exception {
+    void getDefaultView_withHourGranularity_returnsPoints() throws Exception {
         TrendResponseVO response = new TrendResponseVO();
         response.setGranularity("HOUR");
-        response.setDataPoints(List.of(
-                new TrendBarVO(LocalDateTime.of(2026, 1, 15, 10, 0), 25.0, 30.0, 15.0, 60)
+        response.setMode(TrendService.MODE_OHLC);
+        response.setPoints(List.of(
+                new TrendPointVO(LocalDateTime.of(2026, 1, 15, 10, 0), 25.0, 30.0, 15.0, 20.0, 25.0, 60)
         ));
-        response.setIntradayPoints(Collections.emptyList());
-        response.setAvg5(Collections.singletonList(null));
-        response.setAvg10(Collections.singletonList(null));
-        response.setAvg20(Collections.singletonList(null));
         response.setSummary(new TrendSummaryVO(25.0, 30.0, 15.0, 60));
 
         when(trendService.getDefaultView(1, "PROBE")).thenReturn(response);

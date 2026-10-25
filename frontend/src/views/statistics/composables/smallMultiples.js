@@ -1,17 +1,10 @@
-import {
-  formatMonitorValue,
-  formatAxisTimeAdaptive,
-} from '@/config/monitor'
+import { formatMonitorValue } from '@/config/monitor'
 import { pickColor } from './palette'
+import { darkTooltip, labelFor, MA_COLORS } from '@/components/TrendChart/theme'
+import { findBucketIndex } from '@/components/TrendChart/options/trendOptions'
 
 const GRID_COLOR = '#2a4a7f'
 const LABEL_COLOR = '#8892b0'
-
-const darkTooltip = {
-  backgroundColor: 'rgba(10,14,23,0.95)',
-  borderColor   : '#1e3a5f',
-  textStyle     : { color: '#8892b0', fontSize: 12 },
-}
 
 function escapeHtml(str) {
   if (str == null) return ''
@@ -20,17 +13,24 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#x27;')
 }
 
+/** True when the array carries at least one non-null value. */
+function hasAnyValue(arr) {
+  return Array.isArray(arr) && arr.some(v => v !== null && v !== undefined)
+}
+
 /**
  * Build ECharts option for small-multiples layout (one mini-chart per monitor,
  * stacked vertically, sharing a common X-axis time range).
  *
  * Used when 3+ unit groups make a single chart with multi-Y-axis unreadable.
  * Each monitor gets its own grid + yAxis + xAxis + series, so unit differences
- * are isolated rather than competing for axis real estate.
+ * are isolated rather than competing for axis real estate. Client-computed
+ * moving averages (ma5/ma10/ma20) render as 5/10/20期平均 overlays inside the
+ * owning monitor's grid.
  *
- * @param {Array} series - [{ id, caption, unit, color, dataPoints, thresholds, anomalies }]
- * @param {string} granularity - HOUR/DAY/WEEK/MONTH
- * @param {number} rangeDays
+ * @param {Array} series - [{ monitorId, name, unit, color, points, ma5, ma10, ma20, thresholds, anomalies }]
+ * @param {string} granularity - INTRADAY/HOUR/DAY/WEEK/MONTH
+ * @param {number} rangeDays - kept for call-site stability; axis labels derive from granularity alone
  * @param {boolean} [showThresholds=true]
  * @param {boolean} [showAnomalies=true]
  */
@@ -54,10 +54,10 @@ export function smallMultiplesOption(series, granularity, rangeDays, showThresho
   for (let i = 0; i < n; i++) {
     const s = series[i]
     const color = s.color || pickColor(i)
-    const dataPoints = s.dataPoints || []
-    const formatX = (t) => formatAxisTimeAdaptive(t, granularity, rangeDays)
-    const times = dataPoints.map(p => formatX(p.time))
-    const avgData = dataPoints.map(p => p.avg)
+    const points = s.points || []
+    const formatX = (t) => labelFor(t, granularity)
+    const times = points.map(p => formatX(p.t))
+    const avgData = points.map(p => p.avg)
 
     const topPct    = i * (chartHeight + gapPct)
     const bottomPct = 100 - (topPct + chartHeight)
@@ -90,7 +90,7 @@ export function smallMultiplesOption(series, granularity, rangeDays, showThresho
     })
 
     titles.push({
-      text     : s.caption || `monitor-${s.id}`,
+      text     : s.name || `monitor-${s.monitorId}`,
       subtext  : s.unit || '',
       left     : 'center',
       top      : `${topPct}%`,
@@ -120,10 +120,10 @@ export function smallMultiplesOption(series, granularity, rangeDays, showThresho
       symbolSize: 20,
       data      : showAnomalies && s.anomalies
         ? s.anomalies.map(p => {
-            const idx = findBucketLocal(dataPoints, p.time, granularity)
+            const idx = findBucketIndex(points, p.time, granularity)
             if (idx < 0) return null
             return {
-              coord   : [formatX(dataPoints[idx].time), p.actual],
+              coord   : [formatX(points[idx].t), p.actual],
               value   : `${p.deviation.toFixed(1)}σ`,
               itemStyle: { color: p.severity === 'high' ? '#ff5252' : '#ffab00' },
               label   : { show: false },  // mini-chart: hide labels to avoid clutter
@@ -133,7 +133,7 @@ export function smallMultiplesOption(series, granularity, rangeDays, showThresho
     }
 
     echartsSeries.push({
-      name     : s.caption || `monitor-${s.id}`,
+      name     : s.name || `monitor-${s.monitorId}`,
       type     : 'line',
       data     : avgData,
       xAxisIndex: i,
@@ -145,16 +145,37 @@ export function smallMultiplesOption(series, granularity, rangeDays, showThresho
       markLine,
       markPoint,
     })
+
+    // MA overlays live in the owning monitor's own grid
+    const maSpecs = [
+      { data: s.ma5,  period: 5,  color: MA_COLORS[0] },
+      { data: s.ma10, period: 10, color: MA_COLORS[1] },
+      { data: s.ma20, period: 20, color: MA_COLORS[2] },
+    ]
+    for (const ma of maSpecs) {
+      if (!hasAnyValue(ma.data)) continue
+      echartsSeries.push({
+        name     : `${ma.period}期平均`,
+        type     : 'line',
+        data     : ma.data,
+        xAxisIndex: i,
+        yAxisIndex: i,
+        smooth   : true,
+        symbol   : 'none',
+        lineStyle: { color: ma.color, width: 1, type: 'dotted' },
+        itemStyle: { color: ma.color },
+      })
+    }
   }
 
   return {
     tooltip: {
-      ...darkTooltip,
+      ...darkTooltip(),
       trigger: 'axis',
       formatter(params) {
         if (!Array.isArray(params) || params.length === 0) return ''
         const p = params[0]
-        const s = series.find(x => (x.caption || `monitor-${x.id}`) === p.seriesName)
+        const s = series.find(x => (x.name || `monitor-${x.monitorId}`) === p.seriesName)
         const unitLabel = s && s.unit ? ` (${s.unit})` : ''
         return `<div style="color:#00d4ff;font-weight:600;margin-bottom:4px">${escapeHtml(p.axisValue)}</div>`
           + `<div>${escapeHtml(p.seriesName)}: <span style="color:${p.color || '#8892b0'}">${escapeHtml(formatMonitorValue(p.value, s?.unit))}</span><span style="color:#8892b0;font-size:11px">${escapeHtml(unitLabel)}</span></div>`
@@ -180,26 +201,4 @@ export function smallMultiplesOption(series, granularity, rangeDays, showThresho
     ] : undefined,
     series : echartsSeries,
   }
-}
-
-/**
- * Local-time bucket matching for small multiples anomaly markPoint.
- * Mirrors trendOptions.findBucketIndex logic but inlined to avoid circular import.
- */
-function findBucketLocal(dataPoints, anomalyTime, granularity) {
-  if (!anomalyTime || !dataPoints || dataPoints.length === 0) return -1
-  const a = new Date(String(anomalyTime).replace(' ', 'T'))
-  if (isNaN(a.getTime())) return -1
-  const aKey = granularity === 'HOUR'
-    ? new Date(a.getFullYear(), a.getMonth(), a.getDate(), a.getHours()).getTime()
-    : new Date(a.getFullYear(), a.getMonth(), a.getDate()).getTime()
-  for (let i = 0; i < dataPoints.length; i++) {
-    const d = new Date(String(dataPoints[i].time || '').replace(' ', 'T'))
-    if (isNaN(d.getTime())) continue
-    const dKey = granularity === 'HOUR'
-      ? new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours()).getTime()
-      : new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
-    if (dKey === aKey) return i
-  }
-  return -1
 }

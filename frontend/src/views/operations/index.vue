@@ -186,13 +186,15 @@
                 <span class="monitor-time" v-if="detail.lastDetectTime">{{ parseTime(detail.lastDetectTime) }}</span>
               </div>
               <TrendChart
-                :data-points="miniDataPoints"
-                :intraday-points="miniIntradayPoints"
+                :points="miniPoints"
+                :mode="miniMode"
+                :bucket-seconds="miniBucketSeconds"
                 :summary="miniSummary"
                 :granularity="miniGranularity"
                 :unit="detail?.unit || ''"
                 :loading="miniLoading"
                 compact
+                hide-popout
                 chart-height="140px"
               />
             </el-card>
@@ -600,29 +602,39 @@
     <!-- History Detail Dialog -->
     <el-dialog v-model="historyDialogVisible"
       :title="'历史数据 — ' + (detail.caption || detail.name)"
-      width="800px" destroy-on-close @opened="loadDetailTrend">
-      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
-        <el-button v-for="r in timeRanges" :key="r.label" size="small"
-          :type="selectedRange === r.label ? 'primary' : ''"
-          @click="selectTimeRange(r)">{{ r.label }}</el-button>
-        <el-date-picker v-model="customRange" type="datetimerange" range-separator="至"
-          start-placeholder="开始" end-placeholder="结束" size="small"
-          format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DDTHH:mm:ss"
-          @change="onCustomRange" />
-      </div>
-      <div style="display:flex;gap:4px;margin-bottom:8px;">
-        <el-button v-for="p in detailPeriods" :key="p.key" size="small"
-          :type="detailGranularity === p.key ? 'primary' : ''"
-          @click="switchDetailGranularity(p.key)">{{ p.label }}</el-button>
+      width="800px" destroy-on-close @opened="detailLoad()">
+      <!-- Full D6 toolbar (same as MonitorTrend), backed by the dialog's own useTrendView -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+        <el-select v-model="detailGranularityChoice" size="small" style="width:96px" @change="detailSetGranularityChoice">
+          <el-option v-for="c in GRANULARITY_CHOICES" :key="c.value" :value="c.value" :label="c.label" />
+        </el-select>
+        <el-radio-group v-model="detailRangeChoice" size="small" @change="detailSetPreset">
+          <el-radio-button v-for="p in PRESETS" :key="p.key" :value="p.key">{{ p.label }}</el-radio-button>
+        </el-radio-group>
+        <el-date-picker
+          v-model="detailCustomRange"
+          type="datetimerange"
+          size="small"
+          value-format="YYYY-MM-DD HH:mm:ss"
+          start-placeholder="开始"
+          end-placeholder="结束"
+          style="width:320px"
+          @change="onDetailCustomRange"
+        />
+        <el-button size="small" @click="detailRefresh">刷新</el-button>
+        <el-button size="small" @click="resetDetailView">重置视图</el-button>
       </div>
       <TrendChart
-        :data-points="detailData"
-        :intraday-points="detailIntradayPoints"
-        :avg5="detailAvg5" :avg10="detailAvg10" :avg20="detailAvg20"
+        ref="detailChartRef"
+        :points="detailPoints"
+        :mode="detailMode"
+        :bucket-seconds="detailBucketSeconds"
         :summary="detailSummary"
         :granularity="detailGranularity"
         :unit="detail?.unit || ''"
-        :loading="detailLoading"
+        :loading="detailState === 'loading'"
+        :error="detailError"
+        @retry="detailRetry()"
         @data-point-click="onDetailCandleClick"
         @popout="onDetailPopout"
       />
@@ -651,9 +663,15 @@ import ControlCommandInput from '@/components/control/ControlCommandInput.vue'
 import DurationInput from '@/components/DurationInput/index.vue'
 import InlineEdit from '@/components/InlineEdit/index.vue'
 import ConfirmDialog from '@/components/ConfirmDialog/index.vue'
-import TrendChart from '../statistics/components/TrendChart.vue'
-import { getTrendDefault, getTrendData } from '@/api/iot/trend'
-import { getDrillDownRange } from '../statistics/composables/useTrendDrillDown'
+import TrendChart from '@/components/TrendChart/index.vue'
+import { getTrendDefault } from '@/api/iot/trend'
+import { getDrillDownRange } from '@/components/TrendChart/composables/useTrendDrillDown'
+import {
+  useTrendView,
+  GRANULARITY_CHOICES,
+  PRESETS,
+} from '@/components/TrendChart/composables/useTrendView'
+import { formatMonitorDateTime } from '@/config/monitor'
 import { useWebSocketStore } from '@/stores/websocket'
 import { useFormDefaults } from '@/composables/useFormDefaults'
 import { useOperationStatus } from '@/composables/useOperationStatus'
@@ -962,8 +980,6 @@ const pendingBatchIds = ref([])
 const controlCommand = ref('')
 const controlResult = ref('')
 const historyDialogVisible = ref(false)
-const selectedRange = ref('1日')
-const customRange = ref(null)
 
 // Auto-refresh for child node state changes
 const childRefresh = useAutoRefresh(
@@ -982,49 +998,39 @@ function childRowClassName({ row }) {
 }
 
 // Mini chart trend state
-const miniDataPoints = ref([])
-const miniIntradayPoints = ref([])
+const miniPoints = ref([])
+const miniMode = ref('RAW')
+const miniBucketSeconds = ref(null)
 const miniSummary = ref(null)
 const miniGranularity = ref('INTRADAY')
 const miniLoading = ref(false)
 
-// Detail dialog trend state
-const detailData = ref([])
-const detailIntradayPoints = ref([])
-const detailAvg5 = ref([])
-const detailAvg10 = ref([])
-const detailAvg20 = ref([])
-const detailSummary = ref(null)
-const detailGranularity = ref('HOUR')
-const detailLoading = ref(false)
-
-// Granularity tabs for detail dialog
-const detailPeriods = [
-  { key: 'INTRADAY', label: '分时' },
-  { key: 'HOUR', label: '时' },
-  { key: 'DAY', label: '日' },
-  { key: 'WEEK', label: '周' },
-  { key: 'MONTH', label: '月' }
-]
-
-function formatDateTime(d) {
-  const pad = n => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-}
-
-// Time range to granularity mapping
-const timeRangeGranularityMap = {
-  '1日': 'INTRADAY',
-  '1周': 'HOUR',
-  '1月': 'DAY',
-  '1年': 'WEEK'
-}
-const timeRanges = [
-  { label: '1日', unit: 'day', value: 1 },
-  { label: '1周', unit: 'day', value: 7 },
-  { label: '1月', unit: 'month', value: 1 },
-  { label: '1年', unit: 'year', value: 1 }
-]
+// Detail dialog trend state — the dialog owns a full useTrendView instance
+// (granularity direct-select + presets + custom window + error/retry), driven
+// by the currently selected asset. Destructured so template v-model bindings
+// hit top-level refs (a plain object's ref properties are NOT auto-unwrapped).
+const detailChartRef = ref(null)
+const {
+  state           : detailState,
+  error           : detailError,
+  points          : detailPoints,
+  mode            : detailMode,
+  bucketSeconds   : detailBucketSeconds,
+  summary         : detailSummary,
+  granularity     : detailGranularity,
+  granularityChoice: detailGranularityChoice,
+  rangeChoice     : detailRangeChoice,
+  customRange     : detailCustomRange,
+  setGranularityChoice: detailSetGranularityChoice,
+  setPreset       : detailSetPreset,
+  setCustomRange  : detailSetCustomRange,
+  refresh         : detailRefresh,
+  retry           : detailRetry,
+  load            : detailLoad,
+} = useTrendView({
+  monitorId  : computed(() => detail.value?.id ?? null),
+  monitorKind: computed(() => detail.value?.kind ?? 'PROBE'),
+})
 
 function handleNodeClick(data) {
   if (detail.value?.id) opStatus.clearStatus(detail.value.id)
@@ -1064,8 +1070,9 @@ function loadMiniTrend() {
   }).then(res => {
     const payload = res.data || res
     miniGranularity.value = payload.granularity || 'INTRADAY'
-    miniDataPoints.value = payload.dataPoints || []
-    miniIntradayPoints.value = payload.intradayPoints || []
+    miniPoints.value = payload.points ?? []
+    miniMode.value = payload.mode ?? 'RAW'
+    miniBucketSeconds.value = payload.bucketSeconds ?? null
     miniSummary.value = payload.summary || null
   }).catch(() => {
     clearMiniChartData()
@@ -1075,8 +1082,9 @@ function loadMiniTrend() {
 }
 
 function clearMiniChartData() {
-  miniDataPoints.value = []
-  miniIntradayPoints.value = []
+  miniPoints.value = []
+  miniMode.value = 'RAW'
+  miniBucketSeconds.value = null
   miniSummary.value = null
   miniGranularity.value = 'INTRADAY'
 }
@@ -1146,96 +1154,33 @@ async function handleControlExecute(cmd) {
 // === History Detail Dialog ===
 
 function openHistoryDialog() {
-  selectedRange.value = '1日'
-  customRange.value = null
-  detailGranularity.value = 'INTRADAY'
-  clearDetailChartData()
+  // Reset the toolbar to the adaptive default; the actual load fires on
+  // @opened so the chart is mounted before data arrives.
+  detailGranularityChoice.value = 'AUTO'
+  detailRangeChoice.value = '24h'
+  detailCustomRange.value = null
   historyDialogVisible.value = true
 }
 
-function selectTimeRange(r) {
-  selectedRange.value = r.label
-  customRange.value = null
-  // Map time range to appropriate granularity
-  const mappedGranularity = timeRangeGranularityMap[r.label]
-  if (mappedGranularity) {
-    detailGranularity.value = mappedGranularity
-  }
-  const end = new Date()
-  const start = new Date(end)
-  if (r.unit === 'day') start.setDate(start.getDate() - r.value)
-  else if (r.unit === 'month') start.setMonth(start.getMonth() - r.value)
-  else if (r.unit === 'year') start.setFullYear(start.getFullYear() - r.value)
-  fetchDetailTrend(start, end)
+function onDetailCustomRange(v) {
+  if (!v || v.length !== 2) return
+  detailSetCustomRange(v[0], v[1])
 }
 
-function onCustomRange(val) {
-  if (!val) return
-  selectedRange.value = ''
-  fetchDetailTrend(new Date(val[0]), new Date(val[1]))
+function resetDetailView() {
+  detailChartRef.value?.getChartInstance()?.dispatchAction({ type: 'dataZoom', start: 0, end: 100 })
 }
 
-function fetchDetailTrend(start, end) {
-  if (!detail.value?.id) return
-  detailLoading.value = true
-  getTrendData({
-    monitorId: detail.value.id,
-    monitorKind: detail.value.kind,
-    startTime: formatDateTime(start),
-    endTime: formatDateTime(end),
-    granularity: detailGranularity.value
-  }).then(res => {
-    const payload = res.data || res
-    applyDetailResponseData(payload)
-  }).catch(() => {
-    clearDetailChartData()
-  }).finally(() => {
-    detailLoading.value = false
-  })
-}
-
-function loadDetailTrend() {
-  // Called when dialog opens — load default for the selected time range
-  selectTimeRange(timeRanges[0])
-}
-
-function applyDetailResponseData(payload) {
-  if (!payload) { clearDetailChartData(); return }
-  detailGranularity.value = payload.granularity || detailGranularity.value
-  detailData.value = payload.dataPoints || []
-  detailIntradayPoints.value = payload.intradayPoints || []
-  detailAvg5.value = payload.avg5 || []
-  detailAvg10.value = payload.avg10 || []
-  detailAvg20.value = payload.avg20 || []
-  detailSummary.value = payload.summary || null
-}
-
-function clearDetailChartData() {
-  detailData.value = []
-  detailIntradayPoints.value = []
-  detailAvg5.value = []
-  detailAvg10.value = []
-  detailAvg20.value = []
-  detailSummary.value = null
-}
-
-function switchDetailGranularity(key) {
-  detailGranularity.value = key
-  // Reload with current date range
-  const end = new Date()
-  const start = new Date(end)
-  // Determine appropriate date range based on granularity
-  const granToDays = { INTRADAY: 1, HOUR: 7, DAY: 30, WEEK: 365, MONTH: 3650 }
-  const days = granToDays[key] || 30
-  start.setDate(start.getDate() - days)
-  fetchDetailTrend(start, end)
-}
-
+/**
+ * Drill-down: keep the explicit target granularity (AUTO would let the
+ * server ladder pick a different one for the narrower window), then load
+ * the drilled window in a single request.
+ */
 function onDetailCandleClick({ time, granularity: clickedGranularity }) {
   const range = getDrillDownRange(time, clickedGranularity)
   if (!range) return
-  detailGranularity.value = range.granularity
-  fetchDetailTrend(range.startTime, range.endTime)
+  detailGranularityChoice.value = range.granularity
+  detailSetCustomRange(formatMonitorDateTime(range.startTime), formatMonitorDateTime(range.endTime))
 }
 
 function onDetailPopout() {

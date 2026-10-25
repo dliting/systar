@@ -8,6 +8,24 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+Monitor curve component redesign — unified OHLC trend contract, reusable
+`TrendChart` component, SCADA terminology.
+
+### Added
+
+- **Trend curve component** — `frontend/src/components/TrendChart/` is now a self-contained reusable component: candlestick (期初值/期末值/最高值/最低值/波动幅度) for aggregated granularities, gap-aware intraday line with optional 极值带 band, optional 采样数 sub-chart, client-side 5/10/20-period averages, crosshair readout, and a unified toolbar (自动/分时/小时/日/周/月 direct-select + 近1小时…全部 presets + custom range + refresh/reset-view)
+- Backend trend API returns one unified point contract `{granularity, mode: RAW|BUCKETED|OHLC, points[{t,avg,max,min,open,close,count}], bucketSeconds, summary}`; granularity `AUTO` resolves server-side and huge windows are clamped/downsampled to ~1200 buckets
+- Playwright interaction suite (`frontend/e2e/`) covering granularity switch, presets, layer toggles, crosshair, wheel zoom, drill-down, error retry, custom range
+
+### Changed
+
+- **Breaking:** trend response drops `dataPoints`/`intradayPoints`/`avg5`/`avg10`/`avg20`; `t_monitor_stats` gains nullable `open_val`/`close_val` (auto-ALTER on startup; legacy rows keep NULL open/close and the chart degrades to a flat cross at avg — no backfill)
+- Chart terminology is SCADA-only (期初值/期末值/波动幅度/上升/下降), replacing financial-market wording
+
+---
+
 ## [1.2.0] - 2026-10-25
 
 Closed-source monitor engine — the scheduling / alarm / linkage / time-control

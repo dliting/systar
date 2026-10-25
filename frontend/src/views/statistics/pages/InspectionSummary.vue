@@ -50,7 +50,7 @@
 import { ref, watch, onMounted, nextTick } from 'vue'
 import { getInspectionStats } from '@/api/iot/statistics'
 import { useChart } from '../composables/useChart'
-import { gaugeOption, lineOption, barOption, dualBarOption } from '../composables/chartOptions'
+import { gaugeOption, summaryLineOption, barOption, dualBarOption } from '../composables/chartOptions'
 
 const props = defineProps({ startDate: String, endDate: String, granularity: String, pageKey: String })
 defineEmits(['drill-down'])
@@ -69,7 +69,7 @@ function render() {
   if (!data.value) return
   const d = data.value
   gauge.initChart(); gauge.setOption(gaugeOption((d.completionRate || 0) * 100, '完成率'))
-  trend.initChart(); trend.setOption(lineOption(
+  trend.initChart(); trend.setOption(summaryLineOption(
     (d.anomalyTrend || []).map(t => t.period), (d.anomalyTrend || []).map(t => t.value), '异常数'
   ))
   completion.initChart(); completion.setOption(barOption(

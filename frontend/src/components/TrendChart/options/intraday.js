@@ -1,0 +1,111 @@
+/**
+ * Intraday (time-share) option (spec F1): avg line + area, gap-aware, with an
+ * optional 极值带 (min/max envelope) toggle. BUCKETED mode data arrives
+ * pre-aggregated with bucketSeconds set; RAW uses the native sample interval.
+ */
+import {
+  CYAN, ALARM, darkTooltip, axisStyle, gridStyle, cyanGradient,
+  labelFor, perfSwitches,
+} from '../theme'
+import { anomalyMarkerData } from './anomalies'
+
+const fmt = (v) => (v == null ? '--' : Number(v.toFixed(2)).toString())
+
+export function insertGaps(points, bucketSeconds) {
+  if (!bucketSeconds || points.length < 2) return points
+  const out = []
+  for (let i = 0; i < points.length; i++) {
+    if (i > 0) {
+      const a = new Date(String(points[i - 1].t).replace(' ', 'T')).getTime()
+      const b = new Date(String(points[i].t).replace(' ', 'T')).getTime()
+      if (Number.isFinite(a) && Number.isFinite(b) && b - a > bucketSeconds * 1500) {
+        out.push({ t: new Date((a + b) / 2).toISOString().slice(0, 19).replace('T', ' '),
+          avg: null, max: null, min: null, open: null, close: null, count: 0 })
+      }
+    }
+    out.push(points[i])
+  }
+  return out
+}
+
+export function intradayOption(points, opts = {}) {
+  const {
+    unit = '', mode = 'RAW', bucketSeconds = null, showExtremes = false,
+    showThresholds = true, showAnomalies = true, thresholds = null,
+    anomalyPoints = [], compact = false, infiniteMode = false,
+    detectIntervalSeconds = 10,
+  } = opts
+
+  const gapSeconds = bucketSeconds ?? (mode === 'RAW' ? detectIntervalSeconds : 60)
+  const data = insertGaps(points, gapSeconds)
+  const labels = data.map((p) => labelFor(p.t, 'HOUR'))
+  const perf = perfSwitches(data.length)
+
+  const series = [{
+    name: '均值', type: 'line', data: data.map((p) => p.avg),
+    showSymbol: false, connectNulls: false, sampling: perf.sampling,
+    lineStyle: { width: 1.5, color: CYAN }, areaStyle: { color: cyanGradient() },
+    ...(thresholds && showThresholds ? { markLine: thresholdMarkLines(thresholds) } : {}),
+    ...(anomalyPoints?.length && showAnomalies
+      ? { markPoint: { symbol: 'circle', symbolSize: 24,
+          itemStyle: { borderColor: '#1a1a2e', borderWidth: 1 },
+          data: anomalyMarkerData(anomalyPoints, points, 'INTRADAY', (t) => labelFor(t, 'HOUR')) } }
+      : {}),
+  }]
+  if (showExtremes) {
+    series.push(
+      { name: '最低值', type: 'line', stack: 'band', data: data.map((p) => p.min),
+        showSymbol: false, connectNulls: false, lineStyle: { opacity: 0 },
+        areaStyle: { opacity: 0 }, z: 1 },
+      { name: '极值带', type: 'line', stack: 'band',
+        data: data.map((p) => (p.max != null && p.min != null ? p.max - p.min : null)),
+        showSymbol: false, connectNulls: false, lineStyle: { opacity: 0 },
+        areaStyle: { color: 'rgba(0, 212, 255, 0.12)' }, z: 1 },
+      { name: '最高值', type: 'line', data: data.map((p) => p.max),
+        showSymbol: false, connectNulls: false,
+        lineStyle: { width: 1, color: 'rgba(0, 212, 255, 0.5)', type: 'dashed' }, z: 2 },
+    )
+  }
+
+  return {
+    animation: perf.animation,
+    tooltip: {
+      trigger: 'axis', axisPointer: { type: 'cross' }, ...darkTooltip(),
+      formatter: (params) => intradayTooltip(params, data, unit),
+    },
+    legend: { show: !compact && showExtremes, top: 8,
+      textStyle: { color: '#8b9dc3', fontSize: 11 } },
+    grid: { ...gridStyle(), bottom: compact ? 36 : 56 },
+    xAxis: [{ type: 'category', data: labels, boundaryGap: false, ...axisStyle(),
+      axisLabel: { ...axisStyle().axisLabel, hideOverlap: true } }],
+    yAxis: [{ type: 'value', scale: true, ...axisStyle(),
+      axisLabel: { ...axisStyle().axisLabel, formatter: (v) => fmt(v) } }],
+    dataZoom: [
+      { type: 'inside', throttle: 100, zoomOnMouseWheel: true, moveOnMouseMove: true },
+      ...(compact ? [] : [{ type: 'slider', height: 18, bottom: 8,
+        borderColor: 'rgba(0,212,255,0.25)', fillerColor: 'rgba(0,212,255,0.12)',
+        handleStyle: { color: '#00d4ff' }, textStyle: { color: '#8b9dc3', fontSize: 10 } }]),
+    ],
+    series,
+  }
+}
+
+function intradayTooltip(params, data, unit) {
+  const p = Array.isArray(params) ? params.find((x) => x.seriesName === '均值') ?? params[0] : params
+  const point = data[p.dataIndex] || {}
+  const lines = [`<b>${p.name}</b>`, `均值 ${fmt(p.value)}${unit}`]
+  if (point.max != null || point.min != null) {
+    lines.push(`最高值 ${fmt(point.max)}${unit}`, `最低值 ${fmt(point.min)}${unit}`)
+  }
+  if (point.count != null && point.count > 1) lines.push(`采样数 ${point.count.toLocaleString()}`)
+  return lines.join('<br/>')
+}
+
+function thresholdMarkLines(thresholds) {
+  const data = []
+  if (thresholds.max != null) data.push({ yAxis: thresholds.max, name: '上限' })
+  if (thresholds.min != null) data.push({ yAxis: thresholds.min, name: '下限' })
+  return { silent: true, symbol: 'none',
+    lineStyle: { color: ALARM, type: 'dashed', width: 1 },
+    label: { color: ALARM, fontSize: 10 }, data }
+}

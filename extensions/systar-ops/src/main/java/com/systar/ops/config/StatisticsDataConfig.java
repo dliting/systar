@@ -1,11 +1,14 @@
 package com.systar.ops.config;
 
 import com.zaxxer.hikari.HikariDataSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -27,6 +30,8 @@ import java.util.concurrent.ThreadPoolExecutor;
 @Configuration
 public class StatisticsDataConfig {
 
+    private static final Logger log = LoggerFactory.getLogger(StatisticsDataConfig.class);
+
     private static final String CREATE_STATS_TABLE_SQL = """
         CREATE TABLE IF NOT EXISTS t_monitor_stats (
             id              BIGINT          NOT NULL AUTO_INCREMENT,
@@ -34,6 +39,8 @@ public class StatisticsDataConfig {
             bucket_start    DATETIME        NOT NULL,
             bucket_end      DATETIME        NOT NULL,
             granularity     TINYINT         NOT NULL,
+            open_val        FLOAT           NULL,
+            close_val       FLOAT           NULL,
             avg_val         FLOAT           NULL,
             max_val         FLOAT           NULL,
             min_val         FLOAT           NULL,
@@ -75,7 +82,32 @@ public class StatisticsDataConfig {
 
         JdbcTemplate jdbc = new JdbcTemplate(ds);
         jdbc.execute(CREATE_STATS_TABLE_SQL);
+        ensureOpenCloseColumns(jdbc);
         return jdbc;
+    }
+
+    /**
+     * B1 guarded ALTER: existing deployments keep their rows and gain the two
+     * nullable columns; fresh databases already have them from the CREATE.
+     * Probing with a zero-row SELECT (instead of INFORMATION_SCHEMA) avoids the
+     * H2-uppercase vs MySQL-lowercase identifier metadata divergence.
+     */
+    static void ensureOpenCloseColumns(JdbcTemplate jdbc) {
+        addColumnIfAbsent(jdbc, "open_val");
+        addColumnIfAbsent(jdbc, "close_val");
+    }
+
+    private static void addColumnIfAbsent(JdbcTemplate jdbc, String column) {
+        try {
+            jdbc.query("SELECT " + column + " FROM t_monitor_stats WHERE 1 = 0", rs -> { });
+        } catch (DataAccessException missing) {
+            try {
+                jdbc.execute("ALTER TABLE t_monitor_stats ADD COLUMN " + column + " FLOAT NULL");
+            } catch (DataAccessException e) {
+                log.warn("Cannot add {} to t_monitor_stats ({}); trend open/close degrade to NULL",
+                        column, e.getMessage());
+            }
+        }
     }
 
     @Bean("statsCascadeExecutor")

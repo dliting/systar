@@ -41,7 +41,7 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { getMaintenanceStats } from '@/api/iot/statistics'
 import { useChart } from '../composables/useChart'
-import { lineOption, pieOption, horizontalBarOption } from '../composables/chartOptions'
+import { summaryLineOption, pieOption, horizontalBarOption } from '../composables/chartOptions'
 
 const props = defineProps({ startDate: String, endDate: String, granularity: String, pageKey: String })
 defineEmits(['drill-down'])
@@ -61,7 +61,7 @@ async function fetch() {
 function render() {
   if (!data.value) return
   const d = data.value
-  cost.initChart(); cost.setOption(lineOption(
+  cost.initChart(); cost.setOption(summaryLineOption(
     (d.frequencyTrend || []).map(t => t.period), (d.frequencyTrend || []).map(t => t.value), '维护次数'
   ))
   type.initChart(); type.setOption(pieOption(

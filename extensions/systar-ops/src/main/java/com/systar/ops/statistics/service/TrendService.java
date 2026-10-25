@@ -6,9 +6,12 @@ import com.systar.monitor.asset.type.DataType;
 import com.systar.ops.statistics.mapper.TrendBucketExpr;
 import com.systar.ops.statistics.mapper.TrendMapper;
 import com.systar.ops.statistics.model.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +20,7 @@ import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -24,12 +28,22 @@ import java.util.stream.Collectors;
 @Service
 public class TrendService {
 
+    private static final Logger log = LoggerFactory.getLogger(TrendService.class);
+
     private static final int DEFAULT_WINDOW_MULTIPLIER = 60;
     private static final int MAX_INTRADAY_POINTS = 5000;
+
+    /** Response render modes (B3): raw samples / downsampled buckets / candlesticks. */
+    public static final String MODE_RAW = "RAW";
+    public static final String MODE_BUCKETED = "BUCKETED";
+    public static final String MODE_OHLC = "OHLC";
+
+    // AUTO ladder thresholds (D6): keep bucket counts readable — at most
+    // ~336 hourly, 120 daily, ~52 weekly, or a handful of monthly candles
     private static final long ONE_DAY_SECONDS = 86_400L;
-    private static final long THIRTY_ONE_DAYS_SECONDS = 2_678_400L;
-    private static final long ONE_EIGHTY_DAYS_SECONDS = 15_552_000L;
-    private static final long TWO_YEARS_SECONDS = 63_072_000L;
+    private static final long FOURTEEN_DAYS_SECONDS = 1_209_600L;
+    private static final long ONE_TWENTY_DAYS_SECONDS = 10_368_000L;
+    private static final long ONE_YEAR_SECONDS = 31_536_000L;
 
     private final TrendMapper   trendMapper;
     private final DatabaseDialect databaseDialect;
@@ -57,13 +71,18 @@ public class TrendService {
     // ==================== Public API ====================
 
     public TrendResponseVO getTrendData(TrendQuery query) {
-        if (query.granularity().equals("INTRADAY")) {
+        // D6: AUTO (null) resolves by span ladder; explicit requests are
+        // clamped down until the bucket fits the window. The effective value
+        // is echoed back on every response path.
+        long spanSeconds = ChronoUnit.SECONDS.between(query.startTime(), query.endTime());
+        String gran = resolveGranularity(query.granularity(), spanSeconds);
+
+        if ("INTRADAY".equals(gran)) {
             String tableName = resolveSampleTableName(query.monitorKind(), query.monitorId());
             if (tableName == null) return emptyResponse("INTRADAY");
             return handleIntraday(query, tableName);
         }
-        int granCode = granularityCode(query.granularity());
-        return handleAggregated(query, granCode);
+        return handleAggregated(query, granularityCode(gran), gran);
     }
 
     public TrendResponseVO getDefaultView(int monitorId, String monitorKind) {
@@ -113,37 +132,63 @@ public class TrendService {
     // ==================== INTRADAY ====================
 
     private TrendResponseVO handleIntraday(TrendQuery query, String tableName) {
-        List<Map<String, Object>> rows = trendMapper.findRawSamples(
-                tableName, query.monitorId(), query.startTime(), query.endTime(), MAX_INTRADAY_POINTS);
+        // D5: above the raw cap, downsample on the fly into ~1200 fixed-width
+        // buckets (OHLC per bucket) instead of silently truncating the series.
+        long span = ChronoUnit.SECONDS.between(query.startTime(), query.endTime());
+        Long count = null;
+        try {
+            count = trendMapper.countSamples(
+                    tableName, query.monitorId(), query.startTime(), query.endTime());
+        } catch (DataAccessException e) {
+            log.warn("trend sample COUNT failed for monitor {} ({}); falling back to RAW truncation",
+                    query.monitorId(), e.getMessage());
+        }
 
-        List<IntradayPointVO> points = rows.stream()
-                .map(this::mapToIntradayPoint)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+        List<TrendPointVO> points;
+        String mode;
+        Long bucketSeconds;
+        if (count != null && count > MAX_INTRADAY_POINTS && span > 0) {
+            long n = (long) Math.ceil(span / 1200.0);
+            String bucketExpr = TrendBucketExpr.getEpochBucketExpr(n, databaseDialect.getDatabaseType());
+            points = trendMapper.aggregateOHLC(
+                            tableName, query.monitorId(), query.startTime(), query.endTime(), bucketExpr)
+                    .stream()
+                    .map(r -> mapToTrendPoint(r, "bucket"))
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            mode = MODE_BUCKETED;
+            bucketSeconds = n;
+        } else {
+            points = trendMapper.findRawSamples(
+                            tableName, query.monitorId(), query.startTime(), query.endTime(), MAX_INTRADAY_POINTS)
+                    .stream()
+                    .map(this::mapToRawPoint)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            mode = MODE_RAW;
+            bucketSeconds = null;
+        }
 
         TrendResponseVO response = new TrendResponseVO();
         response.setGranularity("INTRADAY");
-        response.setIntradayPoints(points);
-        response.setDataPoints(Collections.emptyList());
-        response.setAvg5(Collections.emptyList());
-        response.setAvg10(Collections.emptyList());
-        response.setAvg20(Collections.emptyList());
-        response.setSummary(new TrendSummaryVO(
-                points.isEmpty() ? 0 : points.get(points.size() - 1).value(),
-                points.stream().mapToDouble(IntradayPointVO::value).max().orElse(0),
-                points.stream().mapToDouble(IntradayPointVO::value).min().orElse(0),
-                points.size()));
+        response.setMode(mode);
+        response.setBucketSeconds(bucketSeconds);
+        response.setPoints(points);
+        response.setSummary(buildSummary(points));
         return response;
     }
 
     // ==================== Aggregated (HOUR / DAY / WEEK / MONTH) ====================
 
-    private TrendResponseVO handleAggregated(TrendQuery query, int granCode) {
+    private TrendResponseVO handleAggregated(TrendQuery query, int granCode, String granularity) {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime effectiveEnd = query.endTime().isAfter(now) ? now : query.endTime();
 
+        String columns = statsHasOpenClose()
+                ? "bucket_start, bucket_end, avg_val, max_val, min_val, open_val, close_val, sample_count"
+                : "bucket_start, bucket_end, avg_val, max_val, min_val, sample_count";
         List<Map<String, Object>> statsRows = statsJdbc.queryForList(
-                "SELECT bucket_start, bucket_end, avg_val, max_val, min_val, sample_count "
+                "SELECT " + columns + " "
                 + "FROM t_monitor_stats "
                 + "WHERE monitor = ? AND granularity = ? AND bucket_start BETWEEN ? AND ? "
                 + "ORDER BY bucket_start",
@@ -152,20 +197,41 @@ public class TrendService {
         List<Map<String, Object>> onTheFlyRows = computeCurrentPeriodOTF(
                 query, granCode, effectiveEnd);
 
-        List<TrendBarVO> bars = mergeStats(statsRows, onTheFlyRows);
-
-        List<Double> avg5 = computeMA(bars, 5);
-        List<Double> avg10 = computeMA(bars, 10);
-        List<Double> avg20 = computeMA(bars, 20);
+        List<TrendPointVO> points = mergeStats(statsRows, onTheFlyRows);
 
         TrendResponseVO response = new TrendResponseVO();
-        response.setGranularity(query.granularity());
-        response.setDataPoints(bars);
-        response.setAvg5(avg5);
-        response.setAvg10(avg10);
-        response.setAvg20(avg20);
-        response.setSummary(buildSummary(bars));
+        response.setGranularity(granularity);
+        response.setMode(MODE_OHLC);
+        response.setBucketSeconds(bucketSecondsFor(granularity));
+        response.setPoints(points);
+        response.setSummary(buildSummary(points));
         return response;
+    }
+
+    /**
+     * B1 guard contract: when the startup ALTER for open_val/close_val fails,
+     * the guard WARNs "trend open/close degrade to NULL" — the query side must
+     * honor that (null open/close on every point) rather than failing each
+     * aggregated request on an unknown column. Probed once per JVM with the
+     * guard's zero-row SELECT technique (dialect-agnostic); the volatile write
+     * is a benign race — a duplicate probe is idempotent.
+     */
+    private volatile Boolean statsHasOpenClose;
+
+    private boolean statsHasOpenClose() {
+        Boolean known = statsHasOpenClose;
+        if (known != null) return known;
+        boolean ok;
+        try {
+            statsJdbc.query("SELECT open_val, close_val FROM t_monitor_stats WHERE 1 = 0", rs -> { });
+            ok = true;
+        } catch (DataAccessException e) {
+            log.warn("t_monitor_stats lacks open_val/close_val ({}); trend open/close degrade to NULL",
+                    e.getMessage());
+            ok = false;
+        }
+        statsHasOpenClose = ok;
+        return ok;
     }
 
     private List<Map<String, Object>> computeCurrentPeriodOTF(TrendQuery query, int granCode,
@@ -228,61 +294,51 @@ public class TrendService {
                 .collect(Collectors.toList());
     }
 
-    // ==================== Moving Averages ====================
-
-    List<Double> computeMA(List<TrendBarVO> bars, int period) {
-        List<Double> result = new ArrayList<>(bars.size());
-        double sum = 0;
-        for (int i = 0; i < bars.size(); i++) {
-            sum += bars.get(i).avg();
-            if (i >= period) {
-                sum -= bars.get(i - period).avg();
-            }
-            if (i >= period - 1) {
-                result.add(Math.round(sum / period * 100.0) / 100.0);
-            } else {
-                result.add(null);
-            }
-        }
-        return result;
-    }
-
     // ==================== Summary ====================
 
-    TrendSummaryVO buildSummary(List<TrendBarVO> bars) {
-        if (bars == null || bars.isEmpty()) {
+    TrendSummaryVO buildSummary(List<TrendPointVO> points) {
+        if (points == null || points.isEmpty()) {
             return new TrendSummaryVO(0, 0, 0, 0);
         }
-        double currentValue = bars.get(bars.size() - 1).avg();
-        double periodMax = bars.stream().mapToDouble(TrendBarVO::max).max().orElse(currentValue);
-        double periodMin = bars.stream().mapToDouble(TrendBarVO::min).min().orElse(currentValue);
-        long totalSamples = bars.stream().mapToLong(TrendBarVO::sampleCount).sum();
+        Double current = null;
+        for (int i = points.size() - 1; i >= 0; i--) {
+            if (points.get(i).avg() != null) {
+                current = points.get(i).avg();
+                break;
+            }
+        }
+        double base = current != null ? current : 0.0;
+        double periodMax = points.stream().map(TrendPointVO::max)
+                .filter(Objects::nonNull).mapToDouble(Double::doubleValue).max().orElse(base);
+        double periodMin = points.stream().map(TrendPointVO::min)
+                .filter(Objects::nonNull).mapToDouble(Double::doubleValue).min().orElse(base);
+        long totalSamples = points.stream().mapToLong(TrendPointVO::count).sum();
         return new TrendSummaryVO(
-                round2(currentValue), round2(periodMax), round2(periodMin), totalSamples);
+                round2(base), round2(periodMax), round2(periodMin), totalSamples);
     }
 
     // ==================== Merge ====================
 
-    private List<TrendBarVO> mergeStats(List<Map<String, Object>> statsRows,
-                                         List<Map<String, Object>> onTheFlyRows) {
-        List<TrendBarVO> bars = statsRows.stream()
-                .map(row -> mapToTrendBar(row, "bucket_start"))
+    private List<TrendPointVO> mergeStats(List<Map<String, Object>> statsRows,
+                                          List<Map<String, Object>> onTheFlyRows) {
+        List<TrendPointVO> points = statsRows.stream()
+                .map(row -> mapToTrendPoint(row, "bucket_start"))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toCollection(ArrayList::new));
 
-        List<TrendBarVO> otfBars = onTheFlyRows.stream()
-                .map(row -> mapToTrendBar(row, "bucket"))
+        List<TrendPointVO> otfPoints = onTheFlyRows.stream()
+                .map(row -> mapToTrendPoint(row, "bucket"))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
 
-        Set<LocalDateTime> otfTimes = otfBars.stream()
-                .map(TrendBarVO::time)
+        Set<LocalDateTime> otfTimes = otfPoints.stream()
+                .map(TrendPointVO::t)
                 .collect(Collectors.toSet());
-        bars.removeIf(bar -> otfTimes.contains(bar.time()));
+        points.removeIf(p -> otfTimes.contains(p.t()));
 
-        bars.addAll(otfBars);
-        bars.sort(Comparator.comparing(TrendBarVO::time));
-        return bars;
+        points.addAll(otfPoints);
+        points.sort(Comparator.comparing(TrendPointVO::t));
+        return points;
     }
 
     // ==================== Granularity Helpers ====================
@@ -307,12 +363,39 @@ public class TrendService {
         };
     }
 
-    String determineGranularity(long windowSeconds) {
+    static String determineGranularity(long windowSeconds) {
         if (windowSeconds <= ONE_DAY_SECONDS) return "INTRADAY";
-        if (windowSeconds <= THIRTY_ONE_DAYS_SECONDS) return "HOUR";
-        if (windowSeconds <= ONE_EIGHTY_DAYS_SECONDS) return "DAY";
-        if (windowSeconds <= TWO_YEARS_SECONDS) return "WEEK";
+        if (windowSeconds <= FOURTEEN_DAYS_SECONDS) return "HOUR";
+        if (windowSeconds <= ONE_TWENTY_DAYS_SECONDS) return "DAY";
+        if (windowSeconds <= ONE_YEAR_SECONDS) return "WEEK";
         return "MONTH";
+    }
+
+    /**
+     * D6 granularity resolution. null = AUTO ladder. An explicit request is
+     * clamped DOWN the ladder MONTH→WEEK→DAY→HOUR→INTRADAY until its bucket
+     * fits the span strictly more than once — a single-bucket candle carries
+     * no trend. INTRADAY is always feasible (BUCKETED downsamples, Task 5).
+     */
+    static String resolveGranularity(String explicit, long spanSeconds) {
+        if (explicit == null) return determineGranularity(spanSeconds);
+        if ("INTRADAY".equals(explicit)) return "INTRADAY";
+        String[] ladder = {"MONTH", "WEEK", "DAY", "HOUR"};
+        int start = Arrays.asList(ladder).indexOf(explicit);
+        for (int i = Math.max(0, start); i < ladder.length; i++) {
+            if (bucketSecondsFor(ladder[i]) < spanSeconds) return ladder[i];
+        }
+        return "INTRADAY";
+    }
+
+    static long bucketSecondsFor(String granularity) {
+        return switch (granularity) {
+            case "HOUR"  -> 3_600L;
+            case "DAY"   -> 86_400L;
+            case "WEEK"  -> 604_800L;
+            case "MONTH" -> 2_592_000L;
+            default -> 0L;
+        };
     }
 
     private static LocalDateTime truncateToGranularity(LocalDateTime time, String granularity) {
@@ -329,21 +412,29 @@ public class TrendService {
 
     // ==================== Mapping ====================
 
-    private TrendBarVO mapToTrendBar(Map<String, Object> row, String timeKey) {
+    /**
+     * Shared stats-row / on-the-fly OHLC row mapper (B3). open_val/close_val
+     * are nullable in the stats table (legacy rows predate the columns, D3)
+     * and must serialize as JSON null, not 0 — hence boxed Double.
+     */
+    private TrendPointVO mapToTrendPoint(Map<String, Object> row, String timeKey) {
         LocalDateTime time = toLocalDateTime(StatisticsService.getValue(row, timeKey));
-        double avgVal = toDouble(StatisticsService.getValue(row, "avg_val"));
-        double maxVal = toDouble(StatisticsService.getValue(row, "max_val"));
-        double minVal = toDouble(StatisticsService.getValue(row, "min_val"));
-        long sampleCount = toLong(StatisticsService.getValue(row, "sample_count"));
         if (time == null) return null;
-        return new TrendBarVO(time, round2(avgVal), round2(maxVal), round2(minVal), sampleCount);
+        Double avg = round2OrNull(StatisticsService.getValue(row, "avg_val"));
+        Double max = round2OrNull(StatisticsService.getValue(row, "max_val"));
+        Double min = round2OrNull(StatisticsService.getValue(row, "min_val"));
+        Double open = round2OrNull(StatisticsService.getValue(row, "open_val"));
+        Double close = round2OrNull(StatisticsService.getValue(row, "close_val"));
+        long sampleCount = toLong(StatisticsService.getValue(row, "sample_count"));
+        return new TrendPointVO(time, avg, max, min, open, close, sampleCount);
     }
 
-    private IntradayPointVO mapToIntradayPoint(Map<String, Object> row) {
+    /** RAW mode: each sample becomes a degenerate candle (open=close=avg=max=min). */
+    private TrendPointVO mapToRawPoint(Map<String, Object> row) {
         LocalDateTime time = toLocalDateTime(StatisticsService.getValue(row, "moment"));
-        double value = toDouble(StatisticsService.getValue(row, "value"));
         if (time == null) return null;
-        return new IntradayPointVO(time, value);
+        double value = toDouble(StatisticsService.getValue(row, "value"));
+        return new TrendPointVO(time, value, value, value, value, value, 1L);
     }
 
     // ==================== Helpers ====================
@@ -410,6 +501,11 @@ public class TrendService {
         return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP).doubleValue();
     }
 
+    /** SQL NULL stays null (boxed) so JSON serializes it as null, not 0. */
+    private static Double round2OrNull(Object value) {
+        return value == null ? null : round2(toDouble(value));
+    }
+
     private static LocalDateTime toLocalDateTime(Object val) {
         if (val instanceof LocalDateTime ldt) return ldt;
         if (val instanceof java.sql.Timestamp ts) return ts.toLocalDateTime();
@@ -442,11 +538,10 @@ public class TrendService {
     private static TrendResponseVO emptyResponse(String granularity) {
         TrendResponseVO response = new TrendResponseVO();
         response.setGranularity(granularity);
-        response.setDataPoints(Collections.emptyList());
-        response.setIntradayPoints(Collections.emptyList());
-        response.setAvg5(Collections.emptyList());
-        response.setAvg10(Collections.emptyList());
-        response.setAvg20(Collections.emptyList());
+        boolean intraday = "INTRADAY".equals(granularity);
+        response.setMode(intraday ? MODE_RAW : MODE_OHLC);
+        response.setBucketSeconds(intraday ? null : bucketSecondsFor(granularity));
+        response.setPoints(Collections.emptyList());
         response.setSummary(new TrendSummaryVO(0, 0, 0, 0));
         return response;
     }

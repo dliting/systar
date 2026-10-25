@@ -8,6 +8,23 @@
 
 ---
 
+## [未发布]
+
+监控曲线组件重构——统一 OHLC 趋势契约、可重用 `TrendChart` 组件、SCADA 术语。
+
+### 新增
+
+- **监控曲线组件** — `frontend/src/components/TrendChart/` 成为自包含可重用组件：聚合粒度用蜡烛图（期初值/期末值/最高值/最低值/波动幅度）、分时折线缺口断开并可选极值带、可选采样数子图、客户端 5/10/20 期平均、十字光标读数，以及统一工具栏（自动/分时/小时/日/周/月直接选择 + 近1小时…全部预设 + 自定义区间 + 刷新/重置视图）
+- 后端趋势 API 返回统一点契约 `{granularity, mode: RAW|BUCKETED|OHLC, points[{t,avg,max,min,open,close,count}], bucketSeconds, summary}`；粒度 `AUTO` 由服务端解析，超大时间窗自动钳制 / 降采样至约 1200 桶
+- Playwright 交互测试套件（`frontend/e2e/`）覆盖粒度切换、时间预设、图层开关、十字光标、滚轮缩放、下钻、错误重试、自定义区间
+
+### 变更
+
+- **破坏性：** 趋势响应移除 `dataPoints`/`intradayPoints`/`avg5`/`avg10`/`avg20`；`t_monitor_stats` 新增可空 `open_val`/`close_val`（启动时自动 ALTER；历史行 open/close 保持 NULL，图表退化为均值处的平头十字——不回填）
+- 图表术语统一为工业 SCADA 用语（期初值/期末值/波动幅度/上升/下降），替换金融市场措辞
+
+---
+
 ## [1.2.0] - 2026-10-25
 
 闭源监测引擎——调度 / 告警 / 联动 / 定时控制运行时移入免费二进制的闭源模块；框架保持 MIT。

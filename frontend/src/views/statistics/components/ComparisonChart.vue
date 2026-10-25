@@ -16,15 +16,15 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useChart } from '../composables/useChart'
-import { multiSeriesOption } from '../composables/trendOptions'
+import { multiSeriesOption } from '@/components/TrendChart/options/trendOptions'
 import { smallMultiplesOption } from '../composables/smallMultiples'
 import { groupSeriesByUnit } from '../composables/palette'
 
 const props = defineProps({
   /**
-   * Loaded trend series — each item is a { id, caption, unit, color, dataPoints,
-   * avg5/10/20, summary, thresholds, anomalies } object produced by
-   * useTrendSeriesLoader. ComparisonChart is a pure rendering component;
+   * Loaded trend series — each item is a { monitorId, name, unit, color,
+   * points, ma5/ma10/ma20, summary, thresholds, anomalies } object produced
+   * by useTrendSeriesLoader. ComparisonChart is a pure rendering component;
    * data loading is the parent's responsibility.
    */
   series: { type: Array, default: () => [] },

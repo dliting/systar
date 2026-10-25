@@ -32,6 +32,20 @@ public final class TrendBucketExpr {
         return buildExpr(granularity, dbType, weekStartMonday, columnName);
     }
 
+    /**
+     * B4: fixed-width epoch-aligned bucket expression returning a DATETIME.
+     * H2 EXTRACT(EPOCH …) / MySQL UNIX_TIMESTAMP both round-trip through the
+     * session-local epoch, so bucket boundaries and the datetime label agree.
+     */
+    public static String getEpochBucketExpr(long bucketSeconds, String dbType) {
+        long n = Math.max(1, bucketSeconds);
+        if (DB_H2.equals(dbType)) {
+            return "DATEADD('SECOND', CAST(FLOOR(EXTRACT(EPOCH FROM moment) / " + n + ") * " + n + " AS BIGINT),"
+                    + " TIMESTAMP '1970-01-01 00:00:00')";
+        }
+        return "FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP(moment) / " + n + ") * " + n + ")";
+    }
+
     private static String buildExpr(String granularity, String dbType,
                                     boolean weekStartMonday, String col) {
         return switch (granularity) {

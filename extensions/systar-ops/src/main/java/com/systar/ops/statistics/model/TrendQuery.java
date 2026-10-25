@@ -27,9 +27,9 @@ public record TrendQuery(
             throw new IllegalArgumentException(
                     "Invalid monitorKind: " + monitorKind + ". Must be PROBE or CONTROL");
         }
-        if (granularity == null) {
-            granularity = "HOUR";
-        } else {
+        // null granularity = AUTO: resolved from the window span by the
+        // service (D6); no more silent HOUR default
+        if (granularity != null) {
             granularity = granularity.toUpperCase();
             if (!VALID_GRANULARITIES.contains(granularity)) {
                 throw new IllegalArgumentException(

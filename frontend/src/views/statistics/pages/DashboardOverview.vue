@@ -32,7 +32,7 @@
 import { ref, onMounted, nextTick } from 'vue'
 import { getDashboardStats } from '@/api/iot/statistics'
 import { useChart } from '../composables/useChart'
-import { gaugeOption, horizontalBarOption, lineOption } from '../composables/chartOptions'
+import { gaugeOption, horizontalBarOption, summaryLineOption } from '../composables/chartOptions'
 
 const props = defineProps({ startDate: String, endDate: String, granularity: String, pageKey: String })
 const loading = ref(false); const data = ref(null)
@@ -68,7 +68,7 @@ function render() {
     (d.topAlarmDevices || []).map(t => t.deviceName),
     (d.topAlarmDevices || []).map(t => t.alarmCount)
   ))
-  trend.initChart(); trend.setOption(lineOption(
+  trend.initChart(); trend.setOption(summaryLineOption(
     (alarms.trend || []).map(t => t.period), (alarms.trend || []).map(t => t.value)
   ))
 }

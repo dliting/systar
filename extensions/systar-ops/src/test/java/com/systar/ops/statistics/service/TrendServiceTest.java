@@ -1,8 +1,10 @@
 package com.systar.ops.statistics.service;
 
+import com.systar.common.database.DatabaseDialect;
 import com.systar.monitor.asset.type.DataType;
 import com.systar.ops.statistics.mapper.TrendMapper;
 import com.systar.ops.statistics.model.TrendBarVO;
+import com.systar.ops.statistics.model.TrendPointVO;
 import com.systar.ops.statistics.model.TrendQuery;
 import com.systar.ops.statistics.model.TrendResponseVO;
 import com.systar.ops.statistics.model.TrendSummaryVO;
@@ -13,8 +15,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.h2.Driver;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.SimpleDriverDataSource;
 import org.springframework.test.annotation.Rollback;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,98 +56,18 @@ class TrendServiceTest {
     @Autowired
     private TrendMapper trendMapper;
 
+    @Autowired
+    private DatabaseDialect databaseDialect;
+
+    /**
+     * Stats live in a separate datasource, so @Transactional/@Rollback does
+     * not undo inserts here — seed helpers use unique monitor ids.
+     */
+    @Autowired
+    @Qualifier("statsJdbcTemplate")
+    private JdbcTemplate statsJdbc;
+
     private static final LocalDateTime BASE_TIME = LocalDateTime.of(2026, 1, 15, 0, 0, 0);
-
-    // ==================== computeMA ====================
-
-    @Nested
-    class ComputeMA {
-
-        @Test
-        void knownInput_period3_returnsCorrectAverages() {
-            List<TrendBarVO> bars = List.of(
-                    bar(10, 10, 10, 1),
-                    bar(20, 20, 20, 1),
-                    bar(30, 30, 30, 1),
-                    bar(40, 40, 40, 1),
-                    bar(50, 50, 50, 1)
-            );
-
-            List<Double> result = trendService.computeMA(bars, 3);
-
-            assertThat(result).hasSize(5);
-            assertThat(result.get(0)).isNull();
-            assertThat(result.get(1)).isNull();
-            assertThat(result.get(2)).isEqualTo(20.0);
-            assertThat(result.get(3)).isEqualTo(30.0);
-            assertThat(result.get(4)).isEqualTo(40.0);
-        }
-
-        @Test
-        void singleElement_period5_returnsNull() {
-            List<TrendBarVO> bars = List.of(bar(42, 42, 42, 1));
-
-            List<Double> result = trendService.computeMA(bars, 5);
-
-            assertThat(result).hasSize(1);
-            assertThat(result.get(0)).isNull();
-        }
-
-        @Test
-        void emptyList_returnsEmptyResult() {
-            List<TrendBarVO> bars = List.of();
-
-            List<Double> result = trendService.computeMA(bars, 3);
-
-            assertThat(result).isEmpty();
-        }
-
-        @Test
-        void allIdenticalValues_returnsConstantMA() {
-            List<TrendBarVO> bars = List.of(
-                    bar(5, 5, 5, 1),
-                    bar(5, 5, 5, 1),
-                    bar(5, 5, 5, 1)
-            );
-
-            List<Double> result = trendService.computeMA(bars, 2);
-
-            assertThat(result).hasSize(3);
-            assertThat(result.get(0)).isNull();
-            assertThat(result.get(1)).isEqualTo(5.0);
-            assertThat(result.get(2)).isEqualTo(5.0);
-        }
-
-        @Test
-        void periodEqualToListSize_returnsSingleValue() {
-            List<TrendBarVO> bars = List.of(
-                    bar(10, 15, 5, 1),
-                    bar(20, 25, 15, 1),
-                    bar(30, 35, 25, 1)
-            );
-
-            // avg values: 10, 20, 30 → MA3 = (10+20+30)/3 = 20.0
-            List<Double> result = trendService.computeMA(bars, 3);
-
-            assertThat(result).hasSize(3);
-            assertThat(result.get(0)).isNull();
-            assertThat(result.get(1)).isNull();
-            assertThat(result.get(2)).isEqualTo(20.0);
-        }
-
-        @Test
-        void largePeriod_returnsAllNulls() {
-            List<TrendBarVO> bars = List.of(
-                    bar(1, 1, 1, 1),
-                    bar(2, 2, 2, 1)
-            );
-
-            List<Double> result = trendService.computeMA(bars, 5);
-
-            assertThat(result).hasSize(2);
-            assertThat(result).allMatch(v -> v == null);
-        }
-    }
 
     // ==================== aggregateToCoarser ====================
 
@@ -275,20 +199,67 @@ class TrendServiceTest {
         }
     }
 
+    // ==================== Degraded stats schema ====================
+
+    @Nested
+    class DegradedStatsSchema {
+
+        /**
+         * The B1 startup guard WARNs "trend open/close degrade to NULL" when
+         * its ALTER fails — the aggregated query path must honor that promise
+         * (points with null open/close) instead of failing every request with
+         * an unknown-column error (final review Important #2).
+         */
+        @Test
+        void statsTableWithoutOpenCloseColumns_returnsPointsWithNullOpenClose() {
+            SimpleDriverDataSource ds = new SimpleDriverDataSource(
+                    new Driver(),
+                    "jdbc:h2:mem:degraded_stats_" + System.nanoTime() + ";DB_CLOSE_DELAY=-1",
+                    "sa", "");
+            JdbcTemplate degraded = new JdbcTemplate(ds);
+            degraded.execute("CREATE TABLE t_monitor_stats ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, monitor INT NOT NULL,"
+                    + "bucket_start DATETIME NOT NULL, bucket_end DATETIME NOT NULL,"
+                    + "granularity TINYINT NOT NULL, avg_val FLOAT, max_val FLOAT, min_val FLOAT,"
+                    + "sample_count INT NOT NULL DEFAULT 0, updated_at DATETIME NOT NULL)");
+            degraded.update("INSERT INTO t_monitor_stats "
+                            + "(monitor, bucket_start, bucket_end, granularity, avg_val, max_val, min_val, sample_count, updated_at) "
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    999, BASE_TIME, BASE_TIME.plusDays(1), 2, 21.0, 24.0, 18.0, 7, BASE_TIME);
+
+            TrendService degradedService =
+                    new TrendService(trendMapper, databaseDialect, jdbc, degraded);
+            // Window entirely in the past → the on-the-fly current-period path
+            // is skipped and only the stats-table read runs.
+            TrendResponseVO resp = degradedService.getTrendData(new TrendQuery(
+                    999, "PROBE", BASE_TIME, BASE_TIME.plusDays(2), "DAY"));
+
+            assertThat(resp.getPoints()).hasSize(1);
+            TrendPointVO point = resp.getPoints().get(0);
+            assertThat(point.t()).isEqualTo(BASE_TIME);
+            assertThat(point.avg()).isEqualTo(21.0);
+            assertThat(point.max()).isEqualTo(24.0);
+            assertThat(point.min()).isEqualTo(18.0);
+            assertThat(point.open()).isNull();
+            assertThat(point.close()).isNull();
+            assertThat(point.count()).isEqualTo(7L);
+        }
+    }
+
     // ==================== buildSummary ====================
 
     @Nested
     class BuildSummary {
 
         @Test
-        void multipleBars_returnsCorrectSummary() {
-            List<TrendBarVO> bars = List.of(
-                    new TrendBarVO(BASE_TIME, 20, 50, 5, 100),
-                    new TrendBarVO(BASE_TIME.plusHours(1), 30, 45, 8, 150),
-                    new TrendBarVO(BASE_TIME.plusHours(2), 25, 60, 3, 200)
+        void multiplePoints_returnsCorrectSummary() {
+            List<TrendPointVO> points = List.of(
+                    new TrendPointVO(BASE_TIME, 20.0, 50.0, 5.0, 20.0, 25.0, 100),
+                    new TrendPointVO(BASE_TIME.plusHours(1), 30.0, 45.0, 8.0, 25.0, 30.0, 150),
+                    new TrendPointVO(BASE_TIME.plusHours(2), 25.0, 60.0, 3.0, 30.0, 25.0, 200)
             );
 
-            TrendSummaryVO summary = trendService.buildSummary(bars);
+            TrendSummaryVO summary = trendService.buildSummary(points);
 
             assertThat(summary.currentValue()).isEqualTo(25.0);
             assertThat(summary.periodMax()).isEqualTo(60.0);
@@ -297,8 +268,8 @@ class TrendServiceTest {
         }
 
         @Test
-        void singleBar_allValuesMatch() {
-            TrendBarVO single = new TrendBarVO(BASE_TIME, 42.5, 42.5, 42.5, 10);
+        void singlePoint_allValuesMatch() {
+            TrendPointVO single = new TrendPointVO(BASE_TIME, 42.5, 42.5, 42.5, 42.5, 42.5, 10);
 
             TrendSummaryVO summary = trendService.buildSummary(List.of(single));
 
@@ -344,34 +315,41 @@ class TrendServiceTest {
             assertThat(trendService.determineGranularity(86_401L)).isEqualTo("HOUR");
         }
 
+        // Candlestick-friendly AUTO ladder (D6): keep bucket count readable
+        // (≤ ~180 bars) — 31d fits in DAY, 180d in WEEK, 2y in MONTH.
         @Test
-        void thirtyOneDays_returnsHour() {
-            assertThat(trendService.determineGranularity(2_678_400L)).isEqualTo("HOUR");
+        void thirtyOneDays_returnsDay() {
+            assertThat(trendService.determineGranularity(2_678_400L)).isEqualTo("DAY");
         }
 
         @Test
-        void thirtyOneDaysPlusOneSecond_returnsDay() {
-            assertThat(trendService.determineGranularity(2_678_401L)).isEqualTo("DAY");
+        void fourteenDays_returnsHour() {
+            assertThat(trendService.determineGranularity(1_209_600L)).isEqualTo("HOUR");
         }
 
         @Test
-        void oneHundredEightyDays_returnsDay() {
-            assertThat(trendService.determineGranularity(15_552_000L)).isEqualTo("DAY");
+        void fourteenDaysPlusOneSecond_returnsDay() {
+            assertThat(trendService.determineGranularity(1_209_601L)).isEqualTo("DAY");
         }
 
         @Test
-        void oneHundredEightyDaysPlusOneSecond_returnsWeek() {
-            assertThat(trendService.determineGranularity(15_552_001L)).isEqualTo("WEEK");
+        void oneHundredEightyDays_returnsWeek() {
+            assertThat(trendService.determineGranularity(15_552_000L)).isEqualTo("WEEK");
         }
 
         @Test
-        void twoYears_returnsWeek() {
-            assertThat(trendService.determineGranularity(63_072_000L)).isEqualTo("WEEK");
+        void oneHundredTwentyDays_returnsDay() {
+            assertThat(trendService.determineGranularity(10_368_000L)).isEqualTo("DAY");
         }
 
         @Test
-        void twoYearsPlusOneSecond_returnsMonth() {
-            assertThat(trendService.determineGranularity(63_072_001L)).isEqualTo("MONTH");
+        void twoYears_returnsMonth() {
+            assertThat(trendService.determineGranularity(63_072_000L)).isEqualTo("MONTH");
+        }
+
+        @Test
+        void threeHundredSixtyFiveDays_returnsWeek() {
+            assertThat(trendService.determineGranularity(31_536_000L)).isEqualTo("WEEK");
         }
 
         @Test
@@ -522,7 +500,7 @@ class TrendServiceTest {
             TrendResponseVO response = trendService.getDefaultView(probeId, "PROBE");
 
             assertThat(response.getGranularity()).isEqualTo("INTRADAY");
-            assertThat(response.getIntradayPoints()).isNotNull();
+            assertThat(response.getPoints()).isNotNull();
         }
 
         @Test
@@ -532,7 +510,7 @@ class TrendServiceTest {
             TrendResponseVO response = trendService.getDefaultView(probeId, "PROBE");
 
             assertThat(response.getGranularity()).isEqualTo("HOUR");
-            assertThat(response.getDataPoints()).isNotNull();
+            assertThat(response.getPoints()).isNotNull();
         }
     }
 
@@ -579,17 +557,16 @@ class TrendServiceTest {
 
         @Test
         void nonExistentProbe_returnsEmptyResponseForHour() {
-            LocalDateTime start = LocalDateTime.now().minusHours(1);
+            // 2h window: HOUR survives the clamp (a 1h span would clamp down
+            // to INTRADAY — see explicitGranularityIsClampedWhenSpanTooSmall)
+            LocalDateTime start = LocalDateTime.now().minusHours(2);
             LocalDateTime end = LocalDateTime.now();
             TrendQuery query = new TrendQuery(99998, "PROBE", start, end, "HOUR");
 
             TrendResponseVO response = trendService.getTrendData(query);
 
             assertThat(response.getGranularity()).isEqualTo("HOUR");
-            assertThat(response.getDataPoints()).isEmpty();
-            assertThat(response.getAvg5()).isEmpty();
-            assertThat(response.getAvg10()).isEmpty();
-            assertThat(response.getAvg20()).isEmpty();
+            assertThat(response.getPoints()).isEmpty();
         }
 
         @Test
@@ -601,7 +578,7 @@ class TrendServiceTest {
             TrendResponseVO response = trendService.getTrendData(query);
 
             assertThat(response.getGranularity()).isEqualTo("DAY");
-            assertThat(response.getDataPoints()).isEmpty();
+            assertThat(response.getPoints()).isEmpty();
         }
 
         @Test
@@ -612,6 +589,139 @@ class TrendServiceTest {
             assertThatThrownBy(() -> new TrendQuery(1, "PROBE", start, end, "YEAR"))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Invalid granularity");
+        }
+    }
+
+    // ==================== unified response contract (B3/B4/D6) ====================
+
+    @Nested
+    class UnifiedContract {
+
+        @Test
+        void aggregatedResponseIsOhlcModeWithOpenCloseAndBucketSeconds() {
+            int monitor = seedStatsHourRow(10.0, 30.0, 20.0, 30.0, 10.0, 3);
+
+            TrendResponseVO resp = trendService.getTrendData(
+                    new TrendQuery(monitor, "PROBE", BASE_TIME, BASE_TIME.plusDays(1), "HOUR"));
+
+            assertThat(resp.getMode()).isEqualTo(TrendService.MODE_OHLC);
+            assertThat(resp.getBucketSeconds()).isEqualTo(3600L);
+            assertThat(resp.getPoints()).hasSize(1);
+            TrendPointVO p = resp.getPoints().get(0);
+            assertThat(p.open()).isEqualTo(10.0);
+            assertThat(p.close()).isEqualTo(30.0);
+            assertThat(p.count()).isEqualTo(3);
+        }
+
+        @Test
+        void legacyStatsRowWithoutOpenCloseSerializesNulls() {
+            // Review Focus 1: stats row inserted with open_val/close_val NULL
+            int monitor = seedStatsHourRow(null, null, 5.0, 9.0, 1.0, 3);
+
+            TrendResponseVO resp = trendService.getTrendData(
+                    new TrendQuery(monitor, "PROBE", BASE_TIME, BASE_TIME.plusDays(1), "HOUR"));
+
+            assertThat(resp.getPoints()).hasSize(1);
+            TrendPointVO p = resp.getPoints().get(0);
+            assertThat(p.open()).isNull();
+            assertThat(p.close()).isNull();
+            assertThat(p.avg()).isEqualTo(5.0);
+        }
+
+        @Test
+        void intradaySmallWindowIsRawModeWithOpenEqualsClose() {
+            int monitor = seedFloatSamples(
+                    10.0, BASE_TIME.plusHours(10),
+                    20.0, BASE_TIME.plusHours(10).plusMinutes(5));
+
+            TrendResponseVO resp = trendService.getTrendData(
+                    new TrendQuery(monitor, "PROBE",
+                            BASE_TIME.plusHours(9), BASE_TIME.plusHours(11), "INTRADAY"));
+
+            assertThat(resp.getMode()).isEqualTo(TrendService.MODE_RAW);
+            assertThat(resp.getBucketSeconds()).isNull();
+            assertThat(resp.getPoints()).hasSize(2);
+            TrendPointVO p = resp.getPoints().get(0);
+            assertThat(p.open()).isEqualTo(p.avg());
+            assertThat(p.close()).isEqualTo(p.avg());
+            assertThat(p.count()).isEqualTo(1);
+        }
+
+        @Test
+        void nullGranularityResolvesBySpan() {
+            // Review Focus 5 / D6: AUTO granularity
+            assertThat(TrendService.resolveGranularity(null, 3_600)).isEqualTo("INTRADAY");
+            assertThat(TrendService.resolveGranularity(null, 7 * 86_400)).isEqualTo("HOUR");
+            assertThat(TrendService.resolveGranularity(null, 30L * 86_400)).isEqualTo("DAY");
+            assertThat(TrendService.resolveGranularity(null, 200L * 86_400)).isEqualTo("WEEK");
+            assertThat(TrendService.resolveGranularity(null, 400L * 86_400)).isEqualTo("MONTH");
+        }
+
+        @Test
+        void explicitGranularityIsClampedWhenSpanTooSmall() {
+            // span 1h asked as DAY -> clamp down to INTRADAY (bucket 86400 > span)
+            assertThat(TrendService.resolveGranularity("DAY", 3_600)).isEqualTo("INTRADAY");
+            assertThat(TrendService.resolveGranularity("HOUR", 600)).isEqualTo("INTRADAY");
+            assertThat(TrendService.resolveGranularity("WEEK", 2 * 86_400)).isEqualTo("DAY");
+            // INTRADAY is always feasible (BUCKETED downsamples)
+            assertThat(TrendService.resolveGranularity("INTRADAY", 400L * 86_400)).isEqualTo("INTRADAY");
+            // feasible explicit values pass through
+            assertThat(TrendService.resolveGranularity("DAY", 30L * 86_400)).isEqualTo("DAY");
+        }
+
+        @Test
+        void responseEchoesEffectiveGranularityAfterClamp() {
+            TrendResponseVO resp = trendService.getTrendData(
+                    new TrendQuery(99997, "PROBE",
+                            BASE_TIME.plusHours(10), BASE_TIME.plusHours(11), "MONTH"));
+
+            assertThat(resp.getGranularity()).isEqualTo("INTRADAY");
+        }
+    }
+
+    // ==================== Adaptive INTRADAY downsampling (D5) ====================
+
+    @Nested
+    class AdaptiveIntradayDownsample {
+
+        @Test
+        void intradaySwitchesToBucketedWhenSampleCountExceedsRawCap() {
+            // 5001 samples at 17s spacing fit inside the 24h window
+            int monitor = seedFloatSamplesBatch(5001, BASE_TIME, 17);
+
+            TrendResponseVO resp = trendService.getTrendData(
+                    new TrendQuery(monitor, "PROBE", BASE_TIME, BASE_TIME.plusHours(24), "INTRADAY"));
+
+            assertThat(resp.getMode()).isEqualTo(TrendService.MODE_BUCKETED);
+            assertThat(resp.getBucketSeconds()).isEqualTo(72L); // ceil(86400 / 1200)
+            assertThat(resp.getPoints()).isNotEmpty().hasSizeLessThanOrEqualTo(1200);
+            TrendPointVO p = resp.getPoints().get(0);
+            assertThat(p.open()).isNotNull();
+            assertThat(p.close()).isNotNull();
+            assertThat(p.count()).isGreaterThan(1);
+        }
+
+        @Test
+        void intradayStaysRawAtExactlyCap() {
+            int monitor = seedFloatSamplesBatch(5000, BASE_TIME, 17);
+
+            TrendResponseVO resp = trendService.getTrendData(
+                    new TrendQuery(monitor, "PROBE", BASE_TIME, BASE_TIME.plusHours(24), "INTRADAY"));
+
+            assertThat(resp.getMode()).isEqualTo(TrendService.MODE_RAW);
+            assertThat(resp.getPoints()).hasSize(5000);
+        }
+
+        @Test
+        void stringMonitorIntradayResolvesToEmptyRaw() {
+            // STRING kind has no sample table: RAW empty, no exception
+            int monitor = createProbe(DataType.STRING, "00:00:10");
+
+            TrendResponseVO resp = trendService.getTrendData(
+                    new TrendQuery(monitor, "PROBE", BASE_TIME, BASE_TIME.plusHours(24), "INTRADAY"));
+
+            assertThat(resp.getMode()).isEqualTo(TrendService.MODE_RAW);
+            assertThat(resp.getPoints()).isEmpty();
         }
     }
 
@@ -742,9 +852,46 @@ class TrendServiceTest {
 
     // ==================== Helpers ====================
 
-    /** Create a TrendBarVO with identical max/min for simple test cases. */
-    private static TrendBarVO bar(double avg, double max, double min, long sampleCount) {
-        return new TrendBarVO(BASE_TIME.plusHours(0), avg, max, min, sampleCount);
+    /**
+     * Seed one HOUR-granularity stats row in the stats datasource. The stats
+     * H2 is a separate datasource (no transaction rollback), so each call
+     * claims a fresh monitor id and clears it first.
+     */
+    private int seedStatsHourRow(Double open, Double close,
+                                 double avg, double max, double min, int count) {
+        int monitor = 95000 + (int) (System.nanoTime() % 1000);
+        statsJdbc.update("DELETE FROM t_monitor_stats WHERE monitor = ?", monitor);
+        statsJdbc.update("INSERT INTO t_monitor_stats "
+                        + "(monitor, bucket_start, bucket_end, granularity, open_val, close_val, "
+                        + "avg_val, max_val, min_val, sample_count, updated_at) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())",
+                monitor, BASE_TIME, BASE_TIME.plusHours(1), 1, open, close, avg, max, min, count);
+        return monitor;
+    }
+
+    /** Seed two raw float samples; monitor id is unknown to t_probe (falls back to t_sample_float). */
+    private int seedFloatSamples(double v1, LocalDateTime m1, double v2, LocalDateTime m2) {
+        int monitor = 96000 + (int) (System.nanoTime() % 1000);
+        jdbc.update("DELETE FROM t_sample_float WHERE monitor = ?", monitor);
+        jdbc.update("INSERT INTO t_sample_float (monitor, `value`, moment) VALUES (?, ?, ?)", monitor, v1, m1);
+        jdbc.update("INSERT INTO t_sample_float (monitor, `value`, moment) VALUES (?, ?, ?)", monitor, v2, m2);
+        return monitor;
+    }
+
+    /**
+     * Seed {@code count} float samples at {@code stepSeconds} spacing (batched —
+     * thousands of rows). Monitor id is unknown to t_probe (falls back to
+     * t_sample_float); main datasource inserts roll back with the test.
+     */
+    private int seedFloatSamplesBatch(int count, LocalDateTime start, long stepSeconds) {
+        int monitor = 97000 + (int) (System.nanoTime() % 1000);
+        jdbc.update("DELETE FROM t_sample_float WHERE monitor = ?", monitor);
+        List<Object[]> batch = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            batch.add(new Object[]{monitor, (double) (i % 50) + 10.0, start.plusSeconds(i * stepSeconds)});
+        }
+        jdbc.batchUpdate("INSERT INTO t_sample_float (monitor, `value`, moment) VALUES (?, ?, ?)", batch);
+        return monitor;
     }
 
     private static final String INSERT_PROBE =

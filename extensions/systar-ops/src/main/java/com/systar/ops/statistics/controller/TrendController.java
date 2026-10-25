@@ -28,7 +28,7 @@ public class TrendController {
             @RequestParam String monitorKind,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime,
-            @RequestParam(required = false, defaultValue = "HOUR") String granularity) {
+            @RequestParam(required = false) String granularity) {
         TrendQuery query = new TrendQuery(monitorId, monitorKind, startTime, endTime, granularity);
         return Result.success(trendService.getTrendData(query));
     }

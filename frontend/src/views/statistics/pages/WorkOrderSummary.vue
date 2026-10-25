@@ -50,7 +50,7 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { getWorkOrderStats } from '@/api/iot/statistics'
 import { useChart } from '../composables/useChart'
-import { funnelOption, pieOption, lineOption, gaugeOption } from '../composables/chartOptions'
+import { funnelOption, pieOption, summaryLineOption, gaugeOption } from '../composables/chartOptions'
 
 const props = defineProps({ startDate: String, endDate: String, granularity: String, pageKey: String })
 defineEmits(['drill-down'])
@@ -81,7 +81,7 @@ function render() {
   status.initChart(); status.setOption(pieOption(
     Object.entries(d.byStatus || {}).map(([k, v]) => ({ name: k, value: v }))
   ))
-  mttr.initChart(); mttr.setOption(lineOption(
+  mttr.initChart(); mttr.setOption(summaryLineOption(
     (d.trend || []).map(t => t.period), (d.trend || []).map(t => t.value), '工单趋势'
   ))
   sla.initChart(); sla.setOption(gaugeOption(d.slaComplianceRate ? d.slaComplianceRate * 100 : 0, '达标率'))

@@ -42,7 +42,8 @@ export function useChart() {
       return null
     }
     dispose()
-    chartInstance = echarts.init(chartRef.value, theme)
+    // useDirtyRect: repaint only changed regions — perf budget for pan/zoom smoothness
+    chartInstance = echarts.init(chartRef.value, theme, { useDirtyRect: true })
     if (typeof ResizeObserver !== 'undefined') {
       ro = new ResizeObserver(scheduleResize)
       ro.observe(chartRef.value)

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { smallMultiplesOption } from '../smallMultiples'
+import { MA_COLORS } from '@/components/TrendChart/theme'
 
 const makePoints = (n, start, stepHours = 1, offset = 0) => {
   const out = []
@@ -8,20 +9,21 @@ const makePoints = (n, start, stepHours = 1, offset = 0) => {
     const ts = new Date(t0 + i * stepHours * 3_600_000)
     const pad = n2 => String(n2).padStart(2, '0')
     const iso = `${ts.getFullYear()}-${pad(ts.getMonth() + 1)}-${pad(ts.getDate())} ${pad(ts.getHours())}:${pad(ts.getMinutes())}:${pad(ts.getSeconds())}`
-    out.push({ time: iso, avg: 20 + i * 0.1 + offset, max: 25 + i + offset, min: 15 + offset, sampleCount: 60 })
+    const avg = 20 + i * 0.1 + offset
+    out.push({ t: iso, avg, max: 25 + i + offset, min: 15 + offset, open: avg, close: avg, count: 60 })
   }
   return out
 }
 
-const makeSeries = (id, unit, caption, count = 5) => ({
-  id,
-  caption,
+const makeSeries = (monitorId, unit, name, count = 5) => ({
+  monitorId,
+  name,
   unit,
   color: null,
-  dataPoints: makePoints(count, '2026-06-01 00:00:00', 1, id),
-  avg5: [],
-  avg10: [],
-  avg20: [],
+  points: makePoints(count, '2026-06-01 00:00:00', 1, monitorId),
+  ma5: [],
+  ma10: [],
+  ma20: [],
   thresholds: null,
   anomalies: [],
 })
@@ -96,7 +98,7 @@ describe('smallMultiplesOption', () => {
     expect(new Set(tops).size).toBe(3)  // all different
   })
 
-  it('each grid has its own label (series caption)', () => {
+  it('each grid has its own label (series name)', () => {
     const series = [
       makeSeries(1, '°C', 'temp-probe'),
       makeSeries(2, '%', 'humidity-sensor'),
@@ -110,10 +112,24 @@ describe('smallMultiplesOption', () => {
     expect(texts).toContain('humidity-sensor')
   })
 
-  it('uses adaptive x-axis formatting for HOUR', () => {
+  it('uses labelFor x-axis formatting for HOUR', () => {
     const series = [{ ...makeSeries(1, '°C', 't1'), color: '#00d4ff' }]
     const opt = smallMultiplesOption(series, 'HOUR', 7)
-    expect(opt.xAxis[0].data[0]).toBe('06-01 00')
+    expect(opt.xAxis[0].data[0]).toBe('06-01 00:00')
+  })
+
+  it('renders 5期平均 overlay in its own grid when the series carries ma5', () => {
+    const series = [{
+      ...makeSeries(1, '°C', 't1'),
+      color: '#00d4ff',
+      ma5: [null, null, null, null, 20.2],
+    }]
+    const opt = smallMultiplesOption(series, 'HOUR', 7)
+    const ma = opt.series.find(s => s.name === '5期平均')
+    expect(ma).toBeDefined()
+    expect(ma.lineStyle.color).toBe(MA_COLORS[0])
+    expect(ma.xAxisIndex).toBe(0)
+    expect(ma.yAxisIndex).toBe(0)
   })
 
   it('handles empty series array', () => {
@@ -142,5 +158,18 @@ describe('smallMultiplesOption', () => {
     const opt = smallMultiplesOption(series, 'HOUR', 7, true, false)
     expect(opt.series[0].markLine).toBeDefined()
     expect(opt.series[0].markLine.data.length).toBe(2)
+  })
+
+  it('anomaly markPoint matches buckets via the unified t field', () => {
+    const series = [{
+      ...makeSeries(1, '°C', 't1', 24),
+      color: '#00d4ff',
+      anomalies: [
+        { time: '2026-06-01 03:15:00', actual: 50, expected: 20, deviation: 2.5, severity: 'medium' },
+      ],
+    }]
+    const opt = smallMultiplesOption(series, 'HOUR', 7, false, true)
+    expect(opt.series[0].markPoint.data).toHaveLength(1)
+    expect(opt.series[0].markPoint.data[0].coord[0]).toBe(opt.xAxis[0].data[3])
   })
 })

@@ -14,6 +14,19 @@ import { getTrendData, getTrendMetadata } from '@/api/iot/trend'
 import { detectAnomalies } from '@/api/iot/analysis'
 import { useTrendSeriesLoader } from '../useTrendSeriesLoader'
 
+/** Unified TrendResponseVO payload (Task 4 contract) wrapped in Result<T>. */
+const payload = (points, extra = {}) => ({
+  data: {
+    granularity  : 'HOUR',
+    mode         : 'OHLC',
+    points,
+    bucketSeconds: 3600,
+    summary      : { currentValue: 20, periodMax: 25, periodMin: 15, totalSamples: points.length },
+    ...extra,
+  },
+})
+const P = (avg) => ({ t: '2026-06-01 00:00:00', avg, max: avg + 5, min: avg - 5, open: avg, close: avg, count: 1 })
+
 describe('useTrendSeriesLoader', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -27,18 +40,8 @@ describe('useTrendSeriesLoader', () => {
   })
 
   it('loads all monitors in parallel via Promise.allSettled', async () => {
-    getTrendData.mockResolvedValueOnce({
-      granularity: 'HOUR',
-      dataPoints: [{ time: '2026-06-01 00:00:00', avg: 20, max: 25, min: 15, sampleCount: 1 }],
-      avg5: [], avg10: [], avg20: [],
-      summary: { currentValue: 20, periodMax: 25, periodMin: 15, totalSamples: 1 },
-    })
-    getTrendData.mockResolvedValueOnce({
-      granularity: 'HOUR',
-      dataPoints: [{ time: '2026-06-01 00:00:00', avg: 30, max: 35, min: 25, sampleCount: 1 }],
-      avg5: [], avg10: [], avg20: [],
-      summary: { currentValue: 30, periodMax: 35, periodMin: 25, totalSamples: 1 },
-    })
+    getTrendData.mockResolvedValueOnce(payload([P(20)]))
+    getTrendData.mockResolvedValueOnce(payload([P(30)]))
     getTrendMetadata.mockResolvedValue({ unit: '°C', caption: 't1' })
     detectAnomalies.mockResolvedValue([])
 
@@ -53,9 +56,33 @@ describe('useTrendSeriesLoader', () => {
     expect(getTrendMetadata).toHaveBeenCalledTimes(2)
   })
 
+  it('builds the unified series shape with client-computed moving averages', async () => {
+    const six = [1, 2, 3, 4, 5, 6].map(P)
+    getTrendData.mockResolvedValueOnce(payload(six))
+    getTrendMetadata.mockResolvedValue({ unit: '°C', caption: 't1' })
+    detectAnomalies.mockResolvedValue([])
+
+    const { load, series } = useTrendSeriesLoader()
+    await load([1], 'PROBE', ['2026-06-01 00:00:00', '2026-06-02 00:00:00'], 'HOUR')
+
+    const s = series.value[0]
+    expect(s.monitorId).toBe(1)
+    expect(s.name).toBe('t1')
+    expect(s.unit).toBe('°C')
+    // Points pass through in the unified contract shape
+    expect(s.points).toHaveLength(6)
+    expect(s.points[0].avg).toBe(1)
+    expect(s.points[0].t).toBe('2026-06-01 00:00:00')
+    // MA computed client-side from avg (no server avg5/avg10/avg20)
+    expect(s.ma5).toEqual([null, null, null, null, 3, 4])
+    expect(s.ma10).toEqual([null, null, null, null, null, null])
+    expect(s.ma20).toEqual([null, null, null, null, null, null])
+    expect(s.avg5).toBeUndefined()
+  })
+
   it('partial failure: successful monitors render, failedCount reflects failures', async () => {
     getTrendData
-      .mockResolvedValueOnce({ granularity: 'HOUR', dataPoints: [], summary: null, avg5: [], avg10: [], avg20: [] })
+      .mockResolvedValueOnce(payload([]))
       .mockRejectedValueOnce(new Error('404'))  // monitor 2 fails
     getTrendMetadata.mockResolvedValue({ unit: '°C' })
     detectAnomalies.mockResolvedValue([])
@@ -64,7 +91,7 @@ describe('useTrendSeriesLoader', () => {
     await load([1, 2], 'PROBE', ['2026-06-01 00:00:00', '2026-06-02 00:00:00'], 'HOUR')
 
     expect(series.value).toHaveLength(1)        // only successful one
-    expect(series.value[0].id).toBe(1)
+    expect(series.value[0].monitorId).toBe(1)
     expect(failedCount.value).toBe(1)
   })
 
@@ -81,7 +108,7 @@ describe('useTrendSeriesLoader', () => {
   })
 
   it('detectAnomalies failure does not block trend series (best-effort)', async () => {
-    getTrendData.mockResolvedValue({ granularity: 'HOUR', dataPoints: [], summary: null, avg5: [], avg10: [], avg20: [] })
+    getTrendData.mockResolvedValue(payload([]))
     getTrendMetadata.mockResolvedValue({ unit: '°C' })
     detectAnomalies.mockRejectedValue(new Error('anomaly service down'))
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -100,7 +127,7 @@ describe('useTrendSeriesLoader', () => {
   })
 
   it('skips detectAnomalies when granularity is not HOUR/DAY', async () => {
-    getTrendData.mockResolvedValue({ granularity: 'WEEK', dataPoints: [], summary: null, avg5: [], avg10: [], avg20: [] })
+    getTrendData.mockResolvedValue(payload([], { granularity: 'WEEK' }))
     getTrendMetadata.mockResolvedValue({ unit: '°C' })
 
     const { load } = useTrendSeriesLoader()
@@ -110,7 +137,7 @@ describe('useTrendSeriesLoader', () => {
   })
 
   it('clear() resets state to defaults', async () => {
-    getTrendData.mockResolvedValue({ granularity: 'HOUR', dataPoints: [{ time: '2026-06-01 00:00:00', avg: 1, max: 2, min: 0, sampleCount: 1 }], summary: null, avg5: [], avg10: [], avg20: [] })
+    getTrendData.mockResolvedValue(payload([P(1)]))
     getTrendMetadata.mockResolvedValue({ unit: '°C' })
     detectAnomalies.mockResolvedValue([])
 
@@ -131,7 +158,7 @@ describe('useTrendSeriesLoader', () => {
   it('clear() discards in-flight load() result', async () => {
     let resolveLoad
     getTrendData.mockImplementation(() => new Promise(resolve => {
-      resolveLoad = () => resolve({ granularity: 'HOUR', dataPoints: [{ time: '2026-06-01 00:00:00', avg: 1, max: 2, min: 0, sampleCount: 1 }] })
+      resolveLoad = () => resolve(payload([P(1)]))
     }))
     getTrendMetadata.mockResolvedValue({ unit: '°C' })
     detectAnomalies.mockResolvedValue([])
@@ -148,7 +175,7 @@ describe('useTrendSeriesLoader', () => {
   })
 
   it('assigns colors from palette to each loaded series', async () => {
-    getTrendData.mockResolvedValue({ granularity: 'HOUR', dataPoints: [], summary: null, avg5: [], avg10: [], avg20: [] })
+    getTrendData.mockResolvedValue(payload([]))
     getTrendMetadata.mockResolvedValue({ unit: '°C' })
     detectAnomalies.mockResolvedValue([])
 
@@ -172,11 +199,7 @@ describe('useTrendSeriesLoader', () => {
     getTrendData.mockImplementation(({ monitorId }) =>
       new Promise(resolve => {
         const delay = monitorId === 1 ? 100 : 5
-        setTimeout(() => resolve({
-          granularity: 'HOUR',
-          dataPoints: [{ time: '2026-06-01 00:00:00', avg: monitorId * 10, max: 0, min: 0, sampleCount: 1 }],
-          summary: null, avg5: [], avg10: [], avg20: [],
-        }), delay)
+        setTimeout(() => resolve(payload([P(monitorId * 10)])), delay)
       }),
     )
     getTrendMetadata.mockImplementation(({ monitorId }) =>
@@ -193,6 +216,6 @@ describe('useTrendSeriesLoader', () => {
 
     // Latest load wins — series has 3 monitors, not 1
     expect(series.value).toHaveLength(3)
-    expect(series.value.map(s => s.id)).toEqual([2, 3, 4])
+    expect(series.value.map(s => s.monitorId)).toEqual([2, 3, 4])
   })
 })

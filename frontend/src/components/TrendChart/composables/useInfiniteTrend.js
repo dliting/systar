@@ -4,8 +4,7 @@ import { formatMonitorDateTime } from '@/config/monitor'
 
 const EDGE_THRESHOLD = 10
 const DEBOUNCE_MS = 300
-const MAX_BUFFER_AGGREGATED = 2000
-const MAX_BUFFER_INTRADAY = 10000
+const MAX_BUFFER_POINTS = 2000 // client perf budget: pan/zoom stays smooth at <=2000 points
 const GRANULARITY_STABLE_THRESHOLD = 2
 
 /** Granularity thresholds in seconds — matches TrendService.determineGranularity() */
@@ -27,6 +26,10 @@ function granularityForSeconds(secs) {
 /**
  * Composable managing infinite-pan trend data with auto-granularity switching.
  *
+ * Holds the unified backend payload (Task 4 contract):
+ * `{ granularity, mode, points, bucketSeconds, summary }` where each point is
+ * `{ t, avg, max, min, open, close, count }`.
+ *
  * @param {Object} opts
  * @param {import('vue').Ref<number>} opts.monitorId
  * @param {import('vue').Ref<string>|import('vue').ComputedRef<string>} opts.monitorKind
@@ -41,14 +44,12 @@ export function useInfiniteTrend(opts) {
     onGranularityChange, onDateRangeChange,
   } = opts
 
-  const dataPoints      = ref([])
-  const intradayPoints  = ref([])
-  const avg5            = ref([])
-  const avg10           = ref([])
-  const avg20           = ref([])
-  const summary         = ref(null)
-  const granularity     = ref('HOUR')
-  const loading         = ref(false)
+  const points        = ref([])
+  const mode          = ref('RAW')
+  const bucketSeconds = ref(null)
+  const summary       = ref(null)
+  const granularity   = ref('HOUR')
+  const loading       = ref(false)
   const bufferStartTime = ref(null)
   const bufferEndTime   = ref(null)
 
@@ -192,8 +193,7 @@ export function useInfiniteTrend(opts) {
   // ---- Granularity auto-switch ----
 
   function checkGranularitySwitch(startPct, endPct) {
-    const points = granularity.value === 'INTRADAY' ? intradayPoints.value : dataPoints.value
-    if (points.length < 2) return
+    if (points.value.length < 2) return
 
     const visible = getVisibleTimeRange(startPct, endPct)
     if (!visible) return
@@ -235,14 +235,14 @@ export function useInfiniteTrend(opts) {
   // ---- Visible time range calculation ----
 
   function getVisibleTimeRange(startPct, endPct) {
-    const points = granularity.value === 'INTRADAY' ? intradayPoints.value : dataPoints.value
-    if (points.length === 0) return null
+    const pts = points.value
+    if (pts.length === 0) return null
 
-    const startIdx = Math.max(0, Math.floor(startPct / 100 * points.length))
-    const endIdx = Math.min(points.length - 1, Math.ceil(endPct / 100 * points.length) - 1)
+    const startIdx = Math.max(0, Math.floor(startPct / 100 * pts.length))
+    const endIdx = Math.min(pts.length - 1, Math.ceil(endPct / 100 * pts.length) - 1)
 
-    const startTime = points[startIdx]?.time
-    const endTime = points[endIdx]?.time
+    const startTime = pts[startIdx]?.t
+    const endTime = pts[endIdx]?.t
     if (!startTime || !endTime) return null
 
     return { startTime, endTime }
@@ -270,89 +270,52 @@ export function useInfiniteTrend(opts) {
   // ---- Apply response ----
 
   /**
-   * Apply a fetch response and optionally trim the buffer.
+   * Apply a unified backend payload wholesale: the server returns the full
+   * requested window, so replacing `points` is how older/newer fetches
+   * concatenate — the fetched window is a superset of the old buffer.
    *
-   * @param {object} payload - backend response
-   * @param {'older'|'newer'|null} fetchDirection
-   *   - 'older': user panned to older end; trim NEWER (tail) to bound memory
-   *     while keeping the just-fetched older data visible.
-   *   - 'newer': user panned to newer end; trim OLDER (head).
-   *   - null: initial load or granularity switch; trim head (default).
-   *     For INTRADAY real-time append, always trim head.
+   * @param {string} [direction] - 'older' | 'newer'; tells trimBuffer which
+   *   edge the fetch just extended so the cap retains the newly loaded side.
    */
-  function applyResponse(payload, fetchDirection = null) {
+  function applyResponse(payload, direction) {
     if (!payload) { clearBuffer(); return }
     if (payload.granularity) granularity.value = payload.granularity
-    dataPoints.value = payload.dataPoints || []
-    intradayPoints.value = payload.intradayPoints || []
-    avg5.value = payload.avg5 || []
-    avg10.value = payload.avg10 || []
-    avg20.value = payload.avg20 || []
-    summary.value = payload.summary || null
+    points.value = payload.points ?? []
+    mode.value = payload.mode ?? 'RAW'
+    bucketSeconds.value = payload.bucketSeconds ?? null
+    summary.value = payload.summary ?? null
     updateBufferBounds()
-    trimBuffer(fetchDirection)
+    trimBuffer(direction)
   }
 
   function updateBufferBounds() {
-    const points = granularity.value === 'INTRADAY' ? intradayPoints.value : dataPoints.value
-    if (points.length === 0) {
+    const pts = points.value
+    if (pts.length === 0) {
       bufferStartTime.value = null
       bufferEndTime.value = null
       return
     }
-    bufferStartTime.value = points[0].time
-    bufferEndTime.value = points[points.length - 1].time
+    bufferStartTime.value = pts[0].t
+    bufferEndTime.value = pts[pts.length - 1].t
   }
 
   // ---- Buffer trimming ----
 
   /**
-   * Trim buffer to bound memory.
-   *
-   * Direction semantics:
-   *   - 'older' (user panned to older end): keep HEAD (older, just-fetched),
-   *     trim TAIL (newer, far from viewport).
-   *   - 'newer' (user panned to newer end): keep TAIL (newer, just-fetched),
-   *     trim HEAD (older, far from viewport).
-   *   - null: initial load or granularity switch; trim HEAD (default).
-   *   - INTRADAY real-time append always trims HEAD (newest at tail, oldest at head).
-   *
-   * Before this fix, trimBuffer always sliced HEAD, which on fetchOlder would
-   * immediately discard the just-fetched older data — defeating the purpose
-   * of the fetch.
+   * Bound the client buffer to MAX_BUFFER_POINTS, retaining the edge the
+   * fetch just extended: an 'older' fetch keeps the oldest window (dropping
+   * the off-screen newest tail), anything else keeps the newest window
+   * (dropping the off-screen oldest head). A head-trim on an older fetch
+   * would discard exactly the data just loaded, pinning bufferStartTime and
+   * re-fetching the identical window on every edge pan past the cap.
    */
-  function trimBuffer(fetchDirection = null) {
-    const maxPoints = granularity.value === 'INTRADAY'
-      ? MAX_BUFFER_INTRADAY : MAX_BUFFER_AGGREGATED
-
-    if (granularity.value === 'INTRADAY') {
-      if (intradayPoints.value.length <= maxPoints) return
-      // INTRADAY appends at tail; always trim head (oldest)
-      const excess = intradayPoints.value.length - maxPoints
-      intradayPoints.value = intradayPoints.value.slice(excess)
-      // avg arrays are normally empty for INTRADAY, but trim if non-empty
-      if (avg5.value.length > maxPoints) avg5.value = avg5.value.slice(excess)
-      if (avg10.value.length > maxPoints) avg10.value = avg10.value.slice(excess)
-      if (avg20.value.length > maxPoints) avg20.value = avg20.value.slice(excess)
-      updateBufferBounds()
-      return
-    }
-
-    if (dataPoints.value.length <= maxPoints) return
-    const excess = dataPoints.value.length - maxPoints
-
-    if (fetchDirection === 'older') {
-      // Keep first maxPoints (oldest); drop last `excess` (newest)
-      dataPoints.value = dataPoints.value.slice(0, maxPoints)
-      avg5.value  = avg5.value.slice(0, maxPoints)
-      avg10.value = avg10.value.slice(0, maxPoints)
-      avg20.value = avg20.value.slice(0, maxPoints)
+  function trimBuffer(direction) {
+    if (points.value.length <= MAX_BUFFER_POINTS) return
+    if (direction === 'older') {
+      points.value = points.value.slice(0, MAX_BUFFER_POINTS)
     } else {
-      // 'newer' or null: keep last maxPoints (newest); drop first `excess` (oldest)
-      dataPoints.value = dataPoints.value.slice(excess)
-      avg5.value  = avg5.value.slice(excess)
-      avg10.value = avg10.value.slice(excess)
-      avg20.value = avg20.value.slice(excess)
+      const excess = points.value.length - MAX_BUFFER_POINTS
+      points.value = points.value.slice(excess)
     }
     updateBufferBounds()
   }
@@ -360,23 +323,29 @@ export function useInfiniteTrend(opts) {
   // ---- Real-time point append (INTRADAY WebSocket) ----
 
   function appendRealtimePoint(point) {
+    // Raw WebSocket samples only belong to the INTRADAY view; aggregated
+    // granularities (HOUR/DAY/...) are server-bucketed and must not be
+    // polluted by native-interval points.
     if (granularity.value !== 'INTRADAY') return
-    intradayPoints.value.push(point)
-    if (intradayPoints.value.length > MAX_BUFFER_INTRADAY) {
-      const excess = intradayPoints.value.length - MAX_BUFFER_INTRADAY
-      intradayPoints.value = intradayPoints.value.slice(excess)
-    }
-    updateBufferBounds()
+    const p = point
+    points.value.push({
+      t: p.time ?? p.t,
+      avg: p.value ?? p.avg,
+      max: p.value ?? p.avg,
+      min: p.value ?? p.avg,
+      open: p.value ?? p.avg,
+      close: p.value ?? p.avg,
+      count: 1,
+    })
+    trimBuffer()
   }
 
   // ---- Clear ----
 
   function clearBuffer() {
-    dataPoints.value = []
-    intradayPoints.value = []
-    avg5.value = []
-    avg10.value = []
-    avg20.value = []
+    points.value = []
+    mode.value = 'RAW'
+    bucketSeconds.value = null
     summary.value = null
     bufferStartTime.value = null
     bufferEndTime.value = null
@@ -392,13 +361,15 @@ export function useInfiniteTrend(opts) {
   }
 
   return {
-    dataPoints, intradayPoints, avg5, avg10, avg20,
+    points, mode, bucketSeconds,
     summary, granularity, loading,
     bufferStartTime, bufferEndTime,
-    loadInitial, loadDefault, handleDataZoomEvent, appendRealtimePoint, applyResponse, clearBuffer,
+    loadDefault, loadInitial, handleDataZoomEvent, checkEdgeAndFetch,
+    fetchOlder, fetchNewer, checkGranularitySwitch, switchGranularity,
+    getVisibleTimeRange, fetchRange, appendRealtimePoint, clearBuffer,
+    applyResponse,
     /** Exposed for unit testing */
     _granularityForSeconds: granularityForSeconds,
-    _getVisibleTimeRange: getVisibleTimeRange,
     _trimBuffer: trimBuffer,
   }
 }

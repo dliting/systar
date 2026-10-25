@@ -1,19 +1,10 @@
 import * as echarts from 'echarts'
-
-const darkTooltip = {
-  backgroundColor: 'rgba(10,14,23,0.95)',
-  borderColor: '#1e3a5f',
-  textStyle: { color: '#8892b0', fontSize: 12 }
-}
-
-const cyanGradient = (x, y, x2, y2) => new echarts.graphic.LinearGradient(x, y, x2, y2, [
-  { offset: 0, color: '#00d4ff' }, { offset: 1, color: '#0066cc' }
-])
+import { darkTooltip, cyanGradient } from '@/components/TrendChart/theme'
 
 /** Donut pie chart */
 export function pieOption(data, nameField = 'name', valueField = 'value') {
   return {
-    tooltip: { ...darkTooltip, trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+    tooltip: { ...darkTooltip(), trigger: 'item', formatter: '{b}: {c} ({d}%)' },
     series: [{
       type: 'pie', radius: ['45%', '72%'],
       itemStyle: { borderRadius: 6, borderColor: '#0a0e17', borderWidth: 3 },
@@ -26,13 +17,13 @@ export function pieOption(data, nameField = 'name', valueField = 'value') {
 /** Vertical bar chart with gradient fill */
 export function barOption(xData, seriesData, name = '数量') {
   return {
-    tooltip: { ...darkTooltip, trigger: 'axis' },
+    tooltip: { ...darkTooltip(), trigger: 'axis' },
     grid: { left: 50, right: 20, top: 20, bottom: 30 },
     xAxis: { type: 'category', data: xData, axisLabel: { color: '#8892b0', rotate: xData.length > 10 ? 45 : 0 } },
     yAxis: { type: 'value', axisLabel: { color: '#8892b0' } },
     series: [{
       name, type: 'bar', barWidth: '60%', data: seriesData,
-      itemStyle: { borderRadius: [4, 4, 0, 0], color: cyanGradient(0, 0, 0, 1) }
+      itemStyle: { borderRadius: [4, 4, 0, 0], color: cyanGradient() }
     }]
   }
 }
@@ -41,22 +32,22 @@ export function barOption(xData, seriesData, name = '数量') {
 export function horizontalBarOption(yData, seriesData, name = '数量') {
   const max = Math.max(...seriesData, 1)
   return {
-    tooltip: { ...darkTooltip, trigger: 'axis' },
+    tooltip: { ...darkTooltip(), trigger: 'axis' },
     grid: { left: 100, right: 40, top: 10, bottom: 20 },
     yAxis: { type: 'category', data: yData, inverse: true, axisLabel: { color: '#8892b0', width: 90, overflow: 'truncate' } },
     xAxis: { type: 'value', max: Math.ceil(max * 1.2), axisLabel: { color: '#8892b0' } },
     series: [{
       name, type: 'bar', barWidth: '50%', data: seriesData,
       label: { show: true, position: 'right', color: '#8892b0', fontSize: 11 },
-      itemStyle: { borderRadius: [0, 4, 4, 0], color: cyanGradient(0, 0, 1, 0) }
+      itemStyle: { borderRadius: [0, 4, 4, 0], color: cyanGradient() }
     }]
   }
 }
 
-/** Smooth line chart with area fill */
-export function lineOption(xData, seriesData, name = '趋势') {
+/** Smooth line chart with area fill (dashboard summaries — not the trend curve) */
+export function summaryLineOption(xData, seriesData, name = '趋势') {
   return {
-    tooltip: { ...darkTooltip, trigger: 'axis' },
+    tooltip: { ...darkTooltip(), trigger: 'axis' },
     grid: { left: 50, right: 20, top: 20, bottom: 30 },
     xAxis: { type: 'category', data: xData, axisLabel: { color: '#8892b0', rotate: xData.length > 10 ? 45 : 0 } },
     yAxis: { type: 'value', axisLabel: { color: '#8892b0' } },
@@ -75,7 +66,7 @@ export function lineOption(xData, seriesData, name = '趋势') {
 export function funnelOption(data) {
   const colors = ['#ff4444', '#ff8800', '#ffcc00', '#00ff88']
   return {
-    tooltip: { ...darkTooltip, trigger: 'item' },
+    tooltip: { ...darkTooltip(), trigger: 'item' },
     series: [{
       type: 'funnel', left: '15%', top: 20, bottom: 20, width: '70%',
       sort: 'descending', gap: 2,
@@ -106,7 +97,7 @@ export function gaugeOption(value, title, max = 100) {
 /** Dual bar comparison chart (period-over-period) */
 export function dualBarOption(xData, curData, prevData, curName = '本期', prevName = '上期') {
   return {
-    tooltip: { ...darkTooltip, trigger: 'axis' },
+    tooltip: { ...darkTooltip(), trigger: 'axis' },
     legend: { data: [curName, prevName], textStyle: { color: '#8892b0', fontSize: 11 }, top: 0 },
     grid: { left: 50, right: 20, top: 30, bottom: 20 },
     xAxis: { type: 'category', data: xData, axisLabel: { color: '#8892b0' } },
@@ -121,7 +112,7 @@ export function dualBarOption(xData, curData, prevData, curName = '本期', prev
 /** Mixed bar + line chart */
 export function mixedBarLineOption(xData, barData, lineData, barName = '数量', lineName = '趋势') {
   return {
-    tooltip: { ...darkTooltip, trigger: 'axis' },
+    tooltip: { ...darkTooltip(), trigger: 'axis' },
     legend: { data: [barName, lineName], textStyle: { color: '#8892b0', fontSize: 11 }, top: 0 },
     grid: { left: 50, right: 55, top: 30, bottom: 20 },
     xAxis: { type: 'category', data: xData, axisLabel: { color: '#8892b0' } },
@@ -130,7 +121,7 @@ export function mixedBarLineOption(xData, barData, lineData, barName = '数量',
       { type: 'value', name: lineName, nameTextStyle: { color: '#8892b0' }, axisLabel: { color: '#8892b0' } }
     ],
     series: [
-      { name: barName, type: 'bar', barWidth: '60%', data: barData, itemStyle: { borderRadius: [4, 4, 0, 0], color: cyanGradient(0, 0, 0, 1) } },
+      { name: barName, type: 'bar', barWidth: '60%', data: barData, itemStyle: { borderRadius: [4, 4, 0, 0], color: cyanGradient() } },
       { name: lineName, type: 'line', yAxisIndex: 1, data: lineData, smooth: true, lineStyle: { color: '#ff8800', width: 2 }, itemStyle: { color: '#ff8800' } }
     ]
   }
