@@ -1,7 +1,8 @@
 /**
- * Intraday (time-share) option (spec F1): avg line + area, gap-aware, with an
- * optional 极值带 (min/max envelope) toggle. BUCKETED mode data arrives
- * pre-aggregated with bucketSeconds set; RAW uses the native sample interval.
+ * Intraday (time-share) option (spec F1): value line + area, gap-aware, with
+ * an optional 极值带 (min/max envelope) toggle. RAW mode renders the actual
+ * measured samples (series 实测值); BUCKETED data arrives pre-aggregated with
+ * bucketSeconds set and is an average per bucket (series 均值).
  */
 import {
   CYAN, ALARM, darkTooltip, axisStyle, gridStyle, cyanGradient,
@@ -48,9 +49,16 @@ export function intradayOption(points, opts = {}) {
     ? (range.hi - range.lo) * 0.05 || Math.abs(range.hi || 1) * 0.05
     : 0
 
+  // RAW points carry the actual measured value (open=close=avg=max=min,
+  // count=1) — calling it 均值 misrepresents it (user requirement 2026-10-25:
+  // 缺省显示最细粒度实测值，不是均值). Only BUCKETED buckets are averages.
+  const valueName = mode === 'RAW' ? '实测值' : '均值'
   const series = [{
-    name: '均值', type: 'line', data: data.map((p) => p.avg),
-    showSymbol: false, connectNulls: false, sampling: perf.sampling,
+    name: valueName, type: 'line', data: data.map((p) => p.avg),
+    // Sparse data (fresh dev DB, long comms outage) draws no line segment —
+    // symbols keep every collected sample visible (same threshold as the
+    // candlestick line series).
+    showSymbol: data.length <= 300, connectNulls: false, sampling: perf.sampling,
     lineStyle: { width: 1.5, color: CYAN }, areaStyle: { color: cyanGradient() },
     ...(thresholds && showThresholds ? { markLine: thresholdMarkLines(thresholds, range) } : {}),
     ...(anomalyPoints?.length && showAnomalies
@@ -62,14 +70,14 @@ export function intradayOption(points, opts = {}) {
   if (showExtremes) {
     series.push(
       { name: '最低值', type: 'line', stack: 'band', data: data.map((p) => p.min),
-        showSymbol: false, connectNulls: false, lineStyle: { opacity: 0 },
+        showSymbol: data.length <= 300, connectNulls: false, lineStyle: { opacity: 0 },
         areaStyle: { opacity: 0 }, z: 1 },
       { name: '极值带', type: 'line', stack: 'band',
         data: data.map((p) => (p.max != null && p.min != null ? p.max - p.min : null)),
         showSymbol: false, connectNulls: false, lineStyle: { opacity: 0 },
         areaStyle: { color: 'rgba(0, 212, 255, 0.12)' }, z: 1 },
       { name: '最高值', type: 'line', data: data.map((p) => p.max),
-        showSymbol: false, connectNulls: false,
+        showSymbol: data.length <= 300, connectNulls: false,
         lineStyle: { width: 1, color: 'rgba(0, 212, 255, 0.5)', type: 'dashed' }, z: 2 },
     )
   }
@@ -78,7 +86,7 @@ export function intradayOption(points, opts = {}) {
     animation: perf.animation,
     tooltip: {
       trigger: 'axis', axisPointer: { type: 'cross' }, ...darkTooltip(),
-      formatter: (params) => intradayTooltip(params, data, unit),
+      formatter: (params) => intradayTooltip(params, data, unit, valueName),
     },
     // D3: legend only earns space with more than one visible series (the
     // 极值带 trio); the lone avg line is already named by the panel title.
@@ -101,10 +109,10 @@ export function intradayOption(points, opts = {}) {
   }
 }
 
-function intradayTooltip(params, data, unit) {
-  const p = Array.isArray(params) ? params.find((x) => x.seriesName === '均值') ?? params[0] : params
+function intradayTooltip(params, data, unit, valueName) {
+  const p = Array.isArray(params) ? params.find((x) => x.seriesName === valueName) ?? params[0] : params
   const point = data[p.dataIndex] || {}
-  const lines = [`<b>${p.name}</b>`, `均值 ${fmt(p.value)}${unit}`]
+  const lines = [`<b>${p.name}</b>`, `${valueName} ${fmt(p.value)}${unit}`]
   if (point.max != null || point.min != null) {
     lines.push(`最高值 ${fmt(point.max)}${unit}`, `最低值 ${fmt(point.min)}${unit}`)
   }

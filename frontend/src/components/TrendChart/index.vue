@@ -32,7 +32,7 @@
           <span class="summary-label">期末 {{ readout.closeText }}</span>
         </template>
         <!-- RAW points carry no meaningful open/close (D2): show the value. -->
-        <span v-else class="summary-value">数值 {{ readout.valueText }}</span>
+        <span v-else class="summary-value">实测值 {{ readout.valueText }}</span>
       </div>
       <div class="layer-toggles" style="margin-left:auto">
         <el-checkbox v-if="isOhlc" v-model="showCandles" size="small" label="箱体" />

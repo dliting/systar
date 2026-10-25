@@ -1178,7 +1178,7 @@ function openHistoryDialog() {
   // Reset the toolbar to the adaptive default; the actual load fires on
   // @opened so the chart is mounted before data arrives.
   detailGranularityChoice.value = 'AUTO'
-  detailRangeChoice.value = '24h'
+  detailRangeChoice.value = '1h' // keeps the default view on RAW actual samples
   detailCustomRange.value = null
   historyDialogVisible.value = true
 }

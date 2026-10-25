@@ -150,7 +150,10 @@ const showAnomalies = ref(true)
 
 // Toolbar state (D6 direct-select + relative presets + custom absolute window)
 const granularityChoice = ref('AUTO')
-const rangeChoice = ref('24h')
+// 1h keeps the default view in RAW mode (actual measured samples) — 24h at a
+// 10s probe exceeds the backend's 5000-sample RAW cap and returns bucket
+// averages instead (same rationale as useTrendView).
+const rangeChoice = ref('1h')
 const customRange = ref(null)
 const loadError = ref('')
 

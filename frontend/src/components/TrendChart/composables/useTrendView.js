@@ -73,7 +73,10 @@ export function useTrendView({ monitorId, monitorKind }) {
   const summary = ref(null)
   const granularity = ref('INTRADAY')
   const granularityChoice = ref('AUTO')
-  const rangeChoice = ref('24h')
+  // 1h keeps the first view in RAW mode (actual measured samples) for any
+  // probe interval ≥ 7s: the backend switches to BUCKETED bucket averages
+  // above 5000 raw samples, and 24h at a 10s probe is 8640.
+  const rangeChoice = ref('1h')
   const customRange = ref(null)
   let loadToken = 0
 

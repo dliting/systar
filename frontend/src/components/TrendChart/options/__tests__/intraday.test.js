@@ -36,7 +36,7 @@ describe('intradayOption', () => {
   })
   it('extends the y-range for a near-out threshold and draws it (D4)', () => {
     const opt = intradayOption(pts(0, 1, 2), { thresholds: { max: 26 } })
-    expect(opt.series.find((s) => s.name === '均值').markLine.data.some((l) => l.yAxis === 26)).toBe(true)
+    expect(opt.series.find((s) => s.name === '实测值').markLine.data.some((l) => l.yAxis === 26)).toBe(true)
     expect(opt.yAxis[0].max).toBeGreaterThanOrEqual(26)
   })
   it('hides the legend for the single avg series (D3)', () => {
@@ -47,7 +47,7 @@ describe('intradayOption', () => {
   })
   it('renders the avg line with area fill and no extremes band by default (D5)', () => {
     const opt = intradayOption(pts(0, 1, 2), {})
-    const line = opt.series.find((s) => s.type === 'line' && s.name === '均值')
+    const line = opt.series.find((s) => s.type === 'line' && s.name === '实测值')
     expect(line).toBeTruthy()
     expect(opt.series.some((s) => s.stack === 'band')).toBe(false)
   })
@@ -59,7 +59,41 @@ describe('intradayOption', () => {
   })
   it('connects nulls off so gaps break the line', () => {
     const opt = intradayOption(pts(0, 1, 10), { bucketSeconds: 60 })
-    expect(opt.series.find((s) => s.name === '均值').connectNulls).toBe(false)
+    expect(opt.series.find((s) => s.name === '实测值').connectNulls).toBe(false)
+  })
+  // A lone sample draws no line segment — with symbols off the operator sees
+  // an empty chart (reported on the 分时 view with a fresh dev DB).
+  it('shows point symbols on sparse data so every collected sample stays visible', () => {
+    const opt = intradayOption(pts(0), {})
+    expect(opt.series.find((s) => s.name === '实测值').showSymbol).toBe(true)
+    // The 极值带 boundary lines share the same root cause — with one sample
+    // their dashed/solid segments draw nothing either. The stacked 极值带
+    // series itself stays symbol-less (its symbol would sit on the band top).
+    const ex = intradayOption(pts(0), { showExtremes: true })
+    expect(ex.series.find((s) => s.name === '最高值').showSymbol).toBe(true)
+    expect(ex.series.find((s) => s.name === '最低值').showSymbol).toBe(true)
+    expect(ex.series.find((s) => s.name === '极值带').showSymbol).toBe(false)
+  })
+  it('hides point symbols on dense data to keep the trend line readable', () => {
+    const many = pts(...Array.from({ length: 301 }, (_, i) => i))
+    const opt = intradayOption(many, { detectIntervalSeconds: 60, showExtremes: true })
+    expect(opt.series.find((s) => s.name === '实测值').showSymbol).toBe(false)
+    expect(opt.series.find((s) => s.name === '最高值').showSymbol).toBe(false)
+  })
+  // The default state shows the finest-granularity actual samples — labeling
+  // them 均值 misrepresents the data (user requirement 2026-10-25: 不是均值).
+  // Only BUCKETED buckets are averages.
+  it('names the series 实测值 in RAW mode and 均值 in BUCKETED mode', () => {
+    expect(intradayOption(pts(0, 1, 2), { mode: 'RAW', detectIntervalSeconds: 60 }).series[0].name).toBe('实测值')
+    expect(intradayOption(pts(0, 1, 2), { mode: 'BUCKETED', bucketSeconds: 60 }).series[0].name).toBe('均值')
+  })
+  it('tooltips the value under the mode-appropriate name', () => {
+    const raw = intradayOption(pts(0, 1, 2), { mode: 'RAW', detectIntervalSeconds: 60, unit: '℃' })
+    expect(raw.tooltip.formatter([{ seriesName: '实测值', name: '10-25 00:00', value: 20, dataIndex: 0 }]))
+      .toContain('实测值 20℃')
+    const buck = intradayOption(pts(0, 1, 2), { mode: 'BUCKETED', bucketSeconds: 60, unit: '℃' })
+    expect(buck.tooltip.formatter([{ seriesName: '均值', name: '10-25 00:00', value: 20, dataIndex: 0 }]))
+      .toContain('均值 20℃')
   })
   it('empty frame still renders axes without data', () => {
     const opt = emptyFrameOption('INTRADAY', '℃', 10)
@@ -74,7 +108,7 @@ describe('intradayOption', () => {
   it('renders anomaly markers from the analysis API shape', () => {
     const anomalies = [{ time: '2026-10-25 00:01:30', actual: 21, expected: 20, deviation: 2.5, severity: 'low' }]
     const opt = intradayOption(pts(0, 1, 2), { anomalyPoints: anomalies, showAnomalies: true })
-    const data = opt.series.find((s) => s.name === '均值').markPoint?.data ?? []
+    const data = opt.series.find((s) => s.name === '实测值').markPoint?.data ?? []
     expect(data).toHaveLength(1)
     expect(data[0].coord).toEqual(['10-25 00:01', 21])
     expect(data[0].itemStyle.color).toBe('#ffab00')

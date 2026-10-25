@@ -80,6 +80,19 @@ describe('useTrendView', () => {
     expect(v.granularity.value).toBe('DAY') // #2 wins; #1 was discarded
   })
 
+  // The default state must show the finest-granularity ACTUAL samples: 24h
+  // at a 10s detect interval is 8640 samples > the backend's 5000 RAW cap, so
+  // the server would answer with BUCKETED bucket averages instead. 1h keeps
+  // RAW actual measured values for every probe interval ≥ 7s.
+  it('defaults to 近1小时 so the first view renders actual samples, not bucket averages', async () => {
+    vi.mocked(getTrendData).mockResolvedValue(ok(P))
+    const v = useTrendView({ monitorId: ref(1), monitorKind: ref('PROBE') })
+    await v.load()
+    const call = vi.mocked(getTrendData).mock.lastCall[0]
+    const secs = (new Date(call.endTime.replace(' ', 'T')) - new Date(call.startTime.replace(' ', 'T'))) / 1000
+    expect(secs).toBe(3600)
+  })
+
   it('AUTO sends granularity null; explicit choices pass through', async () => {
     vi.mocked(getTrendData).mockResolvedValue(ok(P))
     const v = useTrendView({ monitorId: ref(1), monitorKind: ref('PROBE') })
@@ -96,7 +109,7 @@ describe('useTrendView', () => {
   it('extends a too-short window when switching to a coarser granularity', async () => {
     vi.mocked(getTrendData).mockResolvedValue(ok(P))
     const v = useTrendView({ monitorId: ref(1), monitorKind: ref('PROBE') })
-    await v.setGranularityChoice('DAY') // default preset is 24h — one DAY bucket at most
+    await v.setGranularityChoice('DAY') // default preset is 1h — one DAY bucket at most
     const call = vi.mocked(getTrendData).mock.lastCall[0]
     const secs = (new Date(call.endTime.replace(' ', 'T')) - new Date(call.startTime.replace(' ', 'T'))) / 1000
     expect(secs).toBe(2592000) // DAY default (30d)
@@ -119,7 +132,7 @@ describe('useTrendView', () => {
   it('demotes an explicit granularity to AUTO when a preset window cannot hold it', async () => {
     vi.mocked(getTrendData).mockResolvedValue(ok(P))
     const v = useTrendView({ monitorId: ref(1), monitorKind: ref('PROBE') })
-    await v.setGranularityChoice('HOUR') // 24h default preset holds HOUR buckets — choice stands
+    await v.setGranularityChoice('HOUR') // 1h default preset is too short for HOUR buckets — extends to the HOUR default (7d), choice stands
     expect(vi.mocked(getTrendData).mock.lastCall[0].granularity).toBe('HOUR')
     v.setPreset('1h') // 3600s span == one HOUR bucket — backend would clamp to INTRADAY
     await vi.waitFor(() => expect(v.state.value).toBe('ready'))

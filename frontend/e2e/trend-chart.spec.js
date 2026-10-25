@@ -32,9 +32,9 @@ test('granularity switch: 日 renders the default line series and requests granu
     r.url().includes('/api/ops/trend/data') && r.url().includes('granularity=DAY'))
   await pickGranularity(page, '日')
   const req = await reqPromise
-  // The 24h preset cannot hold DAY buckets — the backend would clamp the
-  // request to HOUR while the select still read 日. The view extends to the
-  // DAY default (30d) so control and data agree.
+  // The 1h default preset cannot hold DAY buckets — the backend would clamp
+  // the request to HOUR while the select still read 日. The view extends to
+  // the DAY default (30d) so control and data agree.
   const u = new URL(req.url())
   const secs = (new Date(u.searchParams.get('endTime').replace(' ', 'T')) -
     new Date(u.searchParams.get('startTime').replace(' ', 'T'))) / 1000
@@ -47,7 +47,7 @@ test('granularity switch: 日 renders the default line series and requests granu
 
 test('preset below the explicit granularity demotes the toolbar to 自动', async ({ page }) => {
   await openStandalone(page)
-  await pickGranularity(page, '小时') // 24h default preset holds HOUR buckets
+  await pickGranularity(page, '小时') // 1h default is too short for HOUR — extends to the 7d default, choice stands
   // 近1小时 cannot hold even one HOUR bucket — the backend would clamp the
   // data to 分时 while the select still read 小时. The view demotes the
   // choice to 自动 so the request carries no granularity and the toolbar
@@ -128,14 +128,14 @@ test('MA legend: DAY mode series include 5期平均', async ({ page }) => {
     .toBe(true)
 })
 
-test('crosshair readout: RAW shows 数值, DAY shows 期初/期末 (D2)', async ({ page }) => {
+test('crosshair readout: RAW shows 实测值, DAY shows 期初/期末 (D2)', async ({ page }) => {
   await openStandalone(page)
   const box = await page.locator('canvas').first().boundingBox()
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   const readout = page.locator('.readout')
   await expect(readout).toBeVisible()
   // RAW points have open≡close — OHLC wording would be meaningless there.
-  await expect(readout).toContainText('数值')
+  await expect(readout).toContainText('实测值')
   await expect(readout).not.toContainText('期初')
   // The DAY view fires an anomaly fetch whose response re-renders the chart
   // and clears the crosshair readout (D2) — hover only after it settles.
@@ -241,6 +241,32 @@ test('error → retry: 500 shows the error overlay, 重试 recovers', async ({ p
   await expect
     .poll(() => page.evaluate(optionEval('(o) => o.series[0]?.data.filter((d) => d != null).length ?? 0')))
     .toBe(60)
+})
+
+// The reported bug: a fresh dev DB with one collected sample rendered an
+// empty chart — a lone point draws no line segment and symbols were off.
+// The suite never had a 1-point fixture, so the gap was invisible to us too.
+test('single collected sample stays visible: one RAW point renders with a symbol under 实测值', async ({ page }) => {
+  await mockTrendApi(page)
+  // Registered after mockTrendApi — later routes win, so the initial load
+  // already sees the single point (no reload dance needed).
+  await page.route('**/api/ops/trend/data*', (r) => r.fulfill({ json: { code: 0, data: {
+    granularity: 'INTRADAY', mode: 'RAW', bucketSeconds: null,
+    points: [{ t: '2026-10-25 00:00:00', avg: 21.5, max: 21.5, min: 21.5, open: 21.5, close: 21.5, count: 1 }],
+    summary: { currentValue: 21.5, periodMax: 21.5, periodMin: 21.5, totalSamples: 1 },
+  } } }))
+  await page.goto(STANDALONE)
+  await expect(page.locator('canvas').first()).toBeVisible()
+  await expect
+    .poll(() => page.evaluate(optionEval('(o) => o.series[0]?.data.filter((d) => d != null).length ?? 0')))
+    .toBe(1)
+  await expect
+    .poll(() => page.evaluate(optionEval('(o) => o.series[0]?.showSymbol')))
+    .toBe(true)
+  // Default state = finest-granularity actual values, not averages (D2 copy).
+  await expect
+    .poll(() => page.evaluate(optionEval('(o) => o.series[0]?.name')))
+    .toBe('实测值')
 })
 
 test('threshold markLines render from metadata and the 阈值 switch removes them', async ({ page }) => {
