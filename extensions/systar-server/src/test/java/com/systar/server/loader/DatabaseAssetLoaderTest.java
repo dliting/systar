@@ -190,6 +190,43 @@ class DatabaseAssetLoaderTest {
     }
 
     @Test
+    @DisplayName("Skipped-row WARN carries the wrapped root cause, not just the wrapper message")
+    void skipWarnIncludesRootCause() {
+        // Reported 2026-10-25: broken driver jars made every Modbus/Mqtt service fail
+        // with "Cannot instantiate driver class" while the real reason (an ECJ
+        // "Unresolved compilation problems" Error inside the driver class) stayed
+        // invisible because the WARN logged only e.getMessage() without the cause.
+        var row = new AssetRepository.ServiceRow(101, "broken", "Broken", 0, "com.example.Missing", 5, null);
+        when(repo.findAllServiceRows()).thenReturn(List.of(row));
+        when(repo.assembleService(eq(row), any())).thenThrow(new AssetException(
+                new IllegalStateException("Unresolved compilation problems: The import org.slf4j.Logger cannot be resolved"),
+                "Cannot instantiate driver class '%s' for service '%s'.", "com.example.Missing", "broken"));
+
+        ch.qos.logback.classic.Logger logbackLogger =
+                (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(DatabaseAssetLoader.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender =
+                new ch.qos.logback.core.read.ListAppender<>();
+        appender.start();
+        logbackLogger.addAppender(appender);
+        try {
+            loader.load(store);
+        } finally {
+            logbackLogger.detachAppender(appender);
+        }
+
+        StringBuilder logged = new StringBuilder();
+        for (var event : appender.list) {
+            logged.append(event.getFormattedMessage()).append('\n');
+            for (var tp = event.getThrowableProxy(); tp != null; tp = tp.getCause()) {
+                logged.append(tp.getClassName()).append(": ").append(tp.getMessage()).append('\n');
+            }
+        }
+        assertThat(logged)
+                .contains("Cannot instantiate driver class")
+                .contains("Unresolved compilation problems");
+    }
+
+    @Test
     @DisplayName("Device row failure WARN-skips only that row")
     void deviceRowSkipped() {
         var ok = new AssetRepository.DeviceRow(1, "d1", "D1", null, null, null, null, null, null,

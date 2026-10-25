@@ -55,7 +55,7 @@ public class DatabaseAssetLoader implements AssetLoader {
             try {
                 store.addAsset(repo.assembleDevice(row));
             } catch (AssetException e) {
-                log.warn("Skipped device row id={} '{}': {}", row.id(), row.name(), e.getMessage());
+                log.warn("Skipped device row id={} '{}': {}", row.id(), row.name(), e.getMessage(), e);
             }
         }
         for (AssetRepository.ServiceRow row : repo.findAllServiceRows()) {
@@ -63,7 +63,7 @@ public class DatabaseAssetLoader implements AssetLoader {
                 store.addAsset(repo.assembleService(row, serviceIndex));
             } catch (AssetException e) {
                 skippedServices.put(row.id(), e.getMessage());
-                log.warn("Skipped service row id={} '{}': {}", row.id(), row.name(), e.getMessage());
+                log.warn("Skipped service row id={} '{}': {}", row.id(), row.name(), e.getMessage(), e);
             }
         }
         for (AssetRepository.ProbeRow row : repo.findAllProbeRows()) {
@@ -71,7 +71,7 @@ public class DatabaseAssetLoader implements AssetLoader {
                 store.addAsset(repo.assembleProbe(row, serviceIndex));
             } catch (AssetException e) {
                 log.warn("Skipped probe row id={} '{}': {}{}",
-                        row.id(), row.name(), e.getMessage(), cascadeNote(row.serviceId(), skippedServices));
+                        row.id(), row.name(), e.getMessage(), cascadeNote(row.serviceId(), skippedServices), e);
             }
         }
         for (AssetRepository.ControlRow row : repo.findAllControlRows()) {
@@ -79,7 +79,7 @@ public class DatabaseAssetLoader implements AssetLoader {
                 store.addAsset(repo.assembleControl(row, serviceIndex));
             } catch (AssetException e) {
                 log.warn("Skipped control row id={} '{}': {}{}",
-                        row.id(), row.name(), e.getMessage(), cascadeNote(row.serviceId(), skippedServices));
+                        row.id(), row.name(), e.getMessage(), cascadeNote(row.serviceId(), skippedServices), e);
             }
         }
 
