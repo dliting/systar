@@ -124,6 +124,7 @@ import {
   PRESETS,
   windowForChoice,
   windowTooShortFor,
+  resolveChoiceForWindow,
 } from '@/components/TrendChart/composables/useTrendView'
 
 const DEFAULT_GRANULARITY = 'HOUR'
@@ -250,6 +251,10 @@ function onPreset(k) {
     loadCompare()
     return
   }
+  // Reverse-direction guard (see useTrendView): a window shorter than the
+  // explicit granularity's bucket floor gets clamped by the backend while the
+  // select still reads the stale pick — demote so the toolbar tracks the data.
+  granularityChoice.value = resolveChoiceForWindow(granularityChoice.value, win)
   loadSingleWindow(win.start, win.end, resolveGranularity(win))
 }
 
@@ -262,6 +267,7 @@ function onCustomRange(v) {
     return
   }
   const win = { start: v[0], end: v[1] }
+  granularityChoice.value = resolveChoiceForWindow(granularityChoice.value, win)
   loadSingleWindow(win.start, win.end, resolveGranularity(win))
 }
 
@@ -273,6 +279,7 @@ function refresh() {
   if (!monitorId.value) return
   if (dateRange.value && dateRange.value.length === 2) {
     const win = { start: dateRange.value[0], end: dateRange.value[1] }
+    granularityChoice.value = resolveChoiceForWindow(granularityChoice.value, win)
     loadSingleWindow(win.start, win.end, resolveGranularity(win))
   } else {
     loadDefaultView()

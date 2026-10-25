@@ -55,6 +55,15 @@ export function windowTooShortFor(choice, win) {
   return span <= bucket
 }
 
+// Reverse-direction guard: when a window change (preset/custom/refresh) drops
+// the span below the explicit choice's bucket floor, the backend clamps the
+// data one rung down the ladder while the select would still read the stale
+// pick — fall back to AUTO so the server-resolved granularity drives the
+// toolbar too.
+export function resolveChoiceForWindow(choice, win) {
+  return windowTooShortFor(choice, win) ? 'AUTO' : choice
+}
+
 export function useTrendView({ monitorId, monitorKind }) {
   const state = ref('idle')
   const error = ref('')
@@ -117,11 +126,14 @@ export function useTrendView({ monitorId, monitorKind }) {
   function setPreset(key) {
     rangeChoice.value = key
     customRange.value = null
+    granularityChoice.value = resolveChoiceForWindow(
+      granularityChoice.value, windowForChoice(granularityChoice.value, key))
     load()
   }
   function setCustomRange(start, end) {
     customRange.value = [start, end]
     rangeChoice.value = 'custom'
+    granularityChoice.value = resolveChoiceForWindow(granularityChoice.value, { start, end })
     load()
   }
 

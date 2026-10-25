@@ -45,6 +45,20 @@ test('granularity switch: 日 renders the default line series and requests granu
     .toBe('line')
 })
 
+test('preset below the explicit granularity demotes the toolbar to 自动', async ({ page }) => {
+  await openStandalone(page)
+  await pickGranularity(page, '小时') // 24h default preset holds HOUR buckets
+  // 近1小时 cannot hold even one HOUR bucket — the backend would clamp the
+  // data to 分时 while the select still read 小时. The view demotes the
+  // choice to 自动 so the request carries no granularity and the toolbar
+  // tracks what actually renders.
+  const reqPromise = page.waitForRequest((r) =>
+    r.url().includes('/api/ops/trend/data') && !r.url().includes('granularity='))
+  await page.locator('.el-radio-button__inner', { hasText: '近1小时' }).click()
+  await reqPromise
+  await expect(page.locator('.el-select').first()).toContainText('自动')
+})
+
 test('箱体 toggle switches the DAY main series between line and candlestick', async ({ page }) => {
   await openStandalone(page)
   await pickGranularity(page, '日')

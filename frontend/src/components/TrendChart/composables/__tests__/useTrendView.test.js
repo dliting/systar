@@ -112,6 +112,31 @@ describe('useTrendView', () => {
     expect(secs).toBe(604800) // 7d holds 7 DAY buckets — user's window stands
   })
 
+  // Reverse direction of the guard above: shrinking the window below the
+  // explicit choice's bucket floor (小时 + 近1小时, 日 + 近1小时) would leave
+  // the backend clamping the data one rung down while the select still reads
+  // the pick — demote the choice to AUTO so the toolbar tracks what renders.
+  it('demotes an explicit granularity to AUTO when a preset window cannot hold it', async () => {
+    vi.mocked(getTrendData).mockResolvedValue(ok(P))
+    const v = useTrendView({ monitorId: ref(1), monitorKind: ref('PROBE') })
+    await v.setGranularityChoice('HOUR') // 24h default preset holds HOUR buckets — choice stands
+    expect(vi.mocked(getTrendData).mock.lastCall[0].granularity).toBe('HOUR')
+    v.setPreset('1h') // 3600s span == one HOUR bucket — backend would clamp to INTRADAY
+    await vi.waitFor(() => expect(v.state.value).toBe('ready'))
+    expect(vi.mocked(getTrendData).mock.lastCall[0].granularity).toBeNull()
+    expect(v.granularityChoice.value).toBe('AUTO')
+  })
+
+  it('demotes an explicit granularity to AUTO for a too-short custom range', async () => {
+    vi.mocked(getTrendData).mockResolvedValue(ok(P))
+    const v = useTrendView({ monitorId: ref(1), monitorKind: ref('PROBE') })
+    await v.setGranularityChoice('DAY') // window extended to the 30d DAY default
+    v.setCustomRange('2026-10-24 00:00:00', '2026-10-24 12:00:00') // 12h < one DAY bucket
+    await vi.waitFor(() => expect(v.state.value).toBe('ready'))
+    expect(vi.mocked(getTrendData).mock.lastCall[0].granularity).toBeNull()
+    expect(v.granularityChoice.value).toBe('AUTO')
+  })
+
   it('custom range overrides presets', async () => {
     vi.mocked(getTrendData).mockResolvedValue(ok(P))
     const v = useTrendView({ monitorId: ref(1), monitorKind: ref('PROBE') })
