@@ -42,6 +42,19 @@ export function windowForChoice(granularityChoice, presetKey) {
   return { start: fmtLocal(start), end: fmtLocal(end) }
 }
 
+// Mirror of backend TrendService.bucketSecondsFor: an explicit granularity is
+// honored only while the span holds more than one bucket of it; below that the
+// backend clamps it down the ladder (DAY over 24h silently becomes HOUR) and
+// the toolbar selection would contradict the rendered data.
+const BUCKET_SECONDS = { HOUR: 3_600, DAY: 86_400, WEEK: 604_800, MONTH: 2_592_000 }
+
+export function windowTooShortFor(choice, win) {
+  const bucket = BUCKET_SECONDS[choice]
+  if (bucket == null) return false
+  const span = (new Date(win.end.replace(' ', 'T')) - new Date(win.start.replace(' ', 'T'))) / 1000
+  return span <= bucket
+}
+
 export function useTrendView({ monitorId, monitorKind }) {
   const state = ref('idle')
   const error = ref('')
@@ -89,6 +102,16 @@ export function useTrendView({ monitorId, monitorKind }) {
 
   function setGranularityChoice(choice) {
     granularityChoice.value = choice
+    // A window too short for the chosen granularity would be clamped by the
+    // backend into a coarser-looking finer view while the select still reads
+    // the user's pick — fall back to that granularity's default range instead.
+    const win = customRange.value
+      ? { start: customRange.value[0], end: customRange.value[1] }
+      : windowForChoice(choice, rangeChoice.value)
+    if (windowTooShortFor(choice, win)) {
+      customRange.value = null
+      rangeChoice.value = 'default' // no preset matches → windowForChoice uses the granularity default
+    }
     load()
   }
   function setPreset(key) {

@@ -70,6 +70,15 @@ describe('candlestickOption', () => {
     expect(lines[0].name).toBe('5期平均')
   })
 
+  it('omits MA series whose values are all null — no dead legend entries (D3)', () => {
+    // Fewer points than the MA period → every value null. The series would
+    // draw nothing yet still claim a (grayed) legend slot.
+    const ma = { ma5: [null, null], ma10: [null, null], ma20: [null, null] }
+    const opt = candlestickOption(POINTS, { style: 'line', ma })
+    expect(opt.series).toHaveLength(1)
+    expect(opt.legend.show).toBe(false)
+  })
+
   it('pins inside+slider zoom with 100ms throttle for smooth pan/zoom', () => {
     const opt = candlestickOption(POINTS, {})
     expect(opt.dataZoom.some(z => z.type === 'inside' && z.throttle === 100)).toBe(true)
@@ -108,6 +117,49 @@ describe('candlestickOption', () => {
       const anomalies = [{ time: '2026-11-02 09:00:00', actual: 30, expected: 24, deviation: 4.0, severity: 'high' }]
       const cs = csOf(candlestickOption(POINTS, { granularity: 'DAY', anomalyPoints: anomalies, showAnomalies: true }))
       expect(cs.markPoint?.data ?? []).toHaveLength(0)
+    })
+  })
+
+  // Spec D1: every OHLC granularity defaults to a line (avg) render; the
+  // candlestick form becomes an opt-in layer. Same scaffolding either way.
+  describe('candlestickOption style', () => {
+    it("style:'line' renders the avg as a line series", () => {
+      const opt = candlestickOption(POINTS, { style: 'line' })
+      expect(opt.series[0].type).toBe('line')
+      expect(opt.series[0].data).toEqual([20, 25])
+    })
+    it("style:'line' keeps threshold markLines and anomaly markPoints on the main series", () => {
+      const anomalies = [{ time: '2026-10-24 12:00:00', actual: 30, expected: 20, deviation: 3, severity: 'high' }]
+      const opt = candlestickOption(POINTS, { style: 'line', thresholds: { min: 5, max: 35 }, anomalyPoints: anomalies, showAnomalies: true })
+      expect(opt.series[0].markLine.data).toHaveLength(2)
+      expect(opt.series[0].markPoint.data).toHaveLength(1)
+    })
+    it("style:'line' keeps MA overlays", () => {
+      const ma = { ma5: [null, 22], ma10: [null, 23], ma20: [null, 24] }
+      const opt = candlestickOption(POINTS, { style: 'line', ma })
+      expect(opt.series.map((s) => s.name)).toContain('5期平均')
+    })
+    it("style:'line' degrades null open/close to avg without NaN (Review Focus)", () => {
+      const legacy = [{ t: '2026-10-24 00:00:00', avg: 20, max: 30, min: 10, open: null, close: null, count: 5 }]
+      const opt = candlestickOption(legacy, { style: 'line' })
+      expect(opt.series[0].data).toEqual([20])
+    })
+    it('hides the legend for a single-series chart (D3)', () => {
+      expect(candlestickOption(POINTS, {}).legend.show).toBe(false)
+    })
+    it('shows the legend once overlays exist (D3)', () => {
+      const ma = { ma5: [null, 22], ma10: [null, 23], ma20: [null, 24] }
+      expect(candlestickOption(POINTS, { ma }).legend.show).toBe(true)
+    })
+    it('omits a far threshold line and keeps the y-range on data (D4)', () => {
+      const opt = candlestickOption(POINTS, { thresholds: { min: -200, max: 200 } })
+      expect(opt.series[0].markLine.data).toHaveLength(0)
+      expect(opt.yAxis[0].max).toBeLessThan(40)
+    })
+    it('extends the y-range for a near threshold and draws it (D4)', () => {
+      const opt = candlestickOption(POINTS, { thresholds: { max: 35 } })
+      expect(opt.series[0].markLine.data.some((l) => l.yAxis === 35)).toBe(true)
+      expect(opt.yAxis[0].max).toBeGreaterThanOrEqual(35)
     })
   })
 })

@@ -24,13 +24,18 @@
       <!-- Crosshair readout (populated on updateAxisPointer) -->
       <div v-if="readout" class="summary-item readout">
         <span class="readout-time">{{ readout.label }}</span>
-        <span class="summary-value" :style="{ color: readout.rising ? '#ffab00' : '#00d4ff' }">
-          {{ readout.rising ? '上升' : '下降' }} {{ readout.changeText }}
-        </span>
-        <span class="summary-label">期初 {{ readout.openText }}</span>
-        <span class="summary-label">期末 {{ readout.closeText }}</span>
+        <template v-if="isOhlc">
+          <span class="summary-value" :style="{ color: readout.rising ? '#ffab00' : readout.falling ? '#00d4ff' : '#8b9dc3' }">
+            {{ readout.rising ? '上升' : readout.falling ? '下降' : '持平' }} {{ readout.changeText }}
+          </span>
+          <span class="summary-label">期初 {{ readout.openText }}</span>
+          <span class="summary-label">期末 {{ readout.closeText }}</span>
+        </template>
+        <!-- RAW points carry no meaningful open/close (D2): show the value. -->
+        <span v-else class="summary-value">数值 {{ readout.valueText }}</span>
       </div>
       <div class="layer-toggles" style="margin-left:auto">
+        <el-checkbox v-if="isOhlc" v-model="showCandles" size="small" label="箱体" />
         <el-checkbox v-if="isOhlc" v-model="showSamples" size="small" label="采样数" />
         <el-checkbox v-if="!isOhlc" v-model="showExtremes" size="small" label="极值带" />
       </div>
@@ -89,9 +94,12 @@ const emit = defineEmits(['data-point-click', 'popout', 'data-zoom', 'retry'])
 const { chartRef, initChart, dispose } = useChart()
 let chartInstance = null
 let lastKey = null
+let zrClickHandler = null
 
 const showSamples = ref(false)
 const showExtremes = ref(false)
+// D1: OHLC granularities render as a line by default; 箱体 is an opt-in layer.
+const showCandles = ref(false)
 const readout = ref(null)
 
 const isOhlc = computed(() => props.mode === 'OHLC')
@@ -107,6 +115,7 @@ function buildOption() {
       showSamples: showSamples.value, showThresholds: props.showThresholds,
       showAnomalies: props.showAnomalies, thresholds: props.thresholds,
       anomalyPoints: props.anomalyPoints, compact: props.compact, infiniteMode: props.infiniteMode,
+      style: showCandles.value ? 'candle' : 'line',
     })
   }
   return intradayOption(props.points, {
@@ -118,14 +127,34 @@ function buildOption() {
   })
 }
 
+function emitPointClick(idx) {
+  const p = props.points[idx]
+  if (p) emit('data-point-click', { time: p.t, granularity: props.granularity })
+}
+
 function registerHandlers(instance) {
   instance.off('click')
   instance.on('click', (params) => {
     if (isOhlc.value && params.componentType === 'series') {
-      const p = props.points[params.dataIndex]
-      if (p) emit('data-point-click', { time: p.t, granularity: props.granularity })
+      emitPointClick(params.dataIndex)
     }
   })
+  // D1 line default: ECharts maps series clicks only to symbols/candle bodies
+  // — the polyline path carries no component info, so clicks on the line body
+  // never reach the handler above. Snap plot-area clicks to the nearest
+  // category instead, matching where the crosshair already points (spec F).
+  const zr = instance.getZr()
+  if (zr && zrClickHandler) zr.off('click', zrClickHandler)
+  zrClickHandler = (e) => {
+    if (!isOhlc.value) return
+    if (e.target?.__ecComponentInfo) return // interactive item: series click already emitted
+    if (!instance.containPixel({ gridIndex: 0 }, [e.offsetX, e.offsetY])) return
+    const raw = instance.convertFromPixel({ xAxisIndex: 0 }, e.offsetX)
+    const idx = Math.round(Array.isArray(raw) ? raw[0] : raw)
+    if (!Number.isFinite(idx)) return
+    emitPointClick(Math.min(Math.max(idx, 0), props.points.length - 1))
+  }
+  zr?.on?.('click', zrClickHandler)
   instance.off('datazoom')
   if (props.infiniteMode) {
     instance.on('datazoom', (event) => {
@@ -139,14 +168,21 @@ function registerHandlers(instance) {
     const idx = event.dataIndex ?? (Array.isArray(event.dataIndex) ? event.dataIndex[0] : null)
     const p = idx != null ? props.points[idx] : null
     if (!p || p.avg == null) { readout.value = null; return }
-    const o = p.open ?? p.avg, c = p.close ?? p.avg
     const fmt = (v) => (v == null ? '--' : Number(v.toFixed(2)).toString())
-    readout.value = {
-      label: event.seriesAxesParams?.axisLabel?.formattedValue ?? String(p.t),
-      rising: c >= o,
-      changeText: `${fmt(Math.abs(c - o))}${props.unit}`,
-      openText: `${fmt(o)}${props.unit}`,
-      closeText: `${fmt(c)}${props.unit}`,
+    const label = event.seriesAxesParams?.axisLabel?.formattedValue ?? String(p.t)
+    if (props.mode === 'OHLC') {
+      // D2: 持平 when open==close (the old c>=o rule read "上升 0.0").
+      const o = p.open ?? p.avg, c = p.close ?? p.avg
+      readout.value = {
+        label,
+        rising: c > o, falling: c < o,
+        changeText: `${fmt(Math.abs(c - o))}${props.unit}`,
+        openText: `${fmt(o)}${props.unit}`,
+        closeText: `${fmt(c)}${props.unit}`,
+      }
+    } else {
+      // RAW points have open≡close — OHLC semantics would be noise (D2).
+      readout.value = { label, valueText: `${fmt(p.avg)}${props.unit}` }
     }
   })
   instance.getZr()?.off?.('globalout')
@@ -155,10 +191,13 @@ function registerHandlers(instance) {
 
 function renderChart() {
   if (props.loading || props.error) return
+  // D2: drop the stale crosshair readout whenever the chart re-renders
+  // (granularity switch, refresh, layer toggle) — old values mislead.
+  readout.value = null
   const option = buildOption()
   if (!chartInstance) chartInstance = initChart()
   if (!chartInstance) return
-  const key = `${props.granularity}|${props.mode}|${props.compact}|${showSamples.value}|${showExtremes.value}`
+  const key = `${props.granularity}|${props.mode}|${props.compact}|${showSamples.value}|${showExtremes.value}|${showCandles.value}`
   const structural = lastKey !== key
   chartInstance.setOption(option, { notMerge: structural || !props.infiniteMode })
   lastKey = key
@@ -171,7 +210,7 @@ watch(
   () => [props.points, props.mode, props.bucketSeconds, props.granularity, props.unit,
     props.compact, props.loading, props.error, props.dateRange, props.thresholds,
     props.anomalyPoints, props.showThresholds, props.showAnomalies,
-    showSamples.value, showExtremes.value],
+    showSamples.value, showExtremes.value, showCandles.value],
   () => { nextTick(renderChart) }
 )
 

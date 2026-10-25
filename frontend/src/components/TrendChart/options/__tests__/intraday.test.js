@@ -22,11 +22,28 @@ describe('intradayOption', () => {
   it('draws threshold markLines from the consumers\' {min,max} contract', () => {
     // TrendStandalone/MonitorTrend build thresholds as {min,max,warnCond}
     // (from metadata minValue/maxValue) — the builder must read the same keys.
-    const opt = intradayOption(pts(0, 1, 2), { thresholds: { min: 5, max: 35 }, showThresholds: true })
+    // Values sit inside the data range (19–23) so D4 keeps both lines drawn.
+    const opt = intradayOption(pts(0, 1, 2), { thresholds: { min: 20, max: 22 }, showThresholds: true })
     const lines = opt.series.find((s) => s.markLine)?.markLine?.data ?? []
     expect(lines).toHaveLength(2)
-    expect(lines.some((l) => l.yAxis === 35)).toBe(true)
-    expect(lines.some((l) => l.yAxis === 5)).toBe(true)
+    expect(lines.some((l) => l.yAxis === 22)).toBe(true)
+    expect(lines.some((l) => l.yAxis === 20)).toBe(true)
+  })
+  it('omits thresholds farther than 2x the span and keeps the y-range on data (D4)', () => {
+    const opt = intradayOption(pts(0, 1, 2), { thresholds: { min: 5, max: 35 } })
+    expect(opt.series.find((s) => s.markLine)?.markLine?.data ?? []).toHaveLength(0)
+    expect(opt.yAxis[0].max).toBeLessThan(30)
+  })
+  it('extends the y-range for a near-out threshold and draws it (D4)', () => {
+    const opt = intradayOption(pts(0, 1, 2), { thresholds: { max: 26 } })
+    expect(opt.series.find((s) => s.name === '均值').markLine.data.some((l) => l.yAxis === 26)).toBe(true)
+    expect(opt.yAxis[0].max).toBeGreaterThanOrEqual(26)
+  })
+  it('hides the legend for the single avg series (D3)', () => {
+    expect(intradayOption(pts(0, 1, 2), {}).legend.show).toBe(false)
+  })
+  it('shows the legend when the 极值带 overlay is on (D3)', () => {
+    expect(intradayOption(pts(0, 1, 2), { showExtremes: true }).legend.show).toBe(true)
   })
   it('renders the avg line with area fill and no extremes band by default (D5)', () => {
     const opt = intradayOption(pts(0, 1, 2), {})

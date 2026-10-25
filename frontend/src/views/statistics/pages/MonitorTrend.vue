@@ -86,6 +86,7 @@
       :anomaly-points="anomalyPoints"
       :show-thresholds="showThresholds"
       :show-anomalies="showAnomalies"
+      chart-height="calc(100vh - 300px)"
       @data-point-click="onCandleClick"
       @popout="onPopout"
       @data-zoom="onDataZoom"
@@ -122,6 +123,7 @@ import {
   GRANULARITY_CHOICES,
   PRESETS,
   windowForChoice,
+  windowTooShortFor,
 } from '@/components/TrendChart/composables/useTrendView'
 
 const DEFAULT_GRANULARITY = 'HOUR'
@@ -227,9 +229,16 @@ function onGranularityChoice(c) {
     loadDefaultView()
     return
   }
-  const win = customRange.value
+  let win = customRange.value
     ? { start: customRange.value[0], end: customRange.value[1] }
     : windowForChoice(c, rangeChoice.value)
+  // Same guard as useTrendView: a window below the granularity's bucket floor
+  // gets clamped by the backend, contradicting the toolbar selection.
+  if (windowTooShortFor(c, win)) {
+    customRange.value = null
+    rangeChoice.value = 'default'
+    win = windowForChoice(c, null)
+  }
   loadSingleWindow(win.start, win.end, c)
 }
 
@@ -280,7 +289,10 @@ function resetView() {
 async function loadMonitorList() {
   try {
     const res = await listAssets({ kind: props.monitorKind })
-    monitorList.value = res.data || res || []
+    // D5: backend asset-list order is unstable — sort by id so the default
+    // pick is deterministic (and lands on a data-bearing monitor, not a
+    // connectivity probe).
+    monitorList.value = (res.data || res || []).slice().sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
   } catch (e) {
     console.error('Failed to load monitor list:', e)
     monitorList.value = []

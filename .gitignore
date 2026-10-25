@@ -32,6 +32,9 @@ dump.rdb
 temp/test/*
 !temp/test/.gitkeep
 
+# Dev-profile persistent H2 databases (temp/data/db_systar*.mv.db)
+temp/data/
+
 # Frontend
 frontend/node_modules/
 frontend/dist/

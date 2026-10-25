@@ -41,7 +41,14 @@ logging:
     com.systar: DEBUG
 
 ---
-# Development profile — H2 in-memory database
+# Development profile — H2 file database (persistent across restarts, so
+# history-dependent features — trend/candlestick/aggregation catch-up — have
+# real data to show). Files live under gitignored temp/data/; delete that
+# directory to reset. Schema/data init scripts are idempotent (IF NOT EXISTS
+# + MERGE INTO), so every startup re-merges seed rows to canonical values
+# while runtime-collected samples and user edits of non-seed rows accumulate.
+# Full-context tests override both URLs back to in-memory (test resources
+# application-dev.yml) to keep test isolation.
 # Windows winnat 动态端口保留段可能覆盖基础配置的 8081（bind 失败但无监听进程），
 # dev 改用 10000 以上非知名端口规避；生产部署不受影响，仍用基础配置 8081。
 spring:
@@ -49,7 +56,7 @@ spring:
     activate:
       on-profile: dev
   datasource:
-    url: jdbc:h2:mem:db_systar;DB_CLOSE_DELAY=-1;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE
+    url: jdbc:h2:file:./temp/data/db_systar;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE
     username: sa
     password:
     driver-class-name: org.h2.Driver
@@ -76,7 +83,7 @@ systar:
     aggregation-interval-ms: 300000
     max-catch-up-hours: 168
   stats-datasource:
-    url: jdbc:h2:mem:db_systar_stats;DB_CLOSE_DELAY=-1;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE
+    url: jdbc:h2:file:./temp/data/db_systar_stats;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE
     username: sa
     password:
     driver-class-name: org.h2.Driver

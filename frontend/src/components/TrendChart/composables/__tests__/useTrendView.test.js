@@ -89,6 +89,29 @@ describe('useTrendView', () => {
     expect(vi.mocked(getTrendData).mock.lastCall[0].granularity).toBe('DAY')
   })
 
+  // The backend clamps an explicit granularity down the ladder when the
+  // window cannot hold even one bucket of it (TrendService.resolveGranularity:
+  // DAY over 24h silently becomes HOUR) — the toolbar would keep reading 日
+  // while the chart shows hourly data. Extend to the granularity default.
+  it('extends a too-short window when switching to a coarser granularity', async () => {
+    vi.mocked(getTrendData).mockResolvedValue(ok(P))
+    const v = useTrendView({ monitorId: ref(1), monitorKind: ref('PROBE') })
+    await v.setGranularityChoice('DAY') // default preset is 24h — one DAY bucket at most
+    const call = vi.mocked(getTrendData).mock.lastCall[0]
+    const secs = (new Date(call.endTime.replace(' ', 'T')) - new Date(call.startTime.replace(' ', 'T'))) / 1000
+    expect(secs).toBe(2592000) // DAY default (30d)
+  })
+
+  it('keeps a window that already holds buckets of the explicit granularity', async () => {
+    vi.mocked(getTrendData).mockResolvedValue(ok(P))
+    const v = useTrendView({ monitorId: ref(1), monitorKind: ref('PROBE') })
+    v.rangeChoice.value = '7d'
+    await v.setGranularityChoice('DAY')
+    const call = vi.mocked(getTrendData).mock.lastCall[0]
+    const secs = (new Date(call.endTime.replace(' ', 'T')) - new Date(call.startTime.replace(' ', 'T'))) / 1000
+    expect(secs).toBe(604800) // 7d holds 7 DAY buckets — user's window stands
+  })
+
   it('custom range overrides presets', async () => {
     vi.mocked(getTrendData).mockResolvedValue(ok(P))
     const v = useTrendView({ monitorId: ref(1), monitorKind: ref('PROBE') })

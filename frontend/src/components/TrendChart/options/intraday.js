@@ -8,6 +8,7 @@ import {
   labelFor, perfSwitches,
 } from '../theme'
 import { anomalyMarkerData } from './anomalies'
+import { valueRange } from './yRange'
 
 const fmt = (v) => (v == null ? '--' : Number(v.toFixed(2)).toString())
 
@@ -40,12 +41,18 @@ export function intradayOption(points, opts = {}) {
   const data = insertGaps(points, gapSeconds)
   const labels = data.map((p) => labelFor(p.t, 'HOUR'))
   const perf = perfSwitches(data.length)
+  // D4: range + threshold visibility from the shared helper (gap markers in
+  // `data` carry null min/max and are skipped there, so use the raw points).
+  const range = valueRange(points, thresholds, showThresholds)
+  const pad = range.lo != null && range.hi != null
+    ? (range.hi - range.lo) * 0.05 || Math.abs(range.hi || 1) * 0.05
+    : 0
 
   const series = [{
     name: '均值', type: 'line', data: data.map((p) => p.avg),
     showSymbol: false, connectNulls: false, sampling: perf.sampling,
     lineStyle: { width: 1.5, color: CYAN }, areaStyle: { color: cyanGradient() },
-    ...(thresholds && showThresholds ? { markLine: thresholdMarkLines(thresholds) } : {}),
+    ...(thresholds && showThresholds ? { markLine: thresholdMarkLines(thresholds, range) } : {}),
     ...(anomalyPoints?.length && showAnomalies
       ? { markPoint: { symbol: 'circle', symbolSize: 24,
           itemStyle: { borderColor: '#1a1a2e', borderWidth: 1 },
@@ -73,12 +80,16 @@ export function intradayOption(points, opts = {}) {
       trigger: 'axis', axisPointer: { type: 'cross' }, ...darkTooltip(),
       formatter: (params) => intradayTooltip(params, data, unit),
     },
-    legend: { show: !compact && showExtremes, top: 8,
+    // D3: legend only earns space with more than one visible series (the
+    // 极值带 trio); the lone avg line is already named by the panel title.
+    legend: { show: !compact && series.length > 1, top: 8,
       textStyle: { color: '#8b9dc3', fontSize: 11 } },
     grid: { ...gridStyle(), bottom: compact ? 36 : 56 },
     xAxis: [{ type: 'category', data: labels, boundaryGap: false, ...axisStyle(),
       axisLabel: { ...axisStyle().axisLabel, hideOverlap: true } }],
-    yAxis: [{ type: 'value', scale: true, ...axisStyle(),
+    yAxis: [{ type: 'value', scale: true,
+      min: range.lo != null ? range.lo - pad : undefined,
+      max: range.hi != null ? range.hi + pad : undefined, ...axisStyle(),
       axisLabel: { ...axisStyle().axisLabel, formatter: (v) => fmt(v) } }],
     dataZoom: [
       { type: 'inside', throttle: 100, zoomOnMouseWheel: true, moveOnMouseMove: true },
@@ -101,10 +112,11 @@ function intradayTooltip(params, data, unit) {
   return lines.join('<br/>')
 }
 
-function thresholdMarkLines(thresholds) {
+function thresholdMarkLines(thresholds, range) {
   const data = []
-  if (thresholds.max != null) data.push({ yAxis: thresholds.max, name: '上限' })
-  if (thresholds.min != null) data.push({ yAxis: thresholds.min, name: '下限' })
+  // D4: only valueRange-visible thresholds draw a line (see yRange.js).
+  if (thresholds.max != null && range.showMax) data.push({ yAxis: thresholds.max, name: '上限' })
+  if (thresholds.min != null && range.showMin) data.push({ yAxis: thresholds.min, name: '下限' })
   return { silent: true, symbol: 'none',
     lineStyle: { color: ALARM, type: 'dashed', width: 1 },
     label: { color: ALARM, fontSize: 10 }, data }

@@ -1,5 +1,14 @@
 # Full-context tests keep drivers on the test classpath; disable plugin
 # discovery so built-in and plugin scans never see the same type XMLs.
+# The dev profile's persistent file DB (temp/data/) is overridden back to
+# in-memory here: tests must start from a clean database every run and must
+# not contend with a running dev server's H2 file lock.
+spring:
+  datasource:
+    url: jdbc:h2:mem:db_systar;DB_CLOSE_DELAY=-1;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE
+
 systar:
   drivers:
     path: ./target/test-no-drivers
+  stats-datasource:
+    url: jdbc:h2:mem:db_systar_stats;DB_CLOSE_DELAY=-1;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE
