@@ -8,21 +8,27 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [Unreleased]
+## [1.3.0] - 2026-10-25
 
 Monitor curve component redesign — unified OHLC trend contract, reusable
 `TrendChart` component, SCADA terminology.
 
 ### Added
 
-- **Trend curve component** — `frontend/src/components/TrendChart/` is now a self-contained reusable component: candlestick (期初值/期末值/最高值/最低值/波动幅度) for aggregated granularities, gap-aware intraday line with optional 极值带 band, optional 采样数 sub-chart, client-side 5/10/20-period averages, crosshair readout, and a unified toolbar (自动/分时/小时/日/周/月 direct-select + 近1小时…全部 presets + custom range + refresh/reset-view)
+- **Trend curve component** — `frontend/src/components/TrendChart/` is now a self-contained reusable component: aggregated granularities render as a trend line by default with an opt-in 箱体 (candlestick) form (期初值/期末值/最高值/最低值/波动幅度), gap-aware intraday line with optional 极值带 band, optional 采样数 sub-chart, client-side 5/10/20-period averages, crosshair readout, and a unified toolbar (自动/分时/小时/日/周/月 direct-select + 近1小时…全部 presets + custom range + refresh/reset-view)
 - Backend trend API returns one unified point contract `{granularity, mode: RAW|BUCKETED|OHLC, points[{t,avg,max,min,open,close,count}], bucketSeconds, summary}`; granularity `AUTO` resolves server-side and huge windows are clamped/downsampled to ~1200 buckets
 - Playwright interaction suite (`frontend/e2e/`) covering granularity switch, presets, layer toggles, crosshair, wheel zoom, drill-down, error retry, custom range
+- **Persistent dev database** — the dev profile uses file-based H2 databases under `temp/data/`, so trend history survives restarts (delete the directory to reset)
 
 ### Changed
 
 - **Breaking:** trend response drops `dataPoints`/`intradayPoints`/`avg5`/`avg10`/`avg20`; `t_monitor_stats` gains nullable `open_val`/`close_val` (auto-ALTER on startup; legacy rows keep NULL open/close and the chart degrades to a flat cross at avg — no backfill)
 - Chart terminology is SCADA-only (期初值/期末值/波动幅度/上升/下降), replacing financial-market wording
+- **Line-first rendering:** every aggregated granularity defaults to a plain trend line; the candlestick form moves behind the 箱体 toggle. The line is a visual form only — the crosshair still reports full OHLC.
+- Crosshair readout adapts to the data mode: raw samples show 数值 (open≡close made OHLC wording meaningless there), aggregated buckets show 上升/下降 with 期初值/期末值; the readout clears whenever the chart re-renders.
+- Legend and threshold lines track what is actually drawable: the legend appears only with more than one visible series (all-null averages are omitted), and a threshold farther than twice the data span gets no markLine instead of pinning to the axis edge.
+- Picking a granularity coarser than the current window can hold extends the window to that granularity's default range — previously the backend silently clamped the data one rung down the ladder while the toolbar still showed the pick.
+- Embedded trend panel: the monitor dropdown is sorted by id (the deterministic default pick lands on a data-bearing monitor) and the chart fills the viewport height.
 
 ---
 
