@@ -497,8 +497,8 @@ INSERT INTO t_work_order (id, order_no, title, description, type, source, device
 -- 12. 巡检计划与任务 (用于看板/统计演示；时间相对 NOW() 生成)
 -- ============================================================================
 INSERT INTO t_inspection_plan (id, name, description, cron_expression, enabled, default_assignee_id, creator_id) VALUES
-    (901, '机房设备例行巡检', '对机房主要设备进行例行巡视检查', '0 8 * * *',    1, 1, 1),
-    (902, '配电系统专项巡检', 'UPS/PDU配电系统负载与温度专项巡检', '0 8,14 * * *', 1, 1, 1);
+    (901, '机房设备例行巡检', '对机房主要设备进行例行巡视检查', '0 0 8 * * *',    1, 1, 1),
+    (902, '配电系统专项巡检', 'UPS/PDU配电系统负载与温度专项巡检', '0 0 8,14 * * *', 1, 1, 1);
 
 INSERT INTO t_inspection_plan_device (id, plan_id, device_id) VALUES
     (951, 901, 1101),
