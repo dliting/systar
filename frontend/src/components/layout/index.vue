@@ -36,6 +36,9 @@
         <el-menu-item index="/system">系统管理</el-menu-item>
       </el-menu>
       <div class="header-right">
+        <span v-if="wsDisconnected" class="ws-offline-badge" role="alert">
+          实时连接已断开，正在重连
+        </span>
         <NotificationBell />
         <span class="user-name">{{ auth.username || '用户' }}</span>
         <el-button text @click="handleLogout">退出</el-button>
@@ -55,12 +58,18 @@
 import { onUnmounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useWebSocketStore } from '@/stores/websocket'
 import { useKeyboard } from '@/composables/useKeyboard'
 import NotificationBell from '@/components/NotificationBell.vue'
 
 const router = useRouter()
 const route  = useRoute()
 const auth   = useAuthStore()
+const ws     = useWebSocketStore()
+
+// Live pushes stopped after a working connection — alarm bell falls back to
+// polling, but the operator must see that on-screen data is no longer live.
+const wsDisconnected = computed(() => ws.hasConnected && !ws.connected)
 
 useKeyboard({
   onEsc: () => {
@@ -122,6 +131,11 @@ async function handleLogout() {
 }
 
 .header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.ws-offline-badge {
+  padding: 3px 10px; border-radius: 10px; font-size: 12px;
+  color: #ffd591; background: rgba(250, 173, 20, 0.15);
+  border: 1px solid rgba(250, 173, 20, 0.5);
+}
 .user-name { font-size: 14px; opacity: 0.85; }
 .systar-main { flex: 1; overflow: auto; padding: 20px; background: #f0f2f5; }
 .systar-main--dashboard { overflow: hidden; }

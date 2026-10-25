@@ -1,5 +1,8 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
+
+vi.mock('@/utils/auth', () => ({ getToken: () => 'fake-token' }))
+
 import { useWebSocketStore } from '@/stores/websocket'
 
 describe('websocket store', () => {
@@ -125,6 +128,52 @@ describe('websocket store', () => {
       store._parseMessage(JSON.stringify({ type: 'alarm', alarmMessageId: 1, eventRankId: 1, assetId: 1 }))
       expect(store.alarmMessages).toHaveLength(1)
       expect(store.unreadAlarmCount).toBe(1)
+    })
+  })
+
+  // The global disconnect banner must tell "dropped after a live connection"
+  // apart from "never connected yet" (initial page load must not flash it).
+  describe('hasConnected (disconnect banner state)', () => {
+    let instances
+    class FakeWebSocket {
+      constructor(url) { this.url = url; this.readyState = 0; instances.push(this) }
+      close() { this.readyState = 3 }
+      send() {}
+    }
+    FakeWebSocket.OPEN = 1
+
+    beforeEach(() => {
+      instances = []
+      vi.stubGlobal('WebSocket', FakeWebSocket)
+    })
+    afterEach(() => { vi.unstubAllGlobals() })
+
+    it('is false until the first successful open', () => {
+      const store = useWebSocketStore()
+      store.connect()
+      expect(store.hasConnected).toBe(false)
+      instances[0].onopen()
+      expect(store.hasConnected).toBe(true)
+      expect(store.connected).toBe(true)
+    })
+
+    it('stays true after a drop so the banner can tell dropped from never-connected', () => {
+      const store = useWebSocketStore()
+      store.connect()
+      instances[0].onopen()
+      instances[0].onclose()
+      expect(store.connected).toBe(false)
+      expect(store.hasConnected).toBe(true)
+      store.disconnect()  // clear the pending reconnect timer
+    })
+
+    it('disconnect() resets hasConnected', () => {
+      const store = useWebSocketStore()
+      store.connect()
+      instances[0].onopen()
+      store.disconnect()
+      expect(store.hasConnected).toBe(false)
+      expect(store.connected).toBe(false)
     })
   })
 

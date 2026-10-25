@@ -14,6 +14,10 @@ const MAX_PROBE_VALUES = 200
 
 export const useWebSocketStore = defineStore('websocket', () => {
   const connected        = ref(false)
+  // True once a connection has been established; lets the global disconnect
+  // banner tell "dropped after a live connection" from "never connected yet"
+  // (initial page load must not flash the banner).
+  const hasConnected     = ref(false)
   const probeValues      = ref({})
   const alarmMessages    = ref([])
   const unreadAlarmCount = ref(0)
@@ -93,6 +97,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
     ws.onopen = () => {
       connected.value  = true
+      hasConnected.value = true
       reconnectDelay   = 2000
       if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
       // Re-subscribe all previously tracked monitor IDs after reconnect.
@@ -152,6 +157,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     ws?.close()
     ws = null
     connected.value = false
+    hasConnected.value = false
     subscribedMonitorIds.value = []
     _lastAccess.clear()
     probeValues.value = {}
@@ -163,6 +169,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
   return {
     connected,
+    hasConnected,
     probeValues,
     alarmMessages,
     unreadAlarmCount,
